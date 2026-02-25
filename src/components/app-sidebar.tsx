@@ -13,6 +13,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useAuth } from "../context/auth-context"
 import { useSidebar } from "@/components/ui/sidebar"
+import { Link, useLocation } from "react-router-dom"
 
 const navItems = [
   {
@@ -64,6 +65,8 @@ export function AppSidebar({
 }) {
   const { user, hotel, logout } = useAuth()
   const { setOpenMobile } = useSidebar()
+  const location = useLocation()
+  const currentPathSegment = location.pathname.split('/')[2] || 'board'
 
   const handleTabChange = (id: string) => {
     onTabChange?.(id)
@@ -92,18 +95,20 @@ export function AppSidebar({
         <SidebarMenu>
           {navItems.map((item) => {
             const hasItems = item.items && item.items.length > 0
-            const isActive = activeTab === item.id || item.items?.some(sub => sub.id === activeTab)
+            const isActive = currentPathSegment === item.id || item.items?.some(sub => sub.id === currentPathSegment)
             
             if (!hasItems) {
               return (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
+                    asChild
                     tooltip={item.title}
-                    isActive={activeTab === item.id}
-                    onClick={() => item.id && handleTabChange(item.id)}
+                    isActive={currentPathSegment === item.id}
                   >
-                    {item.icon && <item.icon />}
-                    <span>{item.title}</span>
+                    <Link to={`/dashboard/${item.id}`} onClick={() => setOpenMobile(false)}>
+                      {item.icon && <item.icon />}
+                      <span>{item.title}</span>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )
@@ -117,13 +122,15 @@ export function AppSidebar({
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
+                      asChild
                       tooltip={item.title}
                       isActive={isActive}
-                      onPointerDown={() => item.id && handleTabChange(item.id)}
                     >
-                      {item.icon && <item.icon />}
-                      <span>{item.title}</span>
-                      <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                      <Link to={`/dashboard/${item.id}`} onClick={() => setOpenMobile(false)}>
+                        {item.icon && <item.icon />}
+                        <span>{item.title}</span>
+                        <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                      </Link>
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
@@ -131,10 +138,12 @@ export function AppSidebar({
                       {item.items?.map((subItem) => (
                         <SidebarMenuSubItem key={subItem.title}>
                           <SidebarMenuSubButton
-                            isActive={activeTab === subItem.id}
-                            onClick={() => subItem.id && handleTabChange(subItem.id)}
+                            asChild
+                            isActive={currentPathSegment === subItem.id}
                           >
-                            <span>{subItem.title}</span>
+                            <Link to={`/dashboard/${subItem.id}`} onClick={() => setOpenMobile(false)}>
+                              <span>{subItem.title}</span>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       ))}
