@@ -1,0 +1,16 @@
+
+> hotel@0.0.0 build
+> tsc -b && vite build
+
+src/App.tsx(16,24): error TS6133: 'ErrorState' is declared but its value is never read.
+src/components/booking-board.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/booking-board.tsx(11,18): error TS6133: 'AnimatePresence' is declared but its value is never read.
+src/components/executive-analytics.tsx(1,1): error TS6133: 'React' is declared but its value is never read.
+src/components/executive-analytics.tsx(3,3): error TS6133: 'BarChart' is declared but its value is never read.
+src/components/executive-analytics.tsx(4,3): error TS6133: 'Bar' is declared but its value is never read.
+src/components/executive-analytics.tsx(19,3): error TS6133: 'Bed' is declared but its value is never read.
+src/components/executive-analytics.tsx(22,3): error TS6133: 'ArrowDownRight' is declared but its value is never read.
+src/components/executive-analytics.tsx(131,39): error TS6133: 'entry' is declared but its value is never read.
+src/components/folio-view.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/folio-view.tsx(49,27): error TS6133: 'bookingId' is declared but its value is never read.
+src/components/guest-table.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
