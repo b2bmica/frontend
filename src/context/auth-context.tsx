@@ -153,7 +153,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearError = useCallback(() => setError(null), []);
 
   return (
-    <AuthContext.Provider value={{ user, hotel, isAuthenticated: !!user, isLoading, login, register, logout, refreshUser, error, clearError }}>
+    <AuthContext.Provider value={{
+      user,
+      hotel,
+      isAuthenticated: !!user,
+      isLoading,
+      login,
+      register,
+      verifyOtp,
+      forgotPassword,
+      resetPassword,
+      logout,
+      refreshUser,
+      error,
+      clearError
+    }}>
       {children}
     </AuthContext.Provider>
   );
