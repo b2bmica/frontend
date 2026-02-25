@@ -114,41 +114,49 @@ export function AppSidebar({
               )
             }
             return (
-                <Collapsible
-                  key={item.title}
-                  open={isActive}
-                  className="group/collapsible"
-                >
+              <Collapsible
+                key={item.title}
+                open={isActive}
+                className="group/collapsible"
+              >
                 <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      asChild
-                      tooltip={item.title}
-                      isActive={isActive}
+                  <SidebarMenuButton
+                    asChild
+                    tooltip={item.title}
+                    isActive={isActive}
+                    className="w-full"
+                  >
+                    <Link 
+                      to={`/dashboard/${item.id}`} 
+                      onClick={() => setOpenMobile(false)}
+                      className="flex items-center w-full"
                     >
-                      <Link to={`/dashboard/${item.id}`} onClick={() => setOpenMobile(false)}>
-                        {item.icon && <item.icon />}
-                        <span>{item.title}</span>
+                      {item.icon && <item.icon />}
+                      <span>{item.title}</span>
+                      {hasItems && (
                         <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                      </Link>
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {item.items?.map((subItem) => (
-                        <SidebarMenuSubItem key={subItem.title}>
-                          <SidebarMenuSubButton
-                            asChild
-                            isActive={currentPathSegment === subItem.id}
-                          >
-                            <Link to={`/dashboard/${subItem.id}`} onClick={() => setOpenMobile(false)}>
-                              <span>{subItem.title}</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
+                      )}
+                    </Link>
+                  </SidebarMenuButton>
+                  
+                  {hasItems && (
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {item.items?.map((subItem) => (
+                          <SidebarMenuSubItem key={subItem.title}>
+                            <SidebarMenuSubButton
+                              asChild
+                              isActive={currentPathSegment === subItem.id}
+                            >
+                              <Link to={`/dashboard/${subItem.id}`} onClick={() => setOpenMobile(false)}>
+                                <span>{subItem.title}</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  )}
                 </SidebarMenuItem>
               </Collapsible>
             )

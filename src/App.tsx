@@ -265,6 +265,7 @@ function RoomStatusBars() {
 function App() {
   const { isAuthenticated, isLoading } = useAuth()
   const [showLogin, setShowLogin] = useState(false)
+  const location = useLocation()
 
   if (isLoading) {
     return (
