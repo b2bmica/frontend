@@ -66,7 +66,11 @@ export function AppSidebar({
   const { user, hotel, logout } = useAuth()
   const { setOpenMobile } = useSidebar()
   const location = useLocation()
-  const currentPathSegment = location.pathname.split('/')[2] || 'board'
+  const pathSegments = location.pathname.split('/').filter(Boolean)
+  const dashboardIndex = pathSegments.indexOf('dashboard')
+  const currentPathSegment = dashboardIndex !== -1 && pathSegments[dashboardIndex + 1] 
+    ? pathSegments[dashboardIndex + 1] 
+    : 'board'
 
   const handleTabChange = (id: string) => {
     onTabChange?.(id)

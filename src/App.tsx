@@ -95,9 +95,12 @@ function DashboardContent() {
   const navigate = useNavigate()
   const location = useLocation()
   
-  // Extract active tab from URL path (e.g., /dashboard/rooms -> rooms)
-  const pathParts = location.pathname.split('/')
-  const activeTab = pathParts[2] || 'board'
+  // Robustly extract active tab from URL (works for /dashboard/rooms, #/dashboard/rooms, etc)
+  const pathSegments = location.pathname.split('/').filter(Boolean)
+  const dashboardIndex = pathSegments.indexOf('dashboard')
+  const activeTab = dashboardIndex !== -1 && pathSegments[dashboardIndex + 1] 
+    ? pathSegments[dashboardIndex + 1] 
+    : 'board'
 
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
   const [showPublicBooking, setShowPublicBooking] = useState(false)
