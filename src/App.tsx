@@ -1,4 +1,5 @@
 import { useState, lazy, Suspense } from 'react'
+import { useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { NotificationProvider } from './context/notification-context'
 import { Toaster } from 'sonner'
@@ -91,10 +92,20 @@ function DashboardStats() {
 function DashboardContent() {
   const { hotel, logout } = useAuth()
   const { bookings } = useBookings()
-  const [activeTab, setActiveTab] = useState("board")
+  const navigate = useNavigate()
+  const location = useLocation()
+  
+  // Extract active tab from URL path (e.g., /dashboard/rooms -> rooms)
+  const pathParts = location.pathname.split('/')
+  const activeTab = pathParts[2] || 'overview'
+
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
   const [showPublicBooking, setShowPublicBooking] = useState(false)
   const [isRegisteringGuest, setIsRegisteringGuest] = useState(false)
+
+  const setActiveTab = (tab: string) => {
+    navigate(`/dashboard/${tab}`)
+  }
 
   if (showPublicBooking) {
     return (
@@ -306,7 +317,12 @@ function App() {
   return (
     <BookingProvider>
       <NotificationProvider>
-        <DashboardContent />
+        <div className="contents">
+          <AnimatePresence mode="wait">
+             {/* Simple router logic within dashboard */}
+             <DashboardContent />
+          </AnimatePresence>
+        </div>
         <Toaster position="top-right" expand={true} richColors closeButton />
       </NotificationProvider>
     </BookingProvider>
