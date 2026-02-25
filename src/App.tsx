@@ -314,6 +314,11 @@ function App() {
     return <AuthPage />
   }
 
+  // Handle Root Redirects
+  if (location.pathname === '/' || location.pathname === '/dashboard' || location.pathname === '/dashboard/') {
+    return <Navigate to="/dashboard/overview" replace />
+  }
+
   return (
     <BookingProvider>
       <NotificationProvider>

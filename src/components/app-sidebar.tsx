@@ -109,12 +109,12 @@ export function AppSidebar({
               )
             }
 
-            return (
-              <Collapsible
-                key={item.title}
-                defaultOpen={isActive}
-                className="group/collapsible"
-              >
+              return (
+                <Collapsible
+                  key={item.title}
+                  open={isActive}
+                  className="group/collapsible"
+                >
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
