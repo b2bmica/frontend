@@ -128,7 +128,7 @@ export function AppSidebar({
                     asChild
                     tooltip={item.title}
                     isActive={isActive}
-                    className="w-full"
+                    className="w-full data-[active=true]:bg-slate-900 data-[active=true]:text-white data-[active=true]:shadow-md"
                   >
                     <Link 
                       to={`/dashboard/${item.id}`} 
@@ -151,6 +151,7 @@ export function AppSidebar({
                             <SidebarMenuSubButton
                               asChild
                               isActive={currentPathSegment === subItem.id}
+                              className="data-[active=true]:bg-slate-900 data-[active=true]:text-white"
                             >
                               <Link to={`/dashboard/${subItem.id}`} onClick={() => setOpenMobile(false)}>
                                 <span>{subItem.title}</span>

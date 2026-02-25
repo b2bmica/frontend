@@ -176,71 +176,67 @@ function DashboardContent() {
           )}
 
           <Suspense fallback={<PageSkeleton />}>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4 md:space-y-6">
+            <div className="space-y-4 md:space-y-6">
               {isRegisteringGuest ? (
                 <GuestProfileForm onSave={() => setIsRegisteringGuest(false)} onCancel={() => setIsRegisteringGuest(false)} />
               ) : (
-                <>
-                    <AnimatePresence mode="wait">
-                      <motion.div 
-                        key={location.pathname} 
-                        initial={{ opacity: 0, y: 8 }} 
-                        animate={{ opacity: 1, y: 0 }} 
-                        exit={{ opacity: 0, y: -8 }} 
-                        transition={{ duration: 0.15 }} 
-                        className="space-y-6"
-                      >
-                        <Routes>
-                          <Route path="overview" element={
-                            <>
-                              <DashboardStats />
-                              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                                <Card className="col-span-full lg:col-span-4 border-none shadow-md">
-                                  <CardHeader><CardTitle>Live Operations</CardTitle></CardHeader>
-                                  <CardContent><BookingTable /></CardContent>
-                                </Card>
-                                <Card className="col-span-full lg:col-span-3 border-none shadow-md">
-                                  <CardHeader><CardTitle>Room Status</CardTitle></CardHeader>
-                                  <CardContent className="space-y-6">
-                                     <RoomStatusBars />
-                                  </CardContent>
-                                </Card>
-                              </div>
-                            </>
-                          } />
-                          
-                          <Route path="board" element={<BookingBoard />} />
-                          <Route path="bookings" element={<BookingTable />} />
-                          <Route path="rooms" element={<RoomInventory />} />
-                          <Route path="guests" element={<Card className="border-none shadow-md"><CardContent className="pt-6"><GuestTable /></CardContent></Card>} />
-                          <Route path="folio" element={<FolioView bookingId={bookings[0]?._id} />} />
-                          
-                          <Route path="reports" element={
-                            <Tabs defaultValue="cashier">
-                              <TabsList className="mb-4"><TabsTrigger value="cashier">Cashier</TabsTrigger><TabsTrigger value="analytics">Executive</TabsTrigger></TabsList>
-                              <TabsContent value="cashier"><CashierReport /></TabsContent>
-                              <TabsContent value="analytics"><ExecutiveAnalytics /></TabsContent>
-                            </Tabs>
-                          } />
+                <AnimatePresence mode="wait">
+                  <motion.div 
+                    key={location.pathname} 
+                    initial={{ opacity: 0, y: 4 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    exit={{ opacity: 0, y: -4 }} 
+                    transition={{ duration: 0.1 }} 
+                    className="space-y-6"
+                  >
+                    <Routes>
+                      <Route path="overview" element={
+                        <>
+                          <DashboardStats />
+                          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+                            <Card className="col-span-full lg:col-span-4 border-none shadow-md">
+                              <CardHeader><CardTitle>Live Operations</CardTitle></CardHeader>
+                              <CardContent><BookingTable /></CardContent>
+                            </Card>
+                            <Card className="col-span-full lg:col-span-3 border-none shadow-md">
+                              <CardHeader><CardTitle>Room Status</CardTitle></CardHeader>
+                              <CardContent className="space-y-6">
+                                 <RoomStatusBars />
+                              </CardContent>
+                            </Card>
+                          </div>
+                        </>
+                      } />
+                      
+                      <Route path="board" element={<BookingBoard />} />
+                      <Route path="bookings" element={<BookingTable />} />
+                      <Route path="rooms" element={<RoomInventory />} />
+                      <Route path="guests" element={<Card className="border-none shadow-md"><CardContent className="pt-6"><GuestTable /></CardContent></Card>} />
+                      <Route path="folio" element={<FolioView bookingId={bookings[0]?._id} />} />
+                      
+                      <Route path="reports" element={
+                        <Tabs defaultValue="cashier">
+                          <TabsList className="mb-4"><TabsTrigger value="cashier">Cashier</TabsTrigger><TabsTrigger value="analytics">Executive</TabsTrigger></TabsList>
+                          <TabsContent value="cashier"><CashierReport /></TabsContent>
+                          <TabsContent value="analytics"><ExecutiveAnalytics /></TabsContent>
+                        </Tabs>
+                      } />
 
-                          <Route path="housekeeping" element={
-                            <Tabs defaultValue="cleaning">
-                              <TabsList className="mb-4"><TabsTrigger value="cleaning">Cleaning</TabsTrigger><TabsTrigger value="maintenance">Maintenance</TabsTrigger></TabsList>
-                              <TabsContent value="cleaning"><HousekeepingBoard /></TabsContent>
-                              <TabsContent value="maintenance"><MaintenanceTickets /></TabsContent>
-                            </Tabs>
-                          } />
+                      <Route path="housekeeping" element={
+                        <Tabs defaultValue="cleaning">
+                          <TabsList className="mb-4"><TabsTrigger value="cleaning">Cleaning</TabsTrigger><TabsTrigger value="maintenance">Maintenance</TabsTrigger></TabsList>
+                          <TabsContent value="cleaning"><HousekeepingBoard /></TabsContent>
+                          <TabsContent value="maintenance"><MaintenanceTickets /></TabsContent>
+                        </Tabs>
+                      } />
 
-                          <Route path="settings" element={<HotelSettings />} />
-                          
-                          {/* Fallback to board if no route matches */}
-                          <Route path="*" element={<Navigate to="board" replace />} />
-                        </Routes>
-                      </motion.div>
-                    </AnimatePresence>
-                </>
+                      <Route path="settings" element={<HotelSettings />} />
+                      <Route path="*" element={<Navigate to="board" replace />} />
+                    </Routes>
+                  </motion.div>
+                </AnimatePresence>
               )}
-            </motion.div>
+            </div>
           </Suspense>
         </div>
       </DashboardLayout>
