@@ -2,14 +2,14 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { api } from '../lib/api';
 
 interface User {
-  id: string;
+  _id: string;
   name: string;
   email: string;
   role: string;
 }
 
 interface Hotel {
-  id: string;
+  _id: string;
   name: string;
   slug: string;
   address?: string;
