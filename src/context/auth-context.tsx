@@ -37,8 +37,11 @@ interface AuthContextType {
   hotel: Hotel | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (data: { hotelName: string; userName: string; email: string; password: string; address?: string; phone?: string }) => Promise<void>;
+  login: (email: string, password: string) => Promise<any>;
+  register: (data: { hotelName: string; userName: string; email: string; password: string; address?: string; phone?: string }) => Promise<any>;
+  verifyOtp: (email: string, otp: string) => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
+  resetPassword: (email: string, otp: string, newPassword: string) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
   error: string | null;
@@ -101,9 +104,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     try {
       const result = await api.register(data);
-      api.setToken(result.token);
-      setUser(result.user);
-      setHotel(result.hotel);
+      return result;
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    }
+  }, []);
+
+  const verifyOtp = useCallback(async (email: string, otp: string) => {
+    setError(null);
+    try {
+      const data = await api.verifyOtp(email, otp);
+      api.setToken(data.token);
+      setUser(data.user);
+      setHotel(data.hotel);
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    }
+  }, []);
+
+  const forgotPassword = useCallback(async (email: string) => {
+    setError(null);
+    try {
+      await api.forgotPassword(email);
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    }
+  }, []);
+
+  const resetPassword = useCallback(async (email: string, otp: string, newPassword: string) => {
+    setError(null);
+    try {
+      await api.resetPassword({ email, otp, newPassword });
     } catch (err: any) {
       setError(err.message);
       throw err;

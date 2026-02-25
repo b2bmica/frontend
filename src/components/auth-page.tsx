@@ -7,16 +7,19 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 
 export function AuthPage() {
-  const { login, register, error, clearError } = useAuth();
-  const [isLogin, setIsLogin] = useState(true);
+  const { login, register, verifyOtp, forgotPassword, resetPassword, error, clearError } = useAuth();
+  const [view, setView] = useState<'login' | 'register' | 'verify' | 'forgot' | 'reset'>('login');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     hotelName: '',
     userName: '',
     email: '',
     password: '',
+    otp: '',
+    newPassword: '',
     address: '',
     phone: '',
   });
@@ -24,22 +27,42 @@ export function AuthPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    clearError();
+    setSuccessMessage(null);
     try {
-      if (isLogin) {
-        await login(form.email, form.password);
-      } else {
+      if (view === 'login') {
+        const res = await login(form.email, form.password);
+        if (res?.unverified) {
+          setView('verify');
+        }
+      } else if (view === 'register') {
         await register(form);
+        setSuccessMessage('Verification code sent to your email.');
+        setView('verify');
+      } else if (view === 'verify') {
+        await verifyOtp(form.email, form.otp);
+      } else if (view === 'forgot') {
+        await forgotPassword(form.email);
+        setSuccessMessage('Reset code sent to your email.');
+        setView('reset');
+      } else if (view === 'reset') {
+        await resetPassword(form.email, form.otp, form.newPassword);
+        setSuccessMessage('Password reset successful. Please login.');
+        setView('login');
       }
-    } catch {
-      // error is handled in context
+    } catch (err: any) {
+      if (err.message && err.message.toLowerCase().includes('unverified')) {
+        setView('verify');
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const toggleMode = () => {
-    setIsLogin(!isLogin);
+  const switchView = (newView: typeof view) => {
+    setView(newView);
     clearError();
+    setSuccessMessage(null);
   };
 
   return (
@@ -92,17 +115,21 @@ export function AuthPage() {
           </div>
 
           <div className="space-y-2">
-            <h2 className="text-3xl font-bold tracking-tight text-slate-900">
-              {isLogin ? 'Sign In' : 'Register Property'}
+            <h2 className="text-3xl font-bold tracking-tight text-slate-900 capitalize">
+              {view.replace('-', ' ')}
             </h2>
             <p className="text-slate-500 text-sm font-medium">
-              {isLogin ? 'Welcome back! Please enter your details.' : 'Create an account to manage your property.'}
+              {view === 'login' && 'Welcome back! Please enter your details.'}
+              {view === 'register' && 'Create an account to manage your property.'}
+              {view === 'verify' && 'We have sent a 6-digit code to your email.'}
+              {view === 'forgot' && 'Enter your email to receive a reset code.'}
+              {view === 'reset' && 'Create a new secure password.'}
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <AnimatePresence mode="wait">
-              {!isLogin ? (
+              {view === 'register' && (
                 <motion.div 
                   key="register-fields"
                   initial={{ opacity: 0, height: 0 }}
@@ -143,49 +170,91 @@ export function AuthPage() {
                     </div>
                   </div>
                 </motion.div>
-              ) : null}
+              )}
             </AnimatePresence>
 
-            <div className="space-y-1.5">
-              <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Email Address</Label>
-              <Input 
-                type="email"
-                required 
-                className="h-12 rounded-xl border-slate-200 focus:ring-primary font-bold"
-                value={form.email}
-                onChange={e => setForm({ ...form, email: e.target.value })}
-                placeholder="admin@alphabank.com"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <div className="flex justify-between items-center">
-                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Password</Label>
-                {isLogin && <button type="button" className="text-[10px] font-bold uppercase text-primary tracking-wider">Forgot?</button>}
-              </div>
-              <div className="relative">
+            {(view === 'login' || view === 'register' || view === 'forgot' || view === 'reset') && (
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Email Address</Label>
                 <Input 
-                  type={showPassword ? 'text' : 'password'}
+                  type="email"
                   required 
-                  className="h-12 rounded-xl border-slate-200 focus:ring-primary font-black tracking-widest pr-10"
-                  value={form.password}
-                  onChange={e => setForm({ ...form, password: e.target.value })}
-                  placeholder="••••••••••••"
+                  className="h-12 rounded-xl border-slate-200 focus:ring-primary font-bold"
+                  value={form.email}
+                  disabled={view === 'reset'}
+                  onChange={e => setForm({ ...form, email: e.target.value })}
+                  placeholder="admin@hotel.com"
                 />
-                <button 
-                  type="button" 
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-primary transition-colors"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
               </div>
-            </div>
+            )}
+
+            {(view === 'verify' || view === 'reset') && (
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Verification Code (OTP)</Label>
+                <Input 
+                  required 
+                  maxLength={6}
+                  className="h-12 rounded-xl border-slate-200 focus:ring-primary font-black tracking-[1em] text-center text-lg"
+                  value={form.otp}
+                  onChange={e => setForm({ ...form, otp: e.target.value })}
+                  placeholder="000000"
+                />
+              </div>
+            )}
+
+            {(view === 'login' || view === 'register') && (
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Password</Label>
+                  {view === 'login' && <button type="button" onClick={() => switchView('forgot')} className="text-[10px] font-bold uppercase text-primary tracking-wider">Forgot?</button>}
+                </div>
+                <div className="relative">
+                  <Input 
+                    type={showPassword ? 'text' : 'password'}
+                    required 
+                    className="h-12 rounded-xl border-slate-200 focus:ring-primary font-black tracking-widest pr-10"
+                    value={form.password}
+                    onChange={e => setForm({ ...form, password: e.target.value })}
+                    placeholder="••••••••••••"
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-primary transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {view === 'reset' && (
+               <div className="space-y-1.5">
+                <Label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">New Password</Label>
+                <div className="relative">
+                  <Input 
+                    type={showPassword ? 'text' : 'password'}
+                    required 
+                    className="h-12 rounded-xl border-slate-200 focus:ring-primary font-black tracking-widest pr-10"
+                    value={form.newPassword}
+                    onChange={e => setForm({ ...form, newPassword: e.target.value })}
+                    placeholder="••••••••••••"
+                  />
+                </div>
+              </div>
+            )}
 
             {error && (
               <div className="p-3 bg-red-50 border border-red-100 rounded-xl flex items-center gap-3 text-red-600">
                 <InfoIcon className="h-5 w-5 shrink-0" />
                 <p className="text-xs font-bold leading-tight">{error}</p>
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center gap-3 text-emerald-600">
+                <ShieldCheck className="h-5 w-5 shrink-0" />
+                <p className="text-xs font-bold leading-tight">{successMessage}</p>
               </div>
             )}
 
@@ -196,7 +265,11 @@ export function AuthPage() {
             >
               {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : (
                 <span className="flex items-center justify-center gap-2">
-                  {isLogin ? 'Sign In' : 'Create Property'}
+                  {view === 'login' && 'Sign In'}
+                  {view === 'register' && 'Create Property'}
+                  {view === 'verify' && 'Verify Account'}
+                  {view === 'forgot' && 'Send Reset Code'}
+                  {view === 'reset' && 'Reset Password'}
                   <ArrowRight className="h-4 w-4" />
                 </span>
               )}
@@ -209,10 +282,10 @@ export function AuthPage() {
           </div>
 
           <button
-            onClick={toggleMode}
+            onClick={() => switchView(view === 'login' ? 'register' : 'login')}
             className="w-full h-12 rounded-2xl border-2 border-slate-100 hover:bg-slate-50 font-bold uppercase tracking-wider text-[11px] text-slate-600 transition-colors"
           >
-            {isLogin ? 'Register New Property' : 'Back to Login'}
+            {view === 'login' ? 'Register New Property' : 'Back to Login'}
           </button>
         </div>
       </div>

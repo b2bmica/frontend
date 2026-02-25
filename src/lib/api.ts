@@ -65,6 +65,27 @@ class ApiClient {
     });
   }
 
+  async verifyOtp(email: string, otp: string) {
+    return this.request<{ token: string; user: any; hotel: any }>('/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp }),
+    });
+  }
+
+  async forgotPassword(email: string) {
+    return this.request<any>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  async resetPassword(data: any) {
+    return this.request<any>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   async getMe() {
     return this.request<{ user: any; hotel: any }>('/auth/me');
   }
