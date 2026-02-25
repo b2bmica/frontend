@@ -120,6 +120,7 @@ export function AppSidebar({
                     <SidebarMenuButton
                       tooltip={item.title}
                       isActive={isActive}
+                      onClick={() => item.id && handleTabChange(item.id)}
                     >
                       {item.icon && <item.icon />}
                       <span>{item.title}</span>
