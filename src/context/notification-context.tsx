@@ -20,7 +20,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     
     if (isAuthenticated && hotel?._id) {
       // Connect to socket
-      const socket = io('http://localhost:5000', {
+      const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+      const socket = io(socketUrl, {
         withCredentials: true,
       });
 
