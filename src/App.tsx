@@ -1,5 +1,5 @@
 import { useState, lazy, Suspense } from 'react'
-import { useNavigate, useLocation, Navigate } from 'react-router-dom'
+import { useNavigate, useLocation, Navigate, Routes, Route } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { NotificationProvider } from './context/notification-context'
 import { Toaster } from 'sonner'
@@ -95,7 +95,7 @@ function DashboardContent() {
   const navigate = useNavigate()
   const location = useLocation()
   
-  // Robustly extract active tab from URL (works for /dashboard/rooms, #/dashboard/rooms, etc)
+  // Extract active tab from URL for UI highlighting only
   const pathSegments = location.pathname.split('/').filter(Boolean)
   const dashboardIndex = pathSegments.indexOf('dashboard')
   const activeTab = dashboardIndex !== -1 && pathSegments[dashboardIndex + 1] 
@@ -182,48 +182,60 @@ function DashboardContent() {
               ) : (
                 <>
                     <AnimatePresence mode="wait">
-                      <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.15 }} className="space-y-6">
-                        {activeTab === 'overview' && (
-                           <>
-                             <DashboardStats />
-                             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                               <Card className="col-span-full lg:col-span-4 border-none shadow-md">
-                                 <CardHeader><CardTitle>Live Operations</CardTitle></CardHeader>
-                                 <CardContent><BookingTable /></CardContent>
-                               </Card>
-                               <Card className="col-span-full lg:col-span-3 border-none shadow-md">
-                                 <CardHeader><CardTitle>Room Status</CardTitle></CardHeader>
-                                 <CardContent className="space-y-6">
-                                    <RoomStatusBars />
-                                 </CardContent>
-                               </Card>
-                             </div>
-                           </>
-                        )}
-                        
-                        {activeTab === 'board' && <BookingBoard />}
-                        {activeTab === 'bookings' && <BookingTable />}
-                        {activeTab === 'rooms' && <RoomInventory />}
-                        {activeTab === 'guests' && <Card className="border-none shadow-md"><CardContent className="pt-6"><GuestTable /></CardContent></Card>}
-                        {activeTab === 'folio' && <FolioView bookingId={bookings[0]?._id} />}
-                        
-                        {activeTab === 'reports' && (
-                           <Tabs defaultValue="cashier">
-                             <TabsList className="mb-4"><TabsTrigger value="cashier">Cashier</TabsTrigger><TabsTrigger value="analytics">Executive</TabsTrigger></TabsList>
-                             <TabsContent value="cashier"><CashierReport /></TabsContent>
-                             <TabsContent value="analytics"><ExecutiveAnalytics /></TabsContent>
-                           </Tabs>
-                        )}
+                      <motion.div 
+                        key={location.pathname} 
+                        initial={{ opacity: 0, y: 8 }} 
+                        animate={{ opacity: 1, y: 0 }} 
+                        exit={{ opacity: 0, y: -8 }} 
+                        transition={{ duration: 0.15 }} 
+                        className="space-y-6"
+                      >
+                        <Routes>
+                          <Route path="overview" element={
+                            <>
+                              <DashboardStats />
+                              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+                                <Card className="col-span-full lg:col-span-4 border-none shadow-md">
+                                  <CardHeader><CardTitle>Live Operations</CardTitle></CardHeader>
+                                  <CardContent><BookingTable /></CardContent>
+                                </Card>
+                                <Card className="col-span-full lg:col-span-3 border-none shadow-md">
+                                  <CardHeader><CardTitle>Room Status</CardTitle></CardHeader>
+                                  <CardContent className="space-y-6">
+                                     <RoomStatusBars />
+                                  </CardContent>
+                                </Card>
+                              </div>
+                            </>
+                          } />
+                          
+                          <Route path="board" element={<BookingBoard />} />
+                          <Route path="bookings" element={<BookingTable />} />
+                          <Route path="rooms" element={<RoomInventory />} />
+                          <Route path="guests" element={<Card className="border-none shadow-md"><CardContent className="pt-6"><GuestTable /></CardContent></Card>} />
+                          <Route path="folio" element={<FolioView bookingId={bookings[0]?._id} />} />
+                          
+                          <Route path="reports" element={
+                            <Tabs defaultValue="cashier">
+                              <TabsList className="mb-4"><TabsTrigger value="cashier">Cashier</TabsTrigger><TabsTrigger value="analytics">Executive</TabsTrigger></TabsList>
+                              <TabsContent value="cashier"><CashierReport /></TabsContent>
+                              <TabsContent value="analytics"><ExecutiveAnalytics /></TabsContent>
+                            </Tabs>
+                          } />
 
-                        {activeTab === 'housekeeping' && (
-                           <Tabs defaultValue="cleaning">
-                             <TabsList className="mb-4"><TabsTrigger value="cleaning">Cleaning</TabsTrigger><TabsTrigger value="maintenance">Maintenance</TabsTrigger></TabsList>
-                             <TabsContent value="cleaning"><HousekeepingBoard /></TabsContent>
-                             <TabsContent value="maintenance"><MaintenanceTickets /></TabsContent>
-                           </Tabs>
-                        )}
+                          <Route path="housekeeping" element={
+                            <Tabs defaultValue="cleaning">
+                              <TabsList className="mb-4"><TabsTrigger value="cleaning">Cleaning</TabsTrigger><TabsTrigger value="maintenance">Maintenance</TabsTrigger></TabsList>
+                              <TabsContent value="cleaning"><HousekeepingBoard /></TabsContent>
+                              <TabsContent value="maintenance"><MaintenanceTickets /></TabsContent>
+                            </Tabs>
+                          } />
 
-                        {activeTab === 'settings' && <HotelSettings />}
+                          <Route path="settings" element={<HotelSettings />} />
+                          
+                          {/* Fallback to board if no route matches */}
+                          <Route path="*" element={<Navigate to="board" replace />} />
+                        </Routes>
                       </motion.div>
                     </AnimatePresence>
                 </>
@@ -328,8 +340,10 @@ function App() {
       <NotificationProvider>
         <div className="contents">
           <AnimatePresence mode="wait">
-             {/* Simple router logic within dashboard */}
-             <DashboardContent />
+            <Routes>
+              <Route path="dashboard/*" element={<DashboardContent />} />
+              <Route path="*" element={<DashboardContent />} />
+            </Routes>
           </AnimatePresence>
         </div>
         <Toaster position="top-right" expand={true} richColors closeButton />
