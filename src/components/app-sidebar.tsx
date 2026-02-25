@@ -16,57 +16,37 @@ import { useSidebar } from "@/components/ui/sidebar"
 import { Link, useLocation } from "react-router-dom"
 import { cn } from "@/lib/utils"
 
-const navItems = [
+const sections = [
   {
-    title: "Calendar",
-    id: "board",
-    icon: Calendar,
+    title: "Front Office",
+    items: [
+      { title: "Calendar View", id: "board", icon: Calendar },
+      { title: "Booking List", id: "bookings", icon: BookOpen },
+      { title: "Guest History", id: "guests", icon: Users },
+    ]
   },
   {
-    title: "Registrations",
-    id: "bookings",
-    icon: BookOpen,
+    title: "Property",
+    items: [
+      { title: "Housekeeping", id: "housekeeping", icon: Home },
+      { title: "Maintenance", id: "maintenance", icon: Wrench },
+      { title: "Room List", id: "rooms", icon: Bed },
+    ]
   },
   {
-    title: "Stats & Overview",
-    id: "overview",
-    icon: LayoutDashboard,
+    title: "Insights",
+    items: [
+      { title: "Performance & Dues", id: "reports", icon: BarChart3 },
+      { title: "Stats Overview", id: "overview", icon: LayoutDashboard },
+      { title: "Payments & Folio", id: "folio", icon: Wallet },
+    ]
   },
   {
-    title: "Room List",
-    id: "rooms",
-    icon: Bed,
-  },
-  {
-    title: "Housekeeping",
-    id: "housekeeping",
-    icon: Home,
-  },
-  {
-    title: "Maintenance",
-    id: "maintenance",
-    icon: Wrench,
-  },
-  {
-    title: "Guest History",
-    id: "guests",
-    icon: Users,
-  },
-  {
-    title: "Payments & Folio",
-    id: "folio",
-    icon: Wallet,
-  },
-  {
-    title: "Performance Report",
-    id: "reports",
-    icon: BarChart3,
-  },
-  {
-    title: "Hotel Settings",
-    id: "settings",
-    icon: Settings,
-  },
+    title: "Settings",
+    items: [
+      { title: "Hotel Setup", id: "settings", icon: Settings },
+    ]
+  }
 ]
 
 export function AppSidebar({ 
@@ -109,49 +89,42 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
 
-      <SidebarContent>
-        <SidebarMenu>
-          {navItems.map((item) => {
-            const isActive = currentPathSegment === item.id
-            
-            return (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton
-                  asChild
-                  tooltip={item.title}
-                  isActive={isActive}
-                  className="w-full h-12 px-4 text-[14px] font-bold tracking-tight data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:border-r-4 data-[active=true]:border-primary transition-all duration-200 rounded-xl"
-                >
-                  <Link to={`/dashboard/${item.id}`} onClick={() => setOpenMobile(false)} className="flex items-center gap-3">
-                    <div className={cn(
-                      "flex items-center justify-center size-8 rounded-lg transition-colors",
-                      isActive ? "bg-primary text-primary-foreground" : "bg-slate-100 text-slate-500"
-                    )}>
-                      {item.icon && <item.icon className="size-4" />}
-                    </div>
-                    <span>{item.title}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )
-          })}
-        </SidebarMenu>
+      <SidebarContent className="px-2">
+        {sections.filter(s => s.title !== "Settings").map((section) => (
+          <div key={section.title} className="mb-4">
+             <h4 className="px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 opacity-80">
+                {section.title}
+             </h4>
+             <SidebarMenu>
+               {section.items.map((item) => {
+                 const isActive = currentPathSegment === item.id
+                 return (
+                   <SidebarMenuItem key={item.title}>
+                     <SidebarMenuButton
+                       asChild
+                       tooltip={item.title}
+                       isActive={isActive}
+                       className="w-full h-11 px-4 text-[13px] font-bold tracking-tight data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:shadow-sm transition-all duration-200 rounded-xl mb-0.5"
+                     >
+                       <Link to={`/dashboard/${item.id}`} onClick={() => setOpenMobile(false)} className="flex items-center gap-3">
+                         <div className={cn(
+                           "flex items-center justify-center size-7 rounded-lg transition-colors shadow-xs",
+                           isActive ? "bg-primary text-primary-foreground" : "bg-slate-100 text-slate-500"
+                         )}>
+                           {item.icon && <item.icon className="size-3.5" />}
+                         </div>
+                         <span>{item.title}</span>
+                       </Link>
+                     </SidebarMenuButton>
+                   </SidebarMenuItem>
+                 )
+               })}
+             </SidebarMenu>
+          </div>
+        ))}
       </SidebarContent>
 
       <SidebarRail />
-      <SidebarFooter className="p-4 border-t border-slate-50">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton 
-              onClick={logout}
-              className="w-full h-11 px-4 text-xs font-bold uppercase tracking-widest text-red-500 hover:bg-red-50 hover:text-red-600 rounded-xl"
-            >
-              <LogOut className="mr-3 size-4" />
-              <span>Sign Out</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
     </Sidebar>
   )
 }

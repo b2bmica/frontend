@@ -34,6 +34,7 @@ const MaintenanceTickets = lazy(() => import('./components/maintenance-tickets')
 const ExecutiveAnalytics = lazy(() => import('./components/executive-analytics').then(module => ({ default: module.ExecutiveAnalytics })))
 const DirectBookingEngine = lazy(() => import('./components/direct-booking').then(module => ({ default: module.DirectBookingEngine })))
 const HotelSettings = lazy(() => import('./components/hotel-settings').then(module => ({ default: module.HotelSettings })))
+const PerformanceReport = lazy(() => import('./components/performance-report').then(module => ({ default: module.PerformanceReport })))
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
   overview: { title: 'Stats & Overview', subtitle: 'Overview of operations and key metrics.' },
@@ -192,22 +193,7 @@ function DashboardContent() {
                       <Route path="folio" element={<FolioView bookingId={bookings[0]?._id} />} />
                       <Route path="maintenance" element={<MaintenanceTickets />} />
                       <Route path="housekeeping" element={<HousekeepingBoard />} />
-                      <Route path="reports" element={
-                        <div className="space-y-12 pb-20">
-                          <Card className="border-none shadow-xl rounded-[40px] overflow-hidden bg-white/50 backdrop-blur-sm">
-                            <CardContent className="p-8">
-                              <ExecutiveAnalytics />
-                            </CardContent>
-                          </Card>
-                          <div className="pt-8 border-t border-slate-200">
-                            <div className="flex flex-col mb-8">
-                               <h3 className="text-lg font-black uppercase tracking-tight text-slate-900 italic">Detailed Audit Trail</h3>
-                               <p className="text-xs font-medium text-slate-400">Comprehensive log of all financial transactions and folio collections.</p>
-                            </div>
-                            <CashierReport />
-                          </div>
-                        </div>
-                      } />
+                      <Route path="reports" element={<PerformanceReport />} />
                       <Route path="settings" element={<HotelSettings />} />
                       <Route path="*" element={<Navigate to="board" replace />} />
                     </Routes>

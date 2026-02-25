@@ -143,24 +143,16 @@ export function HotelSettings() {
                   <Label className="text-base">Calculate Taxes Automatically</Label>
                   <p className="text-sm text-muted-foreground">Enabled taxes will be added to the room price during billing.</p>
                 </div>
-                <button 
-                  onClick={() => setForm({
-                    ...form, 
-                    settings: {
-                      ...form.settings, 
-                      taxConfig: {...form.settings.taxConfig, enabled: !form.settings.taxConfig.enabled}
-                    }
-                  })}
-                  className={cn(
-                    "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden",
-                    form.settings.taxConfig.enabled ? "bg-primary" : "bg-muted"
-                  )}
+                <div className={cn(
+                  "relative inline-flex h-6 w-11 items-center rounded-full transition-colors opacity-50 cursor-not-allowed",
+                  form.settings.taxConfig.enabled ? "bg-primary" : "bg-muted"
+                )}
                 >
                   <span className={cn(
                     "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
                     form.settings.taxConfig.enabled ? "translate-x-6" : "translate-x-1"
                   )} />
-                </button>
+                </div>
               </div>
 
               <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 transition-opacity", !form.settings.taxConfig.enabled && "opacity-50 pointer-events-none")}>
@@ -172,7 +164,8 @@ export function HotelSettings() {
                     <Input 
                       type="number" 
                       value={form.settings.taxConfig.sgst} 
-                      onChange={e => setForm({...form, settings: {...form.settings, taxConfig: {...form.settings.taxConfig, sgst: parseFloat(e.target.value)}}})} 
+                      readOnly
+                      className="bg-slate-50 border-none cursor-not-allowed font-bold"
                     />
                     <Percent className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   </div>
@@ -185,7 +178,8 @@ export function HotelSettings() {
                     <Input 
                       type="number" 
                       value={form.settings.taxConfig.cgst} 
-                      onChange={e => setForm({...form, settings: {...form.settings, taxConfig: {...form.settings.taxConfig, cgst: parseFloat(e.target.value)}}})} 
+                      readOnly
+                      className="bg-slate-50 border-none cursor-not-allowed font-bold"
                     />
                     <Percent className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   </div>
@@ -198,7 +192,8 @@ export function HotelSettings() {
                     <Input 
                       type="number" 
                       value={form.settings.taxConfig.igst} 
-                      onChange={e => setForm({...form, settings: {...form.settings, taxConfig: {...form.settings.taxConfig, igst: parseFloat(e.target.value)}}})} 
+                      readOnly
+                      className="bg-slate-50 border-none cursor-not-allowed font-bold"
                     />
                     <Percent className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   </div>
@@ -207,7 +202,8 @@ export function HotelSettings() {
                   <Label>HSN/SAC Code</Label>
                   <Input 
                     value={form.settings.taxConfig.hsnCode} 
-                    onChange={e => setForm({...form, settings: {...form.settings, taxConfig: {...form.settings.taxConfig, hsnCode: e.target.value}}})} 
+                    readOnly
+                    className="bg-slate-50 border-none cursor-not-allowed font-bold"
                     placeholder="9963" 
                   />
                 </div>
@@ -267,53 +263,6 @@ export function HotelSettings() {
             </CardFooter>
           </Card>
 
-          {/* Danger Zone */}
-          {user?.role === 'Super Admin' && (
-            <Card className="border-2 border-red-100 bg-red-50/30">
-              <CardHeader>
-                <div className="flex items-center gap-2 text-red-600">
-                  <AlertTriangle className="h-5 w-5" />
-                  <CardTitle className="text-base font-black uppercase tracking-tight">Danger Zone</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {!isDeleting ? (
-                   <div className="space-y-4">
-                      <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                        Deleting this property will revoke access for all staff members. 
-                        <strong className="block mt-1 text-red-700">Note: Historical data like older orders and guest history will be preserved as "Legacy Data" for your records.</strong>
-                      </p>
-                      <Button variant="destructive" className="w-full font-black uppercase text-[10px] tracking-widest h-10 shadow-lg shadow-red-500/10" onClick={() => setIsDeleting(true)}>
-                        Delete Property
-                      </Button>
-                   </div>
-                ) : (
-                   <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase text-red-700">Type "{hotel?.name}" to confirm</Label>
-                        <Input 
-                          placeholder="Type hotel name here..." 
-                          className="h-10 border-red-200 focus-visible:ring-red-500 font-bold"
-                          value={confirmDelete}
-                          onChange={e => setConfirmDelete(e.target.value)}
-                        />
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant="ghost" className="flex-1 text-[10px] font-bold" onClick={() => { setIsDeleting(false); setConfirmDelete(''); }}>Cancel</Button>
-                        <Button 
-                          variant="destructive" 
-                          className="flex-1 font-black uppercase text-[10px] tracking-widest"
-                          disabled={confirmDelete !== hotel?.name || loading}
-                          onClick={handleDeleteProperty}
-                        >
-                          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm Deletion'}
-                        </Button>
-                      </div>
-                   </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
         </div>
       </div>
 

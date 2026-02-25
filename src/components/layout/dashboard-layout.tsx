@@ -54,14 +54,15 @@ export default function DashboardLayout({
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             {['board', 'bookings'].includes(activeTab || '') && (
               <Button 
                 size="sm" 
                 onClick={() => onTabChange?.('new-booking')} 
-                className="rounded-xl font-bold uppercase text-[10px] tracking-widest px-4 h-9 shadow-lg shadow-primary/10 transition-all active:scale-[0.95] mr-2"
+                className="rounded-xl font-bold uppercase text-[10px] tracking-widest px-3 md:px-4 h-9 shadow-lg shadow-primary/10 transition-all active:scale-[0.95] mr-0.5 md:mr-2"
               >
-                <Plus className="mr-1.5 h-3.5 w-3.5" /> Book
+                <Plus className="md:mr-1.5 h-3.5 w-3.5" /> 
+                <span className="hidden sm:inline">Book</span>
               </Button>
             )}
             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary">

@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { MoreHorizontal, LogIn, LogOut, XCircle, Search, Loader2, Eye } from 'lucide-react';
+import { ChevronRight, Eye, Globe, Loader2, LogIn, LogOut, Mail, MoreHorizontal, Phone, Search, User, UserPlus, XCircle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { BookingDetailSheet } from './booking-detail-sheet';
 import { cn } from '../lib/utils';
@@ -174,46 +174,45 @@ export function BookingTable() {
           const room = typeof booking.roomId === 'object' ? booking.roomId : rooms.find(r => r._id === booking.roomId);
           const nights = Math.max(1, Math.ceil((new Date(booking.checkout).getTime() - new Date(booking.checkin).getTime()) / (1000 * 60 * 60 * 24)));
           const amount = room?.price ? nights * room.price : 0;
+          const status = booking.status;
 
           return (
-            <div key={booking._id} className="bg-white rounded-2xl border p-4 shadow-sm hover:shadow-md transition-all active:scale-[0.99]" onClick={() => setSelectedBooking(booking)}>
-               <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <p className="text-sm font-bold tracking-tight">{guest?.name || '—'}</p>
-                    <p className="text-[10px] text-muted-foreground font-medium">{guest?.phone || ''}</p>
-                  </div>
-                  {statusBadge(booking.status)}
-               </div>
-               
-               <div className="grid grid-cols-2 gap-4 py-3 border-y border-slate-50 mb-3">
-                  <div>
-                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-0.5">Room</p>
-                    <p className="text-xs font-bold">{room?.roomNumber || '—'} <span className="text-[10px] text-muted-foreground font-normal">({room?.roomType || ''})</span></p>
+            <div 
+              key={booking._id} 
+              className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-sm hover:shadow-md transition-shadow group cursor-pointer" 
+              onClick={() => setSelectedBooking(booking)}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center font-black text-slate-400 group-hover:text-primary transition-colors text-xs">
+                    #{room?.roomNumber || '???'}
                   </div>
                   <div>
-                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-0.5">Dates</p>
-                    <p className="text-xs font-bold">{format(new Date(booking.checkin), 'dd MMM')} - {format(new Date(booking.checkout), 'dd MMM')}</p>
+                    <p className="text-xs font-black text-slate-900">{guest?.name || '—'}</p>
+                    <p className="text-[9px] font-black uppercase text-muted-foreground/60 tracking-tighter">
+                      {format(new Date(booking.checkin), 'dd MMM')} - {format(new Date(booking.checkout), 'dd MMM')} {format(new Date(booking.checkout), 'yyyy')} • {nights}N
+                    </p>
                   </div>
-               </div>
-
-               <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-0.5">Potential Revenue</p>
-                    <p className="text-sm font-black text-slate-900">₹{amount.toLocaleString()}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    {booking.status === 'reserved' && (
-                      <Button variant="outline" size="sm" className="h-8 text-[10px] font-bold uppercase rounded-xl" onClick={(e) => { e.stopPropagation(); handleAction(booking._id, checkIn); }}>
-                        <LogIn className="h-3 w-3 mr-1" /> Check In
-                      </Button>
-                    )}
-                    {booking.status === 'checked-in' && (
-                      <Button variant="default" size="sm" className="h-8 text-[10px] font-bold uppercase rounded-xl" onClick={(e) => { e.stopPropagation(); handleAction(booking._id, checkOut); }}>
-                        <LogOut className="h-3 w-3 mr-1" /> Check Out
-                      </Button>
-                    )}
-                  </div>
-               </div>
+                </div>
+                <Badge variant="outline" className={cn(
+                  "text-[8px] font-black uppercase tracking-tighter border-none h-5 px-2",
+                  status === 'reserved' ? 'bg-emerald-500/10 text-emerald-600' :
+                  status === 'checked-in' ? 'bg-blue-500/10 text-blue-600' :
+                  status === 'checked-out' ? 'bg-orange-500/10 text-orange-600' :
+                  'bg-red-500/10 text-red-600'
+                )}>
+                  {status.replace('-', ' ')}
+                </Badge>
+              </div>
+              
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                  <Globe className="h-3 w-3" /> {booking.bookingSource || 'direct'}
+                </div>
+                <div className="text-sm font-black text-primary tracking-tighter">
+                  ₹{amount.toLocaleString()}
+                </div>
+              </div>
             </div>
           );
         })}

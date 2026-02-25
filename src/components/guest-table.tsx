@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, UserPlus, Phone, Mail, Globe, Eye, Loader2 } from 'lucide-react';
+import { Search, UserPlus, Phone, Mail, Globe, Eye, Loader2, User, ChevronRight } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
@@ -128,35 +128,22 @@ export function GuestTable() {
       {/* Mobile Guest Cards */}
       <div className="lg:hidden grid grid-cols-1 gap-3">
         {filtered.map(guest => (
-          <div key={guest._id} className="bg-white rounded-2xl border p-4 shadow-sm active:scale-[0.98] transition-all" onClick={() => setSelectedGuestId(guest._id)}>
-            <div className="flex items-center justify-between mb-3">
-               <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-xs">
-                     {guest.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold tracking-tight">{guest.name}</h3>
-                    <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">{guest.nationality || 'Nationality —'}</p>
-                  </div>
-               </div>
-               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full">
-                  <Eye className="h-4 w-4 text-slate-400" />
-               </Button>
+          <div 
+            key={guest._id} 
+            className="p-4 rounded-2xl bg-muted/30 border border-primary/5 group transition-all hover:bg-muted/50 flex items-center gap-4 cursor-pointer" 
+            onClick={() => setSelectedGuestId(guest._id)}
+          >
+            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+               <User className="h-5 w-5" />
             </div>
-            
-            <div className="space-y-2 pt-2 border-t border-slate-50">
-               {guest.phone && (
-                 <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
-                    <Phone className="h-3.5 w-3.5 text-slate-300" />
-                    {guest.phone}
-                 </div>
-               )}
-               {guest.email && (
-                 <div className="flex items-center gap-2 text-xs text-slate-600 font-medium truncate">
-                    <Mail className="h-3.5 w-3.5 text-slate-300" />
-                    {guest.email}
-                 </div>
-               )}
+            <div className="flex-1">
+              <p className="font-black text-base tracking-tight text-slate-900">{guest.name}</p>
+              <p className="text-[11px] text-muted-foreground font-bold tracking-tight">
+                {guest.phone || 'No phone'} · {guest.email || 'No email'}
+              </p>
+            </div>
+            <div className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center transition-colors">
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </div>
           </div>
         ))}

@@ -31,19 +31,42 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
   const { bookings, rooms, guests, updateBooking } = useBookings();
   const { hotel } = useAuth();
   const [activeTab, setActiveTab] = useState<'folio' | 'payments'>('folio');
-  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(initialBookingId || bookings[0]?._id || null);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(initialBookingId || null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
   const [settleAmount, setSettleAmount] = useState(0);
+  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'UPI' | 'Card'>('Cash');
 
   const filteredBookings = useMemo(() => {
     return bookings.filter(b => {
+      // Basic Search
       const guest = typeof b.guestId === 'object' ? b.guestId : guests.find(g => g._id === b.guestId);
       const room = typeof b.roomId === 'object' ? b.roomId : rooms.find(r => r._id === b.roomId);
       const searchStr = `${guest?.name} ${room?.roomNumber} ${b.status}`.toLowerCase();
-      return searchStr.includes(searchQuery.toLowerCase());
-    }).slice(0, 10);
-  }, [bookings, guests, rooms, searchQuery]);
+      const matchesSearch = searchStr.includes(searchQuery.toLowerCase());
+
+      if (!matchesSearch) return false;
+
+      // Logic Filter
+      if (showHistory) return true; // Show everything if history is toggled on
+
+      // Default view: Checked-in or reserved (upcoming) but prioritize actionable ones
+      return b.status === 'checked-in' || b.status === 'reserved';
+    }).sort((a, b) => {
+       // Sort checked-in to top
+       if (a.status === 'checked-in' && b.status !== 'checked-in') return -1;
+       if (a.status !== 'checked-in' && b.status === 'checked-in') return 1;
+       return 0;
+    });
+  }, [bookings, guests, rooms, searchQuery, showHistory]);
+
+  // Set initial selection if not set
+  useEffect(() => {
+    if (!selectedBookingId && filteredBookings.length > 0) {
+      setSelectedBookingId(filteredBookings[0]._id);
+    }
+  }, [filteredBookings, selectedBookingId]);
 
   const booking = useMemo(() => bookings.find(b => b._id === selectedBookingId), [bookings, selectedBookingId]);
 
@@ -123,16 +146,33 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
         {/* Guest Directory Sidebar - Responsive: Top on mobile, Left on large */}
         <div className="lg:col-span-1 flex flex-col gap-4">
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-             <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3 px-1">Guest Directory</h4>
-             <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                <Input 
-                  placeholder="Search..." 
-                  className="h-9 rounded-xl bg-slate-50 border-none pl-9 text-xs font-medium"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                />
-             </div>
+              <div className="flex items-center justify-between mb-3 px-1">
+                 <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Guest Directory</h4>
+                 <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{showHistory ? 'All Data' : 'Active Only'}</span>
+                    <button 
+                       onClick={() => setShowHistory(!showHistory)}
+                       className={cn(
+                          "relative inline-flex h-4 w-8 items-center rounded-full transition-colors",
+                          showHistory ? "bg-primary" : "bg-slate-200"
+                       )}
+                    >
+                       <span className={cn(
+                          "inline-block h-2.5 w-2.5 transform rounded-full bg-white transition-transform",
+                          showHistory ? "translate-x-4.5" : "translate-x-1"
+                       )} />
+                    </button>
+                 </div>
+              </div>
+              <div className="relative mb-3">
+                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                 <Input 
+                   placeholder="Search..." 
+                   className="h-9 rounded-xl bg-slate-50 border-none pl-9 text-xs font-medium"
+                   value={searchQuery}
+                   onChange={e => setSearchQuery(e.target.value)}
+                 />
+              </div>
              <div className="space-y-1 max-h-[300px] lg:max-h-[500px] overflow-y-auto pr-1">
                {filteredBookings.map(b => {
                  const g = typeof b.guestId === 'object' ? b.guestId : guests.find(g => g._id === b.guestId);
@@ -392,15 +432,28 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                 </div>
              </div>
 
-             <div className="grid grid-cols-2 gap-2">
-                <button className="h-12 rounded-xl border border-slate-100 hover:bg-slate-50 flex flex-col items-center justify-center transition-all">
-                   <Banknote className="h-4 w-4 text-slate-400" />
-                   <span className="text-[8px] font-bold uppercase tracking-widest text-slate-500 mt-1">Cash</span>
-                </button>
-                <button className="h-12 rounded-xl border border-slate-100 hover:bg-slate-50 flex flex-col items-center justify-center transition-all">
-                   <Smartphone className="h-4 w-4 text-slate-400" />
-                   <span className="text-[8px] font-bold uppercase tracking-widest text-slate-500 mt-1">UPI</span>
-                </button>
+             <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'Cash', icon: Banknote },
+                  { id: 'UPI', icon: Smartphone },
+                  { id: 'Card', icon: CreditCard }
+                ].map(m => (
+                  <button 
+                    key={m.id}
+                    onClick={() => setPaymentMethod(m.id as any)}
+                    className={cn(
+                       "h-14 rounded-xl border flex flex-col items-center justify-center transition-all gap-1",
+                       paymentMethod === m.id 
+                         ? "bg-primary border-primary text-white shadow-md shadow-primary/20" 
+                         : "bg-white border-slate-100 text-slate-400 hover:bg-slate-50"
+                    )}
+                  >
+                    <m.icon className={cn("h-4 w-4", paymentMethod === m.id ? "text-white" : "text-slate-400")} />
+                    <span className={cn("text-[9px] font-black uppercase tracking-widest", paymentMethod === m.id ? "text-white" : "text-slate-500")}>
+                      {m.id}
+                    </span>
+                  </button>
+                ))}
              </div>
 
              <DialogFooter className="pt-2">

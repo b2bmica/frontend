@@ -47,12 +47,21 @@ export function HousekeepingBoard() {
     setActioningId(null);
   };
 
-  const getNextAction = (status: string): { label: string; newStatus: string; className: string } | null => {
+  const getActions = (status: string, roomId: string): { label: string; newStatus: string; className: string }[] => {
     switch (status) {
-      case 'dirty':       return { label: 'Start Cleaning', newStatus: 'clean',     className: 'bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-500/20 rounded-xl cursor-pointer' };
-      case 'occupied':    return { label: 'Mark Dirty',     newStatus: 'dirty',     className: 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 rounded-xl cursor-pointer' };
-      case 'clean':       return { label: 'Mark Dirty',     newStatus: 'dirty',     className: 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20 rounded-xl cursor-pointer' };
-      default: return null;
+      case 'dirty':       return [
+        { label: 'Start Cleaning', newStatus: 'clean',     className: 'bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-500/10' },
+        { label: 'Mark Occupied',  newStatus: 'occupied',  className: 'bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/10' },
+      ];
+      case 'occupied':    return [
+        { label: 'Mark Dirty',     newStatus: 'dirty',     className: 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/10' },
+        { label: 'Mark Clean',     newStatus: 'clean',     className: 'bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-500/10' },
+      ];
+      case 'clean':       return [
+        { label: 'Mark Occupied',  newStatus: 'occupied',  className: 'bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/10' },
+        { label: 'Mark Dirty',     newStatus: 'dirty',     className: 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/10' },
+      ];
+      default: return [];
     }
   };
 
@@ -120,12 +129,10 @@ export function HousekeepingBoard() {
         </div>
       </div>
 
-      {/* Room Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         <AnimatePresence>
           {filtered.map((room, i) => {
             const cfg = statusConfig[room.status] || statusConfig.clean;
-            const nextAction = getNextAction(room.status);
             const isActioning = actioningId === room._id;
             return (
               <motion.div key={room._id}
@@ -148,17 +155,23 @@ export function HousekeepingBoard() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3 pl-5">
-                    <div className="text-xs text-muted-foreground">₹{room.price.toLocaleString()}/night · Floor {room.floor || '—'}</div>
-                    {nextAction && (
-                      <Button size="sm" className={cn("w-full h-11 text-[10px] font-black uppercase tracking-widest", nextAction.className)}
-                        disabled={isActioning}
-                        onClick={() => handleStatusChange(room._id, nextAction.newStatus)}>
-                        {isActioning
-                          ? <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                          : null}
-                        {nextAction.label}
-                      </Button>
-                    )}
+                    <div className="text-xs text-muted-foreground whitespace-nowrap mb-1">
+                      ₹{room.price.toLocaleString()}/night · Floor {room.floor || '—'}
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {getActions(room.status, room._id).map((action) => (
+                        <Button 
+                          key={action.label}
+                          size="sm" 
+                          className={cn("w-full h-10 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all", action.className)}
+                          disabled={isActioning}
+                          onClick={() => handleStatusChange(room._id, action.newStatus)}
+                        >
+                          {isActioning && actioningId === room._id ? <Loader2 className="h-3 w-3 mr-2 animate-spin" /> : null}
+                          {action.label}
+                        </Button>
+                      ))}
+                    </div>
                   </CardContent>
                 </Card>
               </motion.div>
