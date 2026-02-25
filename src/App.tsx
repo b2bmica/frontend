@@ -97,7 +97,7 @@ function DashboardContent() {
   
   // Extract active tab from URL path (e.g., /dashboard/rooms -> rooms)
   const pathParts = location.pathname.split('/')
-  const activeTab = pathParts[2] || 'overview'
+  const activeTab = pathParts[2] || 'board'
 
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false)
   const [showPublicBooking, setShowPublicBooking] = useState(false)
@@ -316,7 +316,7 @@ function App() {
 
   // Handle Root Redirects
   if (location.pathname === '/' || location.pathname === '/dashboard' || location.pathname === '/dashboard/') {
-    return <Navigate to="/dashboard/overview" replace />
+    return <Navigate to="/dashboard/board" replace />
   }
 
   return (
