@@ -56,8 +56,8 @@ export function BookingBoard() {
       const width = window.innerWidth;
       setIsMobile(width < 768);
       if (width < 768) setDaysCount(7);
-      else if (width < 1200) setDaysCount(10);
-      else setDaysCount(14);
+      else if (width < 1200) setDaysCount(14);
+      else setDaysCount(21);
     };
     check();
     window.addEventListener('resize', check);
@@ -120,8 +120,8 @@ export function BookingBoard() {
 
   return (
     <>
-      <div className="flex flex-col bg-background border rounded-2xl overflow-hidden shadow-xl"
-        style={{ height: isMobile ? 'auto' : 'calc(100vh - 280px)', minHeight: 480 }}>
+      <div className="flex flex-col bg-background border rounded-2xl overflow-hidden shadow-sm h-full"
+        style={{ minHeight: 480 }}>
 
         {/* ── Header ── */}
         <div className="flex flex-col gap-2.5 p-4 border-b bg-card/40 backdrop-blur-md">
@@ -186,33 +186,19 @@ export function BookingBoard() {
             )}
           </div>
 
-          {/* Row 3: Legend */}
-          <div className="flex items-center gap-4 px-1 py-1 border-t border-slate-50 mt-1">
-             <div className="flex items-center gap-1.5 opacity-60">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Legend:</span>
-             </div>
-             <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1">
-                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                   <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-500">Reserved</span>
-                </div>
-                <div className="flex items-center gap-1">
-                   <span className="w-2 h-2 rounded-full bg-blue-500" />
-                   <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-500">Arrived</span>
-                </div>
-                <div className="flex items-center gap-1">
-                   <span className="w-2 h-2 rounded-full bg-orange-500" />
-                   <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-500">Departed</span>
-                </div>
-                <div className="flex items-center gap-1 border-l pl-3 ml-2">
-                   <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                   <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-500">Clean</span>
-                </div>
-                <div className="flex items-center gap-1">
-                   <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                   <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-500">Repair</span>
-                </div>
-             </div>
+          {/* Compact room-status legend */}
+          <div className="flex items-center gap-3 pt-1 border-t border-slate-100">
+            <span className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-400">Room:</span>
+            {[
+              { dot: 'bg-green-500', label: 'Clean' },
+              { dot: 'bg-yellow-400', label: 'Dirty' },
+              { dot: 'bg-red-500',   label: 'Repair' },
+            ].map(({ dot, label }) => (
+              <span key={label} className="flex items-center gap-1">
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
+                <span className="text-[9px] font-bold text-slate-400">{label}</span>
+              </span>
+            ))}
           </div>
         </div>
 

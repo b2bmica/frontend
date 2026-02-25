@@ -16,6 +16,7 @@ import { Button } from './components/ui/button'
 import { PageSkeleton } from './components/page-states'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs'
 
+import { cn } from './lib/utils'
 import { AuthProvider, useAuth } from './context/auth-context'
 import { BookingProvider, useBookings } from './context/booking-context'
 import { BookingModal } from './components/booking-modal'
@@ -141,10 +142,9 @@ function DashboardContent() {
           setActiveTab(tab);
         }
       }}>
-        <div className="flex flex-col gap-4 md:gap-6">
-
+        <div className={cn("flex flex-col", activeTab === 'board' ? "h-full" : "gap-4 md:gap-6")}>
           {hotel?.status === 'deleted' && (
-             <div className="p-3 bg-amber-50 border border-amber-100 rounded-2xl flex items-center gap-3 text-amber-900">
+             <div className="p-3 bg-amber-50 border border-amber-100 rounded-2xl flex items-center gap-3 text-amber-900 mb-4">
                 <div className="p-2 bg-white rounded-lg"><AlertTriangle className="h-4 w-4 text-amber-600" /></div>
                 <div className="text-xs">
                    <p className="font-black uppercase tracking-widest text-[10px] mb-0.5">Legacy View Mode</p>
@@ -154,7 +154,7 @@ function DashboardContent() {
           )}
 
           <Suspense fallback={<PageSkeleton />}>
-            <div className="space-y-4 md:space-y-6">
+            <div className={cn(activeTab === 'board' ? "h-full" : "space-y-4 md:space-y-6")}>
               {isRegisteringGuest ? (
                 <GuestProfileForm onSave={() => setIsRegisteringGuest(false)} onCancel={() => setIsRegisteringGuest(false)} />
               ) : (
@@ -165,7 +165,7 @@ function DashboardContent() {
                     animate={{ opacity: 1, y: 0 }} 
                     exit={{ opacity: 0, y: -4 }} 
                     transition={{ duration: 0.1 }} 
-                    className="space-y-6"
+                    className={cn(activeTab === 'board' ? "h-full" : "space-y-6")}
                   >
                     <Routes>
                       <Route path="overview" element={

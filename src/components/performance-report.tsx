@@ -99,7 +99,7 @@ export function PerformanceReport() {
                   <stat.icon className={cn("h-6 w-6", stat.color)} />
                 </div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</p>
-                <h3 className="text-2xl font-black tracking-tight text-slate-900 mt-1 italic">{stat.value}</h3>
+                <h3 className="text-2xl font-black tracking-tight text-slate-900 mt-1">{stat.value}</h3>
                 <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-tight">{stat.sub}</p>
               </CardContent>
             </Card>
@@ -113,7 +113,7 @@ export function PerformanceReport() {
           <CardHeader className="p-8 border-b border-slate-50">
              <div className="flex items-center justify-between">
                 <div>
-                   <CardTitle className="text-xl font-black tracking-tight italic flex items-center gap-2">
+                   <CardTitle className="text-xl font-black tracking-tight flex items-center gap-2">
                       Live Transaction Feed
                       <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                    </CardTitle>
@@ -175,7 +175,7 @@ export function PerformanceReport() {
            <Card className="border-none shadow-sm bg-slate-900 text-white rounded-[40px] overflow-hidden relative">
               <div className="absolute top-0 right-0 p-8 opacity-10"><TrendingUp className="h-24 w-24" /></div>
               <CardHeader className="p-8 pb-4">
-                 <CardTitle className="text-white font-black tracking-tight text-lg italic">Property Health</CardTitle>
+                 <CardTitle className="text-white font-black tracking-tight text-lg">Property Health</CardTitle>
                  <CardDescription className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Yield Optimization</CardDescription>
               </CardHeader>
               <CardContent className="p-8 pt-0 space-y-8">
@@ -192,11 +192,11 @@ export function PerformanceReport() {
                  <div className="flex items-center gap-6">
                     <div className="flex-1 p-5 rounded-3xl bg-white/5 border border-white/5">
                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Rooms</p>
-                       <p className="text-2xl font-black italic">{rooms.length}</p>
+                       <p className="text-2xl font-black">{rooms.length}</p>
                     </div>
                     <div className="flex-1 p-5 rounded-3xl bg-white/5 border border-white/5">
                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Guests</p>
-                       <p className="text-2xl font-black italic">{reportData.inHouse}</p>
+                       <p className="text-2xl font-black">{reportData.inHouse}</p>
                     </div>
                  </div>
               </CardContent>

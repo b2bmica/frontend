@@ -164,7 +164,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate }: 
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto p-0 border-none shadow-2xl">
+      <DialogContent className="sm:max-w-[550px] max-h-[90dvh] overflow-y-auto p-0 border-none shadow-2xl [&>button]:z-50">
         <div className="bg-muted/30 border-b p-6 relative">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold tracking-tight flex items-center gap-2">

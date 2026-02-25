@@ -1,5 +1,6 @@
 import * as React from "react"
 import { Bell, LogOut, Settings, Wrench, Plus } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { ModeToggle } from "@/components/mode-toggle"
@@ -31,7 +32,7 @@ export default function DashboardLayout({
   return (
     <SidebarProvider style={{ "--sidebar-width": "18.5rem" } as React.CSSProperties}>
       <AppSidebar activeTab={activeTab} onTabChange={onTabChange} />
-      <SidebarInset className="flex flex-col min-w-0">
+      <SidebarInset className="flex flex-col min-w-0 h-screen overflow-hidden">
         <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between border-b bg-background/95 px-3 md:px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="flex items-center gap-4 min-w-0">
             <SidebarTrigger className="flex-shrink-0" />
@@ -92,8 +93,8 @@ export default function DashboardLayout({
             </DropdownMenu>
           </div>
         </header>
-        <main className="flex-1 overflow-auto p-3 md:p-6">
-          <div className="mx-auto max-w-7xl">
+        <main className="flex-1 overflow-auto p-3 md:p-6 min-h-0">
+          <div className={cn("mx-auto h-full", activeTab === 'board' ? "max-w-none" : "max-w-7xl")}>
             {children}
           </div>
         </main>

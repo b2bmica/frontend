@@ -1,26 +1,39 @@
 import { useState } from 'react';
-import { Sparkles, Clock, AlertTriangle, RefreshCw, Search, CheckCircle, Wrench, Bed, Loader2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Card, CardContent, CardHeader } from './ui/card';
+import { Sparkles, Search, RefreshCw, Loader2, Bed, ChevronDown } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import { cn } from '../lib/utils';
 import { useBookings } from '../context/booking-context';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
 
 const STATUS_TABS = ['all', 'dirty', 'clean', 'occupied'] as const;
 
-const statusConfig: Record<string, { label: string; color: string; barColor: string; icon: any }> = {
-  clean:               { label: 'Clean',       color: 'bg-green-500/10 text-green-700 border-green-200',   barColor: 'bg-green-500',  icon: CheckCircle },
-  occupied:            { label: 'Occupied',    color: 'bg-blue-500/10 text-blue-700 border-blue-200',     barColor: 'bg-blue-500',   icon: Bed },
-  dirty:               { label: 'Dirty',       color: 'bg-orange-500/10 text-orange-700 border-orange-200', barColor: 'bg-orange-400', icon: Sparkles },
+const STATUS_META: Record<string, { label: string; badge: string; bar: string }> = {
+  clean:    { label: 'Clean',    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',  bar: 'bg-emerald-500' },
+  occupied: { label: 'Occupied', badge: 'bg-blue-50 text-blue-700 border-blue-200/80',           bar: 'bg-blue-500'    },
+  dirty:    { label: 'Dirty',    badge: 'bg-amber-50 text-amber-700 border-amber-200/80',        bar: 'bg-amber-400'   },
+  repair:   { label: 'Repair',   badge: 'bg-red-50 text-red-700 border-red-200/80',              bar: 'bg-red-500'     },
+};
+
+const TRANSITIONS: Record<string, { label: string; newStatus: string }[]> = {
+  dirty:    [{ label: 'Mark Clean',    newStatus: 'clean'    }, { label: 'Mark Occupied', newStatus: 'occupied' }],
+  occupied: [{ label: 'Mark Dirty',    newStatus: 'dirty'    }, { label: 'Mark Clean',    newStatus: 'clean'    }],
+  clean:    [{ label: 'Mark Occupied', newStatus: 'occupied' }, { label: 'Mark Dirty',    newStatus: 'dirty'    }],
+  repair:   [{ label: 'Mark Clean',    newStatus: 'clean'    }, { label: 'Mark Dirty',    newStatus: 'dirty'    }],
 };
 
 export function HousekeepingBoard() {
-  const { rooms, updateRoomStatus, loading, refreshRooms } = useBookings();
-  const [filter, setFilter] = useState<string>('all');
-  const [search, setSearch] = useState('');
-  const [actioningId, setActioningId] = useState<string | null>(null);
+  const { rooms, bookings, updateRoomStatus, loading, refreshRooms } = useBookings();
+  const [filter, setFilter]       = useState<string>('all');
+  const [search, setSearch]       = useState('');
+  const [actioningId, setActioning] = useState<string | null>(null);
 
   const filtered = rooms.filter(r => {
     if (filter !== 'all' && r.status !== filter) return false;
@@ -31,50 +44,37 @@ export function HousekeepingBoard() {
     return true;
   });
 
-  // Count by status
+  // Rooms with a live checked-in booking = truly occupied
+  const checkedInRoomIds = new Set(
+    bookings
+      .filter(b => b.status === 'checked-in')
+      .map(b => (typeof b.roomId === 'object' ? b.roomId._id : b.roomId))
+  );
+
   const counts = rooms.reduce((acc, r) => {
     acc[r.status] = (acc[r.status] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
-  const handleStatusChange = async (roomId: string, newStatus: string) => {
-    setActioningId(roomId);
-    try {
-      await updateRoomStatus(roomId, newStatus);
-    } catch (err) {
-      console.error(err);
-    }
-    setActioningId(null);
-  };
+  // Override occupied with the booking-derived count
+  counts['occupied'] = checkedInRoomIds.size;
 
-  const getActions = (status: string, roomId: string): { label: string; newStatus: string; className: string }[] => {
-    switch (status) {
-      case 'dirty':       return [
-        { label: 'Start Cleaning', newStatus: 'clean',     className: 'bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-500/10' },
-        { label: 'Mark Occupied',  newStatus: 'occupied',  className: 'bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/10' },
-      ];
-      case 'occupied':    return [
-        { label: 'Mark Dirty',     newStatus: 'dirty',     className: 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/10' },
-        { label: 'Mark Clean',     newStatus: 'clean',     className: 'bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-500/10' },
-      ];
-      case 'clean':       return [
-        { label: 'Mark Occupied',  newStatus: 'occupied',  className: 'bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/10' },
-        { label: 'Mark Dirty',     newStatus: 'dirty',     className: 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/10' },
-      ];
-      default: return [];
-    }
+  const handleStatusChange = async (roomId: string, newStatus: string) => {
+    setActioning(roomId);
+    try { await updateRoomStatus(roomId, newStatus); } catch { /* noop */ }
+    setActioning(null);
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center py-16"><Loader2 className="h-7 w-7 animate-spin text-muted-foreground" /></div>;
+    return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
   }
 
   if (rooms.length === 0) {
     return (
-      <div className="text-center py-16 bg-muted/20 rounded-xl border">
-        <Bed className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-        <h3 className="text-lg font-bold">No rooms yet</h3>
-        <p className="text-muted-foreground text-sm">Add rooms in the Rooms tab to track housekeeping.</p>
+      <div className="text-center py-20 border border-dashed rounded-2xl">
+        <Bed className="h-10 w-10 mx-auto text-slate-300 mb-4" />
+        <h3 className="text-sm font-bold text-slate-500">No rooms registered</h3>
+        <p className="text-xs text-muted-foreground mt-1">Add rooms in the Rooms section first.</p>
       </div>
     );
   }
@@ -82,107 +82,156 @@ export function HousekeepingBoard() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" /> Housekeeping Board
+          <h2 className="text-lg font-black tracking-tight text-slate-900 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" /> Housekeeping
           </h2>
-          <p className="text-sm text-muted-foreground">Track and update room cleaning status.</p>
+          <p className="text-xs text-muted-foreground font-medium mt-0.5">Room status overview and cleaning assignments</p>
         </div>
-        <Button variant="outline" size="sm" onClick={refreshRooms}>
-          <RefreshCw className="h-4 w-4 mr-2" /> Refresh
+        <Button variant="outline" size="sm" onClick={refreshRooms} className="h-9 rounded-xl font-bold text-xs border-slate-200 self-start sm:self-auto">
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Refresh
         </Button>
       </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {(['clean', 'dirty', 'occupied'] as const).map(s => {
-          const cfg = statusConfig[s];
-          const Icon = cfg.icon;
+      {/* Summary KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {(['clean', 'dirty', 'occupied', 'repair'] as const).map(s => {
+          const m = STATUS_META[s];
           return (
-            <div key={s} className={cn("rounded-lg border p-3 cursor-pointer transition-all", cfg.color, filter === s && 'ring-2 ring-primary')}
-              onClick={() => setFilter(filter === s ? 'all' : s)}>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider">{cfg.label}</span>
-                <Icon className="h-4 w-4" />
+            <button
+              key={s}
+              onClick={() => setFilter(filter === s ? 'all' : s)}
+              className={cn(
+                "text-left p-4 rounded-2xl border transition-all hover:shadow-sm",
+                filter === s ? "ring-2 ring-primary ring-offset-1" : "",
+                m.badge
+              )}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[9px] font-black uppercase tracking-[0.15em] opacity-70">{m.label}</span>
+                <span className={cn("w-2 h-2 rounded-full", m.bar)} />
               </div>
-              <div className="text-2xl font-black mt-1">{counts[s] || 0}</div>
-            </div>
+              <div className="text-2xl font-black">{counts[s] || 0}</div>
+            </button>
           );
         })}
       </div>
 
       {/* Filters + Search */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search room..." className="pl-10 h-9"
-            value={search} onChange={e => setSearch(e.target.value)} />
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Search room number or type..."
+            className="pl-9 h-9 rounded-xl bg-slate-50 border-none text-xs font-medium"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
         </div>
         <div className="flex gap-1.5 flex-wrap">
           {STATUS_TABS.map(s => (
-            <Button key={s} variant={filter === s ? 'default' : 'outline'} size="sm"
-              className="h-8 capitalize text-xs" onClick={() => setFilter(s)}>
-              {s === 'all' ? `All (${rooms.length})` : s.replace('-', ' ')}
+            <Button
+              key={s}
+              variant={filter === s ? 'default' : 'outline'}
+              size="sm"
+              className="h-9 capitalize text-xs rounded-xl font-bold border-slate-200"
+              onClick={() => setFilter(s)}
+            >
+              {s === 'all' ? `All (${rooms.length})` : `${STATUS_META[s]?.label} (${counts[s] || 0})`}
             </Button>
           ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        <AnimatePresence>
+      {/* Room Table */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-sm">
+        {/* Table head */}
+        <div className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-0 px-4 py-2 bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <div className="w-2 mr-3" />
+          <div>Room</div>
+          <div className="px-4 text-right hidden sm:block">Floor</div>
+          <div className="px-4 text-right">Rate</div>
+          <div className="pl-4 text-right">Action</div>
+        </div>
+
+        {filtered.length === 0 && (
+          <div className="py-10 text-center text-sm font-bold text-slate-400">No rooms match this filter.</div>
+        )}
+
+        <div className="divide-y divide-slate-100">
           {filtered.map((room, i) => {
-            const cfg = statusConfig[room.status] || statusConfig.clean;
+            const meta = STATUS_META[room.status] || STATUS_META.dirty;
+            const transitions = TRANSITIONS[room.status] || [];
             const isActioning = actioningId === room._id;
+
             return (
-              <motion.div key={room._id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ delay: i * 0.03 }}
+              <motion.div
+                key={room._id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: i * 0.02 }}
+                className="grid grid-cols-[auto_1fr_auto_auto_auto] gap-0 items-center px-4 py-3 hover:bg-slate-50/70 transition-colors"
               >
-                <Card className="relative border shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-                  <div className={cn("absolute top-0 left-0 w-1.5 h-full", cfg.barColor)} />
-                  <CardHeader className="pb-2 pl-5">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="text-2xl font-black text-primary">#{room.roomNumber}</div>
-                        <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">{room.roomType}</p>
-                      </div>
-                      <Badge variant="outline" className={cn("text-[10px] px-2 capitalize", cfg.color)}>
-                        {cfg.label}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3 pl-5">
-                    <div className="text-xs text-muted-foreground whitespace-nowrap mb-1">
-                      ₹{room.price.toLocaleString()}/night · Floor {room.floor || '—'}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {getActions(room.status, room._id).map((action) => (
-                        <Button 
-                          key={action.label}
-                          size="sm" 
-                          className={cn("w-full h-10 text-[9px] font-black uppercase tracking-widest rounded-xl transition-all", action.className)}
+                {/* Status bar */}
+                <div className={cn("w-1.5 h-8 rounded-full mr-3 flex-shrink-0", meta.bar)} />
+
+                {/* Room info */}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-black text-slate-900">#{room.roomNumber}</span>
+                    <Badge variant="outline" className={cn("text-[9px] font-black uppercase tracking-tight border px-1.5 py-0", meta.badge)}>
+                      {meta.label}
+                    </Badge>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground font-medium mt-0.5">{room.roomType}</p>
+                </div>
+
+                {/* Floor */}
+                <div className="px-4 text-xs font-bold text-slate-500 text-right hidden sm:block">
+                  {room.floor ? `F${room.floor}` : '—'}
+                </div>
+
+                {/* Rate */}
+                <div className="px-4 text-xs font-black text-slate-700 text-right">
+                  ₹{room.price.toLocaleString()}
+                </div>
+
+                {/* Action dropdown */}
+                <div className="pl-4">
+                  {transitions.length > 0 ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           disabled={isActioning}
-                          onClick={() => handleStatusChange(room._id, action.newStatus)}
+                          className="h-8 px-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border-slate-200 hover:border-primary hover:text-primary transition-colors"
                         >
-                          {isActioning && actioningId === room._id ? <Loader2 className="h-3 w-3 mr-2 animate-spin" /> : null}
-                          {action.label}
+                          {isActioning ? <Loader2 className="h-3 w-3 animate-spin" /> : <>Update <ChevronDown className="h-2.5 w-2.5 ml-1 opacity-60" /></>}
                         </Button>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-[150px] rounded-xl shadow-lg border-slate-100">
+                        {transitions.map(t => (
+                          <DropdownMenuItem
+                            key={t.newStatus}
+                            className="text-xs font-bold cursor-pointer rounded-lg"
+                            onClick={() => handleStatusChange(room._id, t.newStatus)}
+                          >
+                            {t.label}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : (
+                    <span className="text-[10px] text-slate-300 font-bold">—</span>
+                  )}
+                </div>
               </motion.div>
             );
           })}
-        </AnimatePresence>
+        </div>
       </div>
-
-      {filtered.length === 0 && (
-        <div className="text-center py-8 text-muted-foreground text-sm">No rooms match this filter.</div>
-      )}
     </div>
   );
 }

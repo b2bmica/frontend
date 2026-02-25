@@ -61,12 +61,22 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
     });
   }, [bookings, guests, rooms, searchQuery, showHistory]);
 
-  // Set initial selection if not set
+  // Reset selection when toggling history off if the selected booking isn't active
+  useEffect(() => {
+    if (!showHistory && selectedBookingId) {
+      const selected = bookings.find(b => b._id === selectedBookingId);
+      if (selected && selected.status !== 'checked-in' && selected.status !== 'reserved') {
+        setSelectedBookingId(null);
+      }
+    }
+  }, [showHistory]);
+
+  // Auto-select the first active booking if nothing selected
   useEffect(() => {
     if (!selectedBookingId && filteredBookings.length > 0) {
       setSelectedBookingId(filteredBookings[0]._id);
     }
-  }, [filteredBookings, selectedBookingId]);
+  }, [filteredBookings]);
 
   const booking = useMemo(() => bookings.find(b => b._id === selectedBookingId), [bookings, selectedBookingId]);
 
@@ -174,7 +184,15 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                  />
               </div>
              <div className="space-y-1 max-h-[300px] lg:max-h-[500px] overflow-y-auto pr-1">
-               {filteredBookings.map(b => {
+               {filteredBookings.length === 0 ? (
+                 <div className="py-10 text-center">
+                   <Receipt className="h-8 w-8 text-slate-200 mx-auto mb-3" />
+                   <p className="text-[10px] font-bold uppercase tracking-widest text-slate-300">No active bookings</p>
+                   {!showHistory && (
+                     <p className="text-[9px] text-slate-300 mt-1">Toggle "All Data" to see history.</p>
+                   )}
+                 </div>
+               ) : filteredBookings.map(b => {
                  const g = typeof b.guestId === 'object' ? b.guestId : guests.find(g => g._id === b.guestId);
                  const r = typeof b.roomId === 'object' ? b.roomId : rooms.find(r => r._id === b.roomId);
                  const isActive = selectedBookingId === b._id;
@@ -192,7 +210,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                      <div className="min-w-0">
                        <p className="text-xs font-bold truncate">{g?.name || 'Guest'}</p>
                        <p className={cn("text-[10px] uppercase font-medium mt-0.5 opacity-60", isActive ? "text-slate-300" : "text-slate-500")}>
-                         Room {r?.roomNumber || '??'}
+                         Room {r?.roomNumber || '??'} · <span className="capitalize">{b.status.replace('-', ' ')}</span>
                        </p>
                      </div>
                      <ChevronRight className={cn("h-3 w-3", isActive ? "text-white" : "text-slate-300")} />
