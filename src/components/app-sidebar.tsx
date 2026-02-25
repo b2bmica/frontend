@@ -16,11 +16,6 @@ import { useSidebar } from "@/components/ui/sidebar"
 
 const navItems = [
   {
-    title: "Dashboard",
-    id: "overview",
-    icon: LayoutDashboard,
-  },
-  {
     title: "Bookings",
     id: "board",
     icon: Calendar,
@@ -28,6 +23,11 @@ const navItems = [
       { title: "Calendar View", id: "board" },
       { title: "All Bookings", id: "bookings" },
     ],
+  },
+  {
+    title: "Dashboard",
+    id: "overview",
+    icon: LayoutDashboard,
   },
   {
     title: "Rooms",
@@ -108,11 +108,10 @@ export function AppSidebar({
                 </SidebarMenuItem>
               )
             }
-
-              return (
+            return (
                 <Collapsible
                   key={item.title}
-                  open={isActive}
+                  defaultOpen={isActive}
                   className="group/collapsible"
                 >
                 <SidebarMenuItem>
@@ -120,7 +119,7 @@ export function AppSidebar({
                     <SidebarMenuButton
                       tooltip={item.title}
                       isActive={isActive}
-                      onClick={() => item.id && handleTabChange(item.id)}
+                      onPointerDown={() => item.id && handleTabChange(item.id)}
                     >
                       {item.icon && <item.icon />}
                       <span>{item.title}</span>
