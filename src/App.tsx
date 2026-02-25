@@ -257,11 +257,41 @@ function App() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-3">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="relative flex flex-col items-center">
+          {/* Branded Icon Container */}
+          <div className="relative mb-8">
+            <div className="h-16 w-16 rounded-2xl bg-primary flex items-center justify-center text-white shadow-2xl shadow-primary/40 animate-bounce">
+              <Building2 className="h-10 w-10" />
+            </div>
+            <div className="absolute -inset-4 border-2 border-primary/10 rounded-[2rem] animate-[spin_4s_linear_infinite]" />
+            <div className="absolute -inset-8 border border-primary/5 rounded-[3rem] animate-[spin_8s_linear_infinite_reverse]" />
+          </div>
+
+          {/* Text & Loading Progress */}
+          <div className="text-center space-y-4">
+             <div className="flex flex-col items-center">
+                <span className="text-sm font-black uppercase tracking-[0.4em] text-slate-900 mb-1">InnLogix Systems</span>
+                <span className="h-0.5 w-12 bg-primary rounded-full" />
+             </div>
+             
+             <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                <span>Synchronizing Environment</span>
+             </div>
+
+             <div className="w-48 h-1 bg-slate-50 rounded-full overflow-hidden mt-4">
+                <div className="h-full bg-primary/30 animate-[loader-slide_2s_infinite_linear]" style={{ width: '40%' }} />
+             </div>
+          </div>
         </div>
+        
+        <style dangerouslySetInnerHTML={{ __html: `
+          @keyframes loader-slide {
+            0% { transform: translateX(-150%); }
+            100% { transform: translateX(250%); }
+          }
+        `}} />
       </div>
     )
   }
