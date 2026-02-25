@@ -65,9 +65,9 @@ export function BookingBoard() {
   }, []);
 
   const DAYS = daysCount;
-  const COLUMN_WIDTH = isMobile ? 52 : 100;
-  const ROW_HEIGHT  = isMobile ? 56 : 68;
-  const ROOM_COL    = isMobile ? 84 : 152;
+  const COLUMN_WIDTH = isMobile ? 65 : 100;
+  const ROW_HEIGHT  = isMobile ? 60 : 68;
+  const ROOM_COL    = isMobile ? 100 : 152;
 
   const timeline = useMemo(() =>
     eachDayOfInterval({ start: weekStart, end: addDays(weekStart, DAYS - 1) }),
@@ -127,21 +127,27 @@ export function BookingBoard() {
         <div className="flex flex-col gap-2.5 p-4 border-b bg-card/40 backdrop-blur-md">
           {/* Row 1: nav */}
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5">
-              <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl border-slate-200"
+            <div className="flex items-center justify-between w-full">
+              <Button variant="outline" size="sm" className="h-9 px-3 rounded-xl border-slate-200 bg-white shadow-sm font-bold text-xs"
                 onClick={() => setWeekStart(addDays(weekStart, -DAYS))}>
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-4 w-4 mr-1" /> Earlier
               </Button>
-              <span className="text-xs sm:text-[11px] font-black uppercase tracking-widest min-w-[200px] text-center text-slate-500">{periodLabel}</span>
-              <Button variant="outline" size="icon" className="h-8 w-8 rounded-xl border-slate-200"
+              <div className="flex flex-col items-center">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Viewing Period</span>
+                <span className="text-xs font-black uppercase tracking-tight text-slate-900">{periodLabel}</span>
+              </div>
+              <Button variant="outline" size="sm" className="h-9 px-3 rounded-xl border-slate-200 bg-white shadow-sm font-bold text-xs"
                 onClick={() => setWeekStart(addDays(weekStart, DAYS))}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="sm" className="h-8 text-[10px] font-black uppercase tracking-widest text-primary ml-2"
-                onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}>
-                Current View
+                Later <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
+          </div>
+
+          <div className="flex items-center justify-center">
+            <Button variant="secondary" size="sm" className="h-7 px-4 rounded-full text-[10px] font-bold uppercase tracking-widest"
+              onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}>
+              Go to Today
+            </Button>
           </div>
 
           {/* Row 2: status filter chips + counts */}
@@ -178,6 +184,35 @@ export function BookingBoard() {
                 <X className="h-3 w-3 text-muted-foreground" />
               </button>
             )}
+          </div>
+
+          {/* Row 3: Legend */}
+          <div className="flex items-center gap-4 px-1 py-1 border-t border-slate-50 mt-1">
+             <div className="flex items-center gap-1.5 opacity-60">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Legend:</span>
+             </div>
+             <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
+                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                   <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-500">Reserved</span>
+                </div>
+                <div className="flex items-center gap-1">
+                   <span className="w-2 h-2 rounded-full bg-blue-500" />
+                   <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-500">Arrived</span>
+                </div>
+                <div className="flex items-center gap-1">
+                   <span className="w-2 h-2 rounded-full bg-orange-500" />
+                   <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-500">Departed</span>
+                </div>
+                <div className="flex items-center gap-1 border-l pl-3 ml-2">
+                   <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                   <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-500">Clean</span>
+                </div>
+                <div className="flex items-center gap-1">
+                   <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                   <span className="text-[9px] font-bold uppercase tracking-tighter text-slate-500">Repair</span>
+                </div>
+             </div>
           </div>
         </div>
 

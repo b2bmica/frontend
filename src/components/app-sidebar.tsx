@@ -14,44 +14,58 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useAuth } from "../context/auth-context"
 import { useSidebar } from "@/components/ui/sidebar"
 import { Link, useLocation } from "react-router-dom"
+import { cn } from "@/lib/utils"
 
 const navItems = [
   {
-    title: "Bookings",
+    title: "Calendar",
     id: "board",
     icon: Calendar,
-    items: [
-      { title: "Calendar View", id: "board" },
-      { title: "All Bookings", id: "bookings" },
-    ],
   },
   {
-    title: "Dashboard",
+    title: "Registrations",
+    id: "bookings",
+    icon: BookOpen,
+  },
+  {
+    title: "Stats & Overview",
     id: "overview",
     icon: LayoutDashboard,
   },
   {
-    title: "Rooms",
+    title: "Room List",
     id: "rooms",
     icon: Bed,
-    items: [
-      { title: "Room Inventory", id: "rooms" },
-      { title: "Housekeeping", id: "housekeeping" },
-    ],
   },
   {
-    title: "Guests",
+    title: "Housekeeping",
+    id: "housekeeping",
+    icon: Home,
+  },
+  {
+    title: "Maintenance",
+    id: "maintenance",
+    icon: Wrench,
+  },
+  {
+    title: "Guest History",
     id: "guests",
     icon: Users,
   },
   {
-    title: "Finance",
+    title: "Payments & Folio",
     id: "folio",
     icon: Wallet,
-    items: [
-      { title: "Billing & Folio", id: "folio" },
-      { title: "Financial Reports", id: "reports" },
-    ],
+  },
+  {
+    title: "Performance Report",
+    id: "reports",
+    icon: BarChart3,
+  },
+  {
+    title: "Hotel Settings",
+    id: "settings",
+    icon: Settings,
   },
 ]
 
@@ -98,78 +112,46 @@ export function AppSidebar({
       <SidebarContent>
         <SidebarMenu>
           {navItems.map((item) => {
-            const hasItems = item.items && item.items.length > 0
-            const isActive = currentPathSegment === item.id || item.items?.some(sub => sub.id === currentPathSegment)
+            const isActive = currentPathSegment === item.id
             
-            if (!hasItems) {
-              return (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    tooltip={item.title}
-                    isActive={currentPathSegment === item.id}
-                  >
-                    <Link to={`/dashboard/${item.id}`} onClick={() => setOpenMobile(false)}>
-                      {item.icon && <item.icon />}
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )
-            }
             return (
-              <Collapsible
-                key={item.title}
-                open={isActive}
-                className="group/collapsible"
-              >
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    tooltip={item.title}
-                    isActive={isActive}
-                    className="w-full data-[active=true]:bg-slate-900 data-[active=true]:text-white data-[active=true]:shadow-md"
-                  >
-                    <Link 
-                      to={`/dashboard/${item.id}`} 
-                      onClick={() => setOpenMobile(false)}
-                      className="flex items-center w-full"
-                    >
-                      {item.icon && <item.icon />}
-                      <span>{item.title}</span>
-                      {hasItems && (
-                        <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                      )}
-                    </Link>
-                  </SidebarMenuButton>
-                  
-                  {hasItems && (
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        {item.items?.map((subItem) => (
-                          <SidebarMenuSubItem key={subItem.title}>
-                            <SidebarMenuSubButton
-                              asChild
-                              isActive={currentPathSegment === subItem.id}
-                              className="data-[active=true]:bg-slate-900 data-[active=true]:text-white"
-                            >
-                              <Link to={`/dashboard/${subItem.id}`} onClick={() => setOpenMobile(false)}>
-                                <span>{subItem.title}</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))}
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
-                  )}
-                </SidebarMenuItem>
-              </Collapsible>
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton
+                  asChild
+                  tooltip={item.title}
+                  isActive={isActive}
+                  className="w-full h-12 px-4 text-[14px] font-bold tracking-tight data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:border-r-4 data-[active=true]:border-primary transition-all duration-200 rounded-xl"
+                >
+                  <Link to={`/dashboard/${item.id}`} onClick={() => setOpenMobile(false)} className="flex items-center gap-3">
+                    <div className={cn(
+                      "flex items-center justify-center size-8 rounded-lg transition-colors",
+                      isActive ? "bg-primary text-primary-foreground" : "bg-slate-100 text-slate-500"
+                    )}>
+                      {item.icon && <item.icon className="size-4" />}
+                    </div>
+                    <span>{item.title}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             )
           })}
         </SidebarMenu>
       </SidebarContent>
 
       <SidebarRail />
+      <SidebarFooter className="p-4 border-t border-slate-50">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton 
+              onClick={logout}
+              className="w-full h-11 px-4 text-xs font-bold uppercase tracking-widest text-red-500 hover:bg-red-50 hover:text-red-600 rounded-xl"
+            >
+              <LogOut className="mr-3 size-4" />
+              <span>Sign Out</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   )
 }

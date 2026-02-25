@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Bell, LogOut, Settings, Wrench } from "lucide-react"
+import { Bell, LogOut, Settings, Wrench, Plus } from "lucide-react"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { ModeToggle } from "@/components/mode-toggle"
@@ -29,18 +29,41 @@ export default function DashboardLayout({
   const initials = user?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || 'U'
 
   return (
-    <SidebarProvider>
+    <SidebarProvider style={{ "--sidebar-width": "18.5rem" } as React.CSSProperties}>
       <AppSidebar activeTab={activeTab} onTabChange={onTabChange} />
       <SidebarInset className="flex flex-col min-w-0">
         <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between border-b bg-background/95 px-3 md:px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-4 min-w-0">
             <SidebarTrigger className="flex-shrink-0" />
             <Separator orientation="vertical" className="mr-1 h-4 flex-shrink-0" />
-            <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider truncate hidden sm:block opacity-60">
-              {hotel?.name || 'Hotel Management'}
+            <div className="flex flex-col">
+              <h1 className="text-sm font-black text-slate-900 uppercase tracking-tight truncate leading-none mb-1">
+                {activeTab === 'board' ? 'Calendar View' : 
+                 activeTab === 'bookings' ? 'Registrations' :
+                 activeTab === 'overview' ? 'Stats Overview' :
+                 activeTab === 'rooms' ? 'Room List' :
+                 activeTab === 'housekeeping' ? 'Housekeeping' :
+                 activeTab === 'maintenance' ? 'Maintenance' :
+                 activeTab === 'guests' ? 'Guest History' :
+                 activeTab === 'folio' ? 'Payments & Folio' :
+                 activeTab === 'reports' ? 'Performance Report' :
+                 'Settings'}
+              </h1>
+              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest truncate opacity-50">
+                {hotel?.name || 'Hotel Management'}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {['board', 'bookings'].includes(activeTab || '') && (
+              <Button 
+                size="sm" 
+                onClick={() => onTabChange?.('new-booking')} 
+                className="rounded-xl font-bold uppercase text-[10px] tracking-widest px-4 h-9 shadow-lg shadow-primary/10 transition-all active:scale-[0.95] mr-2"
+              >
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> Book
+              </Button>
+            )}
             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary">
               <Bell className="h-4 w-4" />
             </Button>

@@ -36,14 +36,15 @@ const DirectBookingEngine = lazy(() => import('./components/direct-booking').the
 const HotelSettings = lazy(() => import('./components/hotel-settings').then(module => ({ default: module.HotelSettings })))
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
-  overview: { title: 'Dashboard', subtitle: 'Overview of operations and key metrics.' },
-  board: { title: 'Booking Calendar', subtitle: 'Visual timeline of all room reservations.' },
-  bookings: { title: 'All Bookings', subtitle: 'Complete list of current and past reservations.' },
-  rooms: { title: 'Room Inventory', subtitle: 'Manage your rooms, types, rates and availability.' },
-  guests: { title: 'Guest Directory', subtitle: 'Manage your visitor records and stay history.' },
-  folio: { title: 'Billing & Folio', subtitle: 'Manage guest charges, payments and tax invoices.' },
-  reports: { title: 'Reports & Analytics', subtitle: 'Detailed breakdown of financial collections.' },
-  housekeeping: { title: 'Housekeeping', subtitle: 'Coordinate cleaning and maintenance tasks.' },
+  overview: { title: 'Stats & Overview', subtitle: 'Overview of operations and key metrics.' },
+  board: { title: 'Calendar View', subtitle: 'Visual timeline of all room reservations.' },
+  bookings: { title: 'Registrations', subtitle: 'Complete list of current and past reservations.' },
+  rooms: { title: 'Room List', subtitle: 'Manage your rooms, types, rates and availability.' },
+  guests: { title: 'Guest History', subtitle: 'Manage your visitor records and stay history.' },
+  folio: { title: 'Payments & Folio', subtitle: 'Manage guest charges, payments and tax invoices.' },
+  reports: { title: 'Performance Report', subtitle: 'Detailed breakdown of financial collections.' },
+  housekeeping: { title: 'Housekeeping', subtitle: 'Coordinate cleaning tasks and room status.' },
+  maintenance: { title: 'Maintenance', subtitle: 'Manage repair tickets and facility upkeep.' },
   settings: { title: 'Hotel Settings', subtitle: 'Configure hotel information and Indian tax settings.' },
 }
 
@@ -140,30 +141,6 @@ function DashboardContent() {
         }
       }}>
         <div className="flex flex-col gap-4 md:gap-6">
-          {/* Header */}
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Building2 className="h-4 w-4 text-primary" />
-                <span className="text-xs font-bold text-primary uppercase tracking-wider">{hotel?.name || 'Hotel'}</span>
-                {hotel?.status === 'deleted' && (
-                  <Badge variant="outline" className="text-[9px] font-black uppercase bg-amber-50 text-amber-700 border-amber-200 py-0 h-5">Legacy / Deleted</Badge>
-                )}
-              </div>
-              <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900">{currentPage.title}</h1>
-              <p className="text-muted-foreground text-xs md:text-sm font-medium">{currentPage.subtitle}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button 
-                size="sm" 
-                onClick={() => setIsBookingModalOpen(true)} 
-                disabled={hotel?.status === 'deleted'}
-                className="rounded-xl font-bold uppercase text-[11px] tracking-wider px-6 h-10 shadow-lg shadow-primary/10 transition-all active:scale-[0.98]"
-              >
-                <Plus className="mr-2 h-4 w-4" /> New Booking
-              </Button>
-            </div>
-          </div>
 
           {hotel?.status === 'deleted' && (
              <div className="p-3 bg-amber-50 border border-amber-100 rounded-2xl flex items-center gap-3 text-amber-900">
@@ -213,23 +190,24 @@ function DashboardContent() {
                       <Route path="rooms" element={<RoomInventory />} />
                       <Route path="guests" element={<Card className="border-none shadow-md"><CardContent className="pt-6"><GuestTable /></CardContent></Card>} />
                       <Route path="folio" element={<FolioView bookingId={bookings[0]?._id} />} />
-                      
+                      <Route path="maintenance" element={<MaintenanceTickets />} />
+                      <Route path="housekeeping" element={<HousekeepingBoard />} />
                       <Route path="reports" element={
-                        <Tabs defaultValue="cashier">
-                          <TabsList className="mb-4"><TabsTrigger value="cashier">Cashier</TabsTrigger><TabsTrigger value="analytics">Executive</TabsTrigger></TabsList>
-                          <TabsContent value="cashier"><CashierReport /></TabsContent>
-                          <TabsContent value="analytics"><ExecutiveAnalytics /></TabsContent>
-                        </Tabs>
+                        <div className="space-y-12 pb-20">
+                          <Card className="border-none shadow-xl rounded-[40px] overflow-hidden bg-white/50 backdrop-blur-sm">
+                            <CardContent className="p-8">
+                              <ExecutiveAnalytics />
+                            </CardContent>
+                          </Card>
+                          <div className="pt-8 border-t border-slate-200">
+                            <div className="flex flex-col mb-8">
+                               <h3 className="text-lg font-black uppercase tracking-tight text-slate-900 italic">Detailed Audit Trail</h3>
+                               <p className="text-xs font-medium text-slate-400">Comprehensive log of all financial transactions and folio collections.</p>
+                            </div>
+                            <CashierReport />
+                          </div>
+                        </div>
                       } />
-
-                      <Route path="housekeeping" element={
-                        <Tabs defaultValue="cleaning">
-                          <TabsList className="mb-4"><TabsTrigger value="cleaning">Cleaning</TabsTrigger><TabsTrigger value="maintenance">Maintenance</TabsTrigger></TabsList>
-                          <TabsContent value="cleaning"><HousekeepingBoard /></TabsContent>
-                          <TabsContent value="maintenance"><MaintenanceTickets /></TabsContent>
-                        </Tabs>
-                      } />
-
                       <Route path="settings" element={<HotelSettings />} />
                       <Route path="*" element={<Navigate to="board" replace />} />
                     </Routes>
