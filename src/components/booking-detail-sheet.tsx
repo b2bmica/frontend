@@ -38,6 +38,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
   const { cancelBooking, checkIn, checkOut, updateBooking } = useBookings();
   const [isActioning, setIsActioning] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi'>('cash');
 
   if (!booking) return null;
 
@@ -171,7 +172,10 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                   <Button 
                     size="sm" 
                     variant="outline"
-                    onClick={() => handleAction((id) => updateBooking(id, { advancePayment: (booking.advancePayment || 0) + balance }))}
+                    onClick={() => handleAction((id) => updateBooking(id, { 
+                      advancePayment: (booking.advancePayment || 0) + balance,
+                      paymentMethod: paymentMethod
+                    }))}
                     className="text-[9px] font-black uppercase tracking-tighter h-7 px-3 border-primary/20 text-primary hover:bg-primary/5 rounded-xl transition-all"
                     disabled={isActioning}
                   >
@@ -223,14 +227,39 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
               </Button>
             )}
             {booking.status === 'checked-in' && (
-              <Button 
-                className="flex-[2] min-w-[140px] h-10 rounded-xl font-black bg-orange-600 hover:bg-orange-700 text-xs shadow-lg shadow-orange-500/10"
-                onClick={() => handleAction((id) => updateBooking(id, { status: 'checked-out', advancePayment: totalAmount }))}
-                disabled={isActioning}
-              >
-                {isActioning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                Checkout
-              </Button>
+              <div className="w-full space-y-2.5 mb-2">
+                <div className="flex items-center justify-between px-1">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">Settlement Method</p>
+                  <Badge variant="outline" className="text-[9px] font-bold uppercase py-0 px-1.5 border-orange-200 text-orange-700 bg-orange-50">Requires Settle</Badge>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {['cash', 'card', 'upi'].map((method) => (
+                    <Button
+                      key={method}
+                      variant={paymentMethod === method ? 'default' : 'outline'}
+                      className={cn(
+                        "h-9 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border-2",
+                        paymentMethod === method ? "border-primary shadow-sm" : "border-slate-100 text-slate-500"
+                      )}
+                      onClick={() => setPaymentMethod(method as any)}
+                    >
+                      {method}
+                    </Button>
+                  ))}
+                </div>
+                <Button 
+                  className="w-full h-11 rounded-2xl font-black bg-orange-600 hover:bg-orange-700 text-sm shadow-xl shadow-orange-500/20 mt-2 transform active:scale-[0.98] transition-all"
+                  onClick={() => handleAction((id) => updateBooking(id, { 
+                    status: 'checked-out', 
+                    advancePayment: totalAmount,
+                    paymentMethod: paymentMethod 
+                  }))}
+                  disabled={isActioning}
+                >
+                  {isActioning ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
+                  Settle & Checkout
+                </Button>
+              </div>
             )}
             <Button 
               variant="outline" 
