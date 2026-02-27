@@ -418,7 +418,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                                        </div>
                                        <div>
                                          <p className="text-[11px] font-bold text-slate-800 capitalize">{p.method}</p>
-                                          <p className="text-[9px] font-medium text-emerald-600 uppercase tracking-widest mt-0.5">{format(new Date(p.date), 'dd MMM')}{(p as any).note ?  /  + (p as any).note : ''}</p>
+                                          <p className="text-[9px] font-medium text-emerald-600 uppercase tracking-widest mt-0.5">{format(new Date(p.date), 'dd MMM')}{(p as any).note ? ' / ' + (p as any).note : ''}</p>
                                        </div>
                                      </div>
                                      <p className="font-bold text-xs text-emerald-600 ml-2 whitespace-nowrap">+ ₹{p.amount.toLocaleString()}</p>
