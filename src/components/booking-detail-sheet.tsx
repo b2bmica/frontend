@@ -19,7 +19,8 @@ import {
   CheckCircle2,
   ChevronRight,
   Info,
-  Loader2
+  Loader2,
+  X
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/auth-context';
@@ -238,45 +239,39 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                     Settle & Checkout
                   </Button>
                 ) : (
-                  <div className="bg-orange-50/50 p-2 rounded-xl border border-orange-100 flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-200">
-                    <div className="grid grid-cols-3 gap-1">
-                      {['cash', 'card', 'upi'].map((method) => (
+                  <div className="flex items-center gap-1.5 p-1 bg-orange-50/50 rounded-lg border border-orange-100 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex bg-white rounded-md border p-0.5 gap-0.5">
+                      {['cash', 'card', 'upi'].map((m) => (
                         <button
-                          key={method}
-                          onClick={() => setPaymentMethod(method as any)}
+                          key={m}
+                          onClick={() => setPaymentMethod(m as any)}
                           className={cn(
-                            "h-7 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all border",
-                            paymentMethod === method 
-                              ? "bg-orange-600 text-white border-orange-600 shadow-sm shadow-orange-500/20" 
-                              : "bg-white text-slate-500 border-slate-200 hover:border-orange-300"
+                            "h-5 px-1.5 text-[8px] font-black uppercase rounded transition-colors",
+                            paymentMethod === m ? "bg-orange-600 text-white" : "text-slate-400 hover:bg-slate-50"
                           )}
                         >
-                          {method}
+                          {m}
                         </button>
                       ))}
                     </div>
-                    <div className="flex gap-1.5">
-                      <Button 
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 px-2 text-[9px] font-bold text-slate-400 hover:text-slate-600"
-                        onClick={() => setShowPaymentSelection(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button 
-                        size="sm"
-                        className="flex-1 h-7 rounded-lg font-black bg-orange-600 hover:bg-orange-700 text-[9px] uppercase tracking-widest shadow-lg shadow-orange-500/10"
-                        onClick={() => handleAction((id) => updateBooking(id, { 
-                          status: 'checked-out', 
-                          advancePayment: totalAmount,
-                          paymentMethod: paymentMethod 
-                        }))}
-                        disabled={isActioning}
-                      >
-                        {isActioning ? <Loader2 className="h-3 w-3 animate-spin" /> : "Complete Settlement"}
-                      </Button>
-                    </div>
+                    <Button 
+                      size="sm"
+                      className="flex-1 h-6 rounded-md font-black bg-orange-600 hover:bg-orange-700 text-[8px] uppercase tracking-widest shadow-md"
+                      onClick={() => handleAction((id) => updateBooking(id, { 
+                        status: 'checked-out', 
+                        advancePayment: totalAmount,
+                        paymentMethod: paymentMethod 
+                      }))}
+                      disabled={isActioning}
+                    >
+                      {isActioning ? <Loader2 className="h-2 w-2 animate-spin" /> : "Confirm Settle"}
+                    </Button>
+                    <button 
+                      onClick={() => setShowPaymentSelection(false)} 
+                      className="p-1 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
                   </div>
                 )}
               </div>

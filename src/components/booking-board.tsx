@@ -478,11 +478,30 @@ export function BookingBoard() {
                                       cardElement.style.zIndex = '';
                                       cardElement.style.transition = '';
                                       cardElement.style.opacity = '';
+                                      // Force a reflow/re-render feel by ensuring no stale visual state
                                     }
 
                                     if (hasMovedSignificant && daysDelta !== 0) {
                                       const newCheckout = format(addDays(originalCheckout, daysDelta), 'yyyy-MM-dd');
-                                      if (new Date(newCheckout) > new Date(booking.checkin)) {
+                                      
+                                      // Overlap Check: Prevent extending into an existing booking
+                                      const proposedEnd = new Date(newCheckout);
+                                      const proposedStart = new Date(booking.checkin);
+                                      
+                                      const isClashing = bookings.some(b => {
+                                        if (b._id === booking._id || b.status === 'cancelled') return false;
+                                        if (getBookingRoomId(b) !== getBookingRoomId(booking)) return false;
+                                        const bStart = new Date(b.checkin);
+                                        const bEnd = new Date(b.checkout);
+                                        return proposedStart < bEnd && proposedEnd > bStart;
+                                      });
+
+                                      if (isClashing) {
+                                        // Silent block or simple alert as requested "dont allow extending"
+                                        return;
+                                      }
+
+                                      if (proposedEnd > proposedStart) {
                                         setPendingUpdate({ 
                                           booking, 
                                           updates: { 
