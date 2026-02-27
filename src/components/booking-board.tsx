@@ -144,13 +144,19 @@ export function BookingBoard() {
 
   const handleResizePointerDown = (e: React.PointerEvent, booking: Booking, side: 'left' | 'right') => {
     e.stopPropagation();
+    e.preventDefault();
     const startX = e.clientX;
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
     
-    const onPointerUp = async (upEvent: PointerEvent) => {
-      const deltaX = upEvent.clientX - startX;
+    const onPointerUp = async (upEvent: any) => {
+      const pointerEvt = upEvent as PointerEvent;
+      target.releasePointerCapture(pointerEvt.pointerId);
+      const deltaX = pointerEvt.clientX - startX;
+      // Calculate how many columns dragged over. Each column is COLUMN_WIDTH
       const deltaDays = Math.round(deltaX / COLUMN_WIDTH);
       
-      document.removeEventListener('pointerup', onPointerUp);
+      target.removeEventListener('pointerup', onPointerUp);
       
       if (deltaDays !== 0) {
         if (side === 'left') {
@@ -165,7 +171,7 @@ export function BookingBoard() {
       }
     };
     
-    document.addEventListener('pointerup', onPointerUp);
+    target.addEventListener('pointerup', onPointerUp);
   };
 
   if (loading) {
@@ -383,30 +389,38 @@ export function BookingBoard() {
                           initial={{ opacity: 0, scale: 0.95 }}
                           animate={{ opacity: 1, scale: 1 }}
                           className={cn(
-                            "absolute z-10 rounded shadow-sm cursor-grab overflow-hidden flex flex-col justify-center border border-black/10 transition-all",
+                            "absolute z-10 rounded-md p-1.5 text-white shadow-md cursor-grab overflow-hidden flex flex-col justify-between transition-all",
                             getStatusColor(booking.status)
                           )}
                           style={{
-                            left:   ROOM_COL + (clampedOffset * COLUMN_WIDTH),
-                            top:    2,
-                            width:  (clampedDuration * COLUMN_WIDTH),
-                            height: ROW_HEIGHT - 4,
+                            left:   ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 1,
+                            top:    3,
+                            width:  (clampedDuration * COLUMN_WIDTH) - 2,
+                            height: ROW_HEIGHT - 6,
                           }}
-                          onDoubleClick={(e) => { e.stopPropagation(); setSelectedBooking(booking); }}
+                          onClick={(e) => { e.stopPropagation(); setSelectedBooking(booking); }}
                         >
-                          <div className="px-2 w-full truncate h-full flex flex-col justify-center pointer-events-none">
-                            <span className="text-[10px] md:text-sm font-bold truncate leading-tight block">
-                              {guest?.name || 'Guest'}
-                            </span>
-                          </div>
+                          <button
+                            className="text-[10px] md:text-xs font-bold truncate text-left hover:underline leading-tight z-10 relative"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (guest?._id) setSelectedGuestId(guest._id);
+                              else setSelectedBooking(booking);
+                            }}
+                          >
+                            {guest?.name || 'Guest'}
+                          </button>
+                          <span className="text-[8px] md:text-[10px] bg-black/20 px-1 rounded truncate capitalize w-fit z-10 relative pointer-events-none">
+                            {booking.status.replace('-', ' ')}
+                          </span>
                           
                           {/* Drag Resize Handles */}
                           <div 
-                            className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/40 z-20"
+                            className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/40 z-20"
                             onPointerDown={(e) => handleResizePointerDown(e, booking, 'left')}
                           />
                           <div 
-                            className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/40 z-20"
+                            className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/40 z-20"
                             onPointerDown={(e) => handleResizePointerDown(e, booking, 'right')}
                           />
                         </motion.div>

@@ -108,7 +108,7 @@ class ApiClient {
     return this.request<any[]>('/rooms');
   }
 
-  async createRoom(data: { roomNumber: string; roomType: string; price: number; amenities?: string[] }) {
+  async createRoom(data: { roomNumber: string; roomType: string; price: number; floor?: number; baseOccupancy?: number; maxOccupancy?: number; extraPersonPrice?: number; amenities?: string[] }) {
     return this.request<any>('/rooms', {
       method: 'POST',
       body: JSON.stringify(data),
