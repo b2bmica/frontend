@@ -135,8 +135,10 @@ export function BookingBoard() {
       const newCheckin = format(targetDay, 'yyyy-MM-dd');
       const newCheckout = format(addDays(targetDay, duration), 'yyyy-MM-dd');
       
-      // If dropped in the same place approximately, don't update
-      if (newCheckin === booking.checkin && targetRoom._id === getBookingRoomId(booking)) return;
+      const currentCheckin = format(new Date(booking.checkin), 'yyyy-MM-dd');
+      
+      // If dropped in the same place exactly, don't update
+      if (newCheckin === currentCheckin && targetRoom._id === getBookingRoomId(booking)) return;
 
       setPendingUpdate({ booking, updates: { roomId: targetRoom._id, checkin: newCheckin, checkout: newCheckout } });
     }
