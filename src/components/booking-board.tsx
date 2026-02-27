@@ -454,47 +454,52 @@ export function BookingBoard() {
                                   if (hasMovedSignificant && cardElement) {
                                     // Visual snapping to full days makes it feel more "robust" as requested
                                     const snappedDeltaX = Math.round(deltaX / COLUMN_WIDTH) * COLUMN_WIDTH;
-                                    cardElement.style.width = `${Math.max(COLUMN_WIDTH, originalWidth + snappedDeltaX)}px`;
+                                    // Cap visual width to prevent 'way too future' craziness
+                                    const newWidth = Math.max(COLUMN_WIDTH, Math.min(originalWidth + snappedDeltaX, 30 * COLUMN_WIDTH));
+                                    cardElement.style.width = `${newWidth}px`;
                                   }
                                 };
 
-                                const onPointerUp = (upEvent: PointerEvent) => {
-                                  const deltaX = upEvent.clientX - startX;
-                                  const daysDelta = Math.round(deltaX / COLUMN_WIDTH);
-                                  
-                                  try {
-                                    handleEl.releasePointerCapture(upEvent.pointerId);
-                                  } catch (err) {}
-                                  window.removeEventListener('pointermove', onPointerMove);
-                                  window.removeEventListener('pointerup', onPointerUp);
-                                  
-                                  // Reset card styles immediately
-                                  if (cardElement) {
-                                    cardElement.style.width = '';
-                                    cardElement.style.zIndex = '';
-                                    cardElement.style.transition = '';
-                                  }
-
-                                  if (hasMovedSignificant && daysDelta !== 0) {
-                                    const newCheckout = format(addDays(originalCheckout, daysDelta), 'yyyy-MM-dd');
-                                    if (new Date(newCheckout) > new Date(booking.checkin)) {
-                                      setPendingUpdate({ 
-                                        booking, 
-                                        updates: { 
-                                          roomId: getBookingRoomId(booking), 
-                                          checkin: booking.checkin, 
-                                          checkout: newCheckout 
-                                        } 
-                                      });
+                                  const onPointerUp = (upEvent: PointerEvent) => {
+                                    const deltaX = upEvent.clientX - startX;
+                                    // Cap daysDelta to prevent accidental 'way too future' dates
+                                    const rawDaysDelta = Math.round(deltaX / COLUMN_WIDTH);
+                                    const daysDelta = Math.max(-30, Math.min(30, rawDaysDelta));
+                                    
+                                    try {
+                                      handleEl.releasePointerCapture(upEvent.pointerId);
+                                    } catch (err) {}
+                                    window.removeEventListener('pointermove', onPointerMove);
+                                    window.removeEventListener('pointerup', onPointerUp);
+                                    
+                                    // Reset card styles immediately - clear entirely to let React's style prop take over
+                                    if (cardElement) {
+                                      cardElement.style.width = '';
+                                      cardElement.style.zIndex = '';
+                                      cardElement.style.transition = '';
+                                      cardElement.style.opacity = '';
                                     }
-                                  }
-                                  
-                                  // Delay state release to prevent accidental clicks
-                                  setTimeout(() => { 
-                                    isResizingRef.current = false; 
-                                    setResizingId(null);
-                                  }, 50);
-                                };
+
+                                    if (hasMovedSignificant && daysDelta !== 0) {
+                                      const newCheckout = format(addDays(originalCheckout, daysDelta), 'yyyy-MM-dd');
+                                      if (new Date(newCheckout) > new Date(booking.checkin)) {
+                                        setPendingUpdate({ 
+                                          booking, 
+                                          updates: { 
+                                            roomId: getBookingRoomId(booking), 
+                                            checkin: booking.checkin, 
+                                            checkout: newCheckout 
+                                          } 
+                                        });
+                                      }
+                                    }
+                                    
+                                    // Delay state release to prevent accidental clicks
+                                    setTimeout(() => { 
+                                      isResizingRef.current = false; 
+                                      setResizingId(null);
+                                    }, 50);
+                                  };
 
                                 window.addEventListener('pointermove', onPointerMove);
                                 window.addEventListener('pointerup', onPointerUp);

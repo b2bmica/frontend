@@ -38,6 +38,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
   const { cancelBooking, checkIn, checkOut, updateBooking } = useBookings();
   const [isActioning, setIsActioning] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showPaymentSelection, setShowPaymentSelection] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi'>('cash');
 
   if (!booking) return null;
@@ -227,38 +228,57 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
               </Button>
             )}
             {booking.status === 'checked-in' && (
-              <div className="w-full space-y-2.5 mb-2">
-                <div className="flex items-center justify-between px-1">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-1">Settlement Method</p>
-                  <Badge variant="outline" className="text-[9px] font-bold uppercase py-0 px-1.5 border-orange-200 text-orange-700 bg-orange-50">Requires Settle</Badge>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {['cash', 'card', 'upi'].map((method) => (
-                    <Button
-                      key={method}
-                      variant={paymentMethod === method ? 'default' : 'outline'}
-                      className={cn(
-                        "h-9 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border-2",
-                        paymentMethod === method ? "border-primary shadow-sm" : "border-slate-100 text-slate-500"
-                      )}
-                      onClick={() => setPaymentMethod(method as any)}
-                    >
-                      {method}
-                    </Button>
-                  ))}
-                </div>
-                <Button 
-                  className="w-full h-11 rounded-2xl font-black bg-orange-600 hover:bg-orange-700 text-sm shadow-xl shadow-orange-500/20 mt-2 transform active:scale-[0.98] transition-all"
-                  onClick={() => handleAction((id) => updateBooking(id, { 
-                    status: 'checked-out', 
-                    advancePayment: totalAmount,
-                    paymentMethod: paymentMethod 
-                  }))}
-                  disabled={isActioning}
-                >
-                  {isActioning ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
-                  Settle & Checkout
-                </Button>
+              <div className="w-full">
+                {!showPaymentSelection ? (
+                  <Button 
+                    variant="outline"
+                    className="w-full h-8 rounded-lg font-bold border-orange-200 text-orange-600 hover:bg-orange-50 text-[10px] uppercase tracking-widest shadow-sm"
+                    onClick={() => setShowPaymentSelection(true)}
+                  >
+                    Settle & Checkout
+                  </Button>
+                ) : (
+                  <div className="bg-orange-50/50 p-2 rounded-xl border border-orange-100 flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="grid grid-cols-3 gap-1">
+                      {['cash', 'card', 'upi'].map((method) => (
+                        <button
+                          key={method}
+                          onClick={() => setPaymentMethod(method as any)}
+                          className={cn(
+                            "h-7 rounded-lg text-[9px] font-black uppercase tracking-tight transition-all border",
+                            paymentMethod === method 
+                              ? "bg-orange-600 text-white border-orange-600 shadow-sm shadow-orange-500/20" 
+                              : "bg-white text-slate-500 border-slate-200 hover:border-orange-300"
+                          )}
+                        >
+                          {method}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-1.5">
+                      <Button 
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-[9px] font-bold text-slate-400 hover:text-slate-600"
+                        onClick={() => setShowPaymentSelection(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button 
+                        size="sm"
+                        className="flex-1 h-7 rounded-lg font-black bg-orange-600 hover:bg-orange-700 text-[9px] uppercase tracking-widest shadow-lg shadow-orange-500/10"
+                        onClick={() => handleAction((id) => updateBooking(id, { 
+                          status: 'checked-out', 
+                          advancePayment: totalAmount,
+                          paymentMethod: paymentMethod 
+                        }))}
+                        disabled={isActioning}
+                      >
+                        {isActioning ? <Loader2 className="h-3 w-3 animate-spin" /> : "Complete Settlement"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             <Button 
