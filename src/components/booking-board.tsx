@@ -58,6 +58,7 @@ export function BookingBoard() {
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
   const [pendingUpdate, setPendingUpdate] = useState<{booking: Booking, updates: any} | null>(null);
+  const [resizePreview, setResizePreview] = useState<{ date: string, x: number, y: number } | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
   const [isMobile, setIsMobile] = useState(false);
@@ -436,12 +437,23 @@ export function BookingBoard() {
                                 cardElement.style.zIndex = '100';
                                 cardElement.style.transition = 'none'; // Disable transition for pure raw move
                                 
+                                let hasMovedSignificant = false;
+
                                 const onPointerMove = (moveEvent: PointerEvent) => {
-                                  isResizingRef.current = true;
                                   const deltaX = moveEvent.clientX - startX;
                                   
-                                  if (cardElement) {
+                                  // Threshold of 12px to start resizing (more robust)
+                                  if (!hasMovedSignificant && Math.abs(deltaX) > 12) {
+                                    hasMovedSignificant = true;
+                                    isResizingRef.current = true;
+                                  }
+
+                                  if (hasMovedSignificant && cardElement) {
                                     cardElement.style.width = `${Math.max(COLUMN_WIDTH, originalWidth + deltaX)}px`;
+                                    
+                                    const previewDays = Math.round(deltaX / COLUMN_WIDTH);
+                                    const prevDate = format(addDays(originalCheckout, previewDays), 'EEE, MMM dd');
+                                    setResizePreview({ date: prevDate, x: moveEvent.clientX, y: moveEvent.clientY });
                                   }
                                 };
 
@@ -453,11 +465,17 @@ export function BookingBoard() {
                                   window.removeEventListener('pointermove', onPointerMove);
                                   window.removeEventListener('pointerup', onPointerUp);
                                   
-                                  // Reset card styles
+                                  // Reset card styles and preview
+                                  setResizePreview(null);
                                   if (cardElement) {
                                     cardElement.style.width = '';
                                     cardElement.style.zIndex = '';
                                     cardElement.style.transition = '';
+                                  }
+
+                                  if (!hasMovedSignificant) {
+                                    setTimeout(() => { isResizingRef.current = false; }, 50);
+                                    return;
                                   }
 
                                   if (daysDelta !== 0) {
@@ -538,8 +556,18 @@ export function BookingBoard() {
                         <Plus className="h-3 w-3" /> Relocate to Room {rooms.find(r => r._id === pendingUpdate.updates.roomId)?.roomNumber || 'Unknown'}
                       </div>
                     ) : (
-                      <div className="text-[10px] font-black uppercase text-slate-400 mt-1 tracking-tight">
-                        Same Room Assignment
+                      <div className="flex flex-col items-end gap-1.5 mt-2">
+                        <div className="text-[10px] font-black uppercase text-slate-400 tracking-tight">
+                          Same Room Assignment
+                        </div>
+                        {pendingUpdate && (() => {
+                          const oldDays = differenceInDays(new Date(pendingUpdate.booking.checkout), new Date(pendingUpdate.booking.checkin));
+                          const newDays = differenceInDays(new Date(pendingUpdate.updates.checkout), new Date(pendingUpdate.updates.checkin));
+                          const diff = newDays - oldDays;
+                          if (diff > 0) return <Badge key="ext" className="bg-emerald-500 hover:bg-emerald-500 text-[9px] font-black uppercase h-5">+{diff} Day{diff > 1 ? 's' : ''} Extended</Badge>;
+                          if (diff < 0) return <Badge key="red" variant="destructive" className="text-[9px] font-black uppercase h-5">{diff} Day{Math.abs(diff) > 1 ? 's' : ''} Reduced</Badge>;
+                          return null;
+                        })()}
                       </div>
                     )}
                   </div>
@@ -556,6 +584,23 @@ export function BookingBoard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {resizePreview && (
+        <div 
+          className="fixed z-[9999] pointer-events-none bg-slate-900/90 text-white px-3 py-1.5 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-2xl backdrop-blur-md border border-white/20 whitespace-nowrap"
+          style={{ 
+            left: resizePreview.x, 
+            top: resizePreview.y - 50,
+            transform: 'translateX(-50%)',
+            padding: '8px 16px'
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="opacity-50">PROPOSED CHECKOUT:</span>
+            <span className="text-emerald-400">{resizePreview.date}</span>
+          </div>
+        </div>
+      )}
     </>
   );
 }
