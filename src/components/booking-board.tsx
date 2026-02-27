@@ -285,22 +285,6 @@ export function BookingBoard() {
                 </button>
               );
             })}
-            <button
-               onClick={() => setStatusFilter('maintenance')}
-               className={cn(
-                 "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all",
-                 statusFilter === 'maintenance'
-                   ? "bg-red-500 text-white border-red-500 shadow-sm"
-                   : "bg-red-50 text-red-600 border-red-100 hover:border-red-400"
-               )}
-            >
-               <span className="w-2 h-2 rounded-full flex-shrink-0 bg-red-500" />
-               Repair
-               <span className={cn(
-                 "inline-flex items-center justify-center rounded-full min-w-[18px] h-[18px] text-[10px] px-1",
-                 statusFilter === 'maintenance' ? "bg-white/20" : "bg-red-100/50"
-               )}>{counts.maintenance}</span>
-            </button>
             {statusFilter !== 'all' && (
               <button onClick={() => setStatusFilter('all')} className="h-5 w-5 rounded-full bg-muted flex items-center justify-center">
                 <X className="h-3 w-3 text-muted-foreground" />

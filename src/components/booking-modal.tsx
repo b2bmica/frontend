@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useBookings } from '../context/booking-context';
 import { useAuth } from '../context/auth-context';
 import { differenceInDays, format, addDays } from 'date-fns';
-import { Loader2, Search, UserPlus, IndianRupee, Info } from 'lucide-react';
+import { Loader2, Search, UserPlus, IndianRupee, Info, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
@@ -210,6 +210,10 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         };
         await createBooking(finalData);
         setShowSuccess(true);
+        setTimeout(() => {
+          setShowSuccess(false);
+          onClose();
+        }, 1500);
       }
     } catch (err: any) {
       setError(err.message);
@@ -233,24 +237,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         </div>
 
         <div className="p-6">
-          {showSuccess ? (
-            <div className="py-8 text-center space-y-6 animate-in fade-in zoom-in-95 duration-300">
-              <div className="h-24 w-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
-                <Info className="h-12 w-12" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Reservation Confirmed!</h3>
-                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest max-w-[300px] mx-auto leading-relaxed">
-                  Room {selectedRoom?.roomNumber} has been secured for {selectedGuest?.name}.
-                </p>
-              </div>
-              <div className="pt-4">
-                <Button onClick={onClose} className="w-full h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black uppercase tracking-widest text-xs shadow-xl shadow-slate-900/20">
-                  Finish & Close
-                </Button>
-              </div>
-            </div>
-          ) : step === 'guest' && !showNewGuest && (
+          {step === 'guest' && !showNewGuest && (
             <div className="space-y-4 py-2">
               <div className="relative group">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
@@ -485,8 +472,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               
               <DialogFooter className="pt-2 gap-3">
                 <Button type="button" variant="ghost" onClick={() => setStep('guest')} className="font-bold">Back</Button>
-                <Button type="submit" className="h-12 rounded-2xl flex-1 font-black shadow-lg shadow-primary/20" disabled={isSubmitting || !bookingForm.roomId || nights <= 0}>
-                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : initialBooking ? 'Update Stay' : 'Confirm Reservation'}
+                <Button type="submit" className={cn("h-12 rounded-2xl flex-1 font-black shadow-lg", showSuccess ? "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20 text-white" : "shadow-primary/20")} disabled={isSubmitting || !bookingForm.roomId || nights <= 0 || showSuccess}>
+                  {showSuccess ? <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Confirmed!</span> : isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : initialBooking ? 'Update Stay' : 'Confirm Reservation'}
                 </Button>
               </DialogFooter>
             </form>
