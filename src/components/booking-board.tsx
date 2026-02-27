@@ -387,7 +387,7 @@ export function BookingBoard() {
                           dragMomentum={false}
                           onDragStart={() => { isDraggingRef.current = true; }}
                           onDragEnd={(e, info) => handleDragEnd(e, info, booking)}
-                          whileDrag={{ scale: 1.02, zIndex: 100, opacity: 0.8, cursor: 'grabbing' }}
+                          whileDrag={{ scale: 1.02, zIndex: 40, opacity: 0.8, cursor: 'grabbing' }}
                           initial={{ opacity: 0, scale: 1 }}
                           animate={{ opacity: 1, scale: 1 }}
                           className={cn(
@@ -439,8 +439,8 @@ export function BookingBoard() {
                                 const cardElement = handleEl.parentElement as HTMLElement;
                                 const originalWidth = cardElement.offsetWidth;
 
-                                // Boost z-index during resize
-                                cardElement.style.zIndex = '100';
+                                 // Boost z-index during resize - stay below z-50 overlay
+                                 cardElement.style.zIndex = '40';
                                 cardElement.style.transition = 'none'; 
                                 
                                 let hasMovedSignificant = false;
