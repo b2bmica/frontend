@@ -58,7 +58,7 @@ export function BookingBoard() {
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
   const [pendingUpdate, setPendingUpdate] = useState<{booking: Booking, updates: any} | null>(null);
-  const [resizePreview, setResizePreview] = useState<{ date: string, x: number, y: number } | null>(null);
+  const [resizingId, setResizingId] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
   const [isMobile, setIsMobile] = useState(false);
@@ -380,7 +380,7 @@ export function BookingBoard() {
                       return (
                         <motion.div
                           key={`${booking._id}-${booking.checkin}-${booking.checkout}`}
-                          drag={isEditable}
+                          drag={isEditable && resizingId !== booking._id}
                           dragSnapToOrigin
                           dragElastic={0}
                           dragMomentum={false}
@@ -427,6 +427,7 @@ export function BookingBoard() {
                               onPointerDown={(e) => {
                                 e.stopPropagation();
                                 (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+                                setResizingId(booking._id);
                                 
                                 const startX = e.clientX;
                                 const originalCheckout = new Date(booking.checkout);
@@ -450,10 +451,6 @@ export function BookingBoard() {
 
                                   if (hasMovedSignificant && cardElement) {
                                     cardElement.style.width = `${Math.max(COLUMN_WIDTH, originalWidth + deltaX)}px`;
-                                    
-                                    const previewDays = Math.round(deltaX / COLUMN_WIDTH);
-                                    const prevDate = format(addDays(originalCheckout, previewDays), 'EEE, MMM dd');
-                                    setResizePreview({ date: prevDate, x: moveEvent.clientX, y: moveEvent.clientY });
                                   }
                                 };
 
@@ -465,8 +462,8 @@ export function BookingBoard() {
                                   window.removeEventListener('pointermove', onPointerMove);
                                   window.removeEventListener('pointerup', onPointerUp);
                                   
-                                  // Reset card styles and preview
-                                  setResizePreview(null);
+                                  setResizingId(null);
+                                  // Reset card styles
                                   if (cardElement) {
                                     cardElement.style.width = '';
                                     cardElement.style.zIndex = '';
@@ -584,23 +581,6 @@ export function BookingBoard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {resizePreview && (
-        <div 
-          className="fixed z-[9999] pointer-events-none bg-slate-900/90 text-white px-3 py-1.5 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-2xl backdrop-blur-md border border-white/20 whitespace-nowrap"
-          style={{ 
-            left: resizePreview.x, 
-            top: resizePreview.y - 50,
-            transform: 'translateX(-50%)',
-            padding: '8px 16px'
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <span className="opacity-50">PROPOSED CHECKOUT:</span>
-            <span className="text-emerald-400">{resizePreview.date}</span>
-          </div>
-        </div>
-      )}
     </>
   );
 }
