@@ -4,7 +4,7 @@ import {
   differenceInDays, startOfDay
 } from 'date-fns';
 import { motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, Minus, Pencil, Loader2, Bed, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Bed, X } from 'lucide-react';
 import { useBookings, type Booking } from '../context/booking-context';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -400,7 +400,7 @@ export function BookingBoard() {
                             height: ROW_HEIGHT - 6,
                           }}
                           onClick={(e) => { 
-                            if (isDraggingRef.current) return;
+                            if (isDraggingRef.current || isResizingRef.current) return;
                             e.stopPropagation(); 
                             setSelectedBooking(booking); 
                           }}
@@ -408,7 +408,7 @@ export function BookingBoard() {
                           <button
                             className="text-[10px] md:text-xs font-bold truncate text-left hover:underline leading-tight z-10 relative pr-6"
                             onClick={(e) => {
-                              if (isDraggingRef.current) return;
+                              if (isDraggingRef.current || isResizingRef.current) return;
                               e.stopPropagation();
                               if (guest?._id) setSelectedGuestId(guest._id);
                               else setSelectedBooking(booking);
@@ -419,36 +419,59 @@ export function BookingBoard() {
                           <span className="text-[8px] md:text-[10px] bg-black/20 px-1 rounded truncate capitalize w-fit z-10 relative pointer-events-none">
                             {booking.status.replace('-', ' ')}
                           </span>
-                          {/* Premium Quick Action Pill - Improved with Glassmorphism and better spacing */}
+                          {/* Resize handle (Right edge) - Improved for real horizontal drag feedback */}
                           {isEditable && (
-                            <div className="absolute top-1/2 -translate-y-1/2 right-1.5 flex flex-col gap-1.5 opacity-0 group-hover/booking:opacity-100 transition-all duration-300 translate-x-3 group-hover/booking:translate-x-0 z-30">
-                              <div className="flex flex-col bg-white/10 backdrop-blur-xl rounded-xl border border-white/20 p-1 shadow-2xl">
-                                <button
-                                  onPointerDown={(e) => e.stopPropagation()}
-                                  onClick={(e) => { e.stopPropagation(); setEditingBooking(booking); }}
-                                  className="size-7 rounded-lg hover:bg-white/30 flex items-center justify-center text-white transition-all active:scale-90"
-                                  title="Edit Stay"
-                                >
-                                  <Pencil className="size-3.5" />
-                                </button>
-                                <div className="h-px bg-white/10 mx-1" />
-                                <button
-                                  onPointerDown={(e) => e.stopPropagation()}
-                                  onClick={(e) => handleQuickExtend(e, booking)}
-                                  className="size-7 rounded-lg hover:bg-white/30 flex items-center justify-center text-white transition-all active:scale-90"
-                                  title="Ext. 1 Day"
-                                >
-                                  <Plus className="size-3.5" />
-                                </button>
-                                <button
-                                  onPointerDown={(e) => e.stopPropagation()}
-                                  onClick={(e) => handleQuickReduce(e, booking)}
-                                  className="size-7 rounded-lg hover:bg-white/30 flex items-center justify-center text-white transition-all active:scale-90"
-                                  title="Red. 1 Day"
-                                >
-                                  <Minus className="size-3.5" />
-                                </button>
-                              </div>
+                            <div 
+                              className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/20 z-40 flex items-center justify-center group-hover/booking:opacity-100 opacity-0 transition-opacity"
+                              onPointerDown={(e) => {
+                                e.stopPropagation();
+                                const startX = e.clientX;
+                                const originalCheckout = new Date(booking.checkout);
+                                const cardElement = e.currentTarget.parentElement as HTMLElement;
+                                const originalWidth = cardElement.offsetWidth;
+                                
+                                const onPointerMove = (moveEvent: PointerEvent) => {
+                                  isResizingRef.current = true;
+                                  const deltaX = moveEvent.clientX - startX;
+                                  
+                                  // Live visual feedback by stretching the card DOM element
+                                  if (cardElement) {
+                                    cardElement.style.width = `${Math.max(COLUMN_WIDTH, originalWidth + deltaX)}px`;
+                                  }
+                                };
+
+                                const onPointerUp = (upEvent: PointerEvent) => {
+                                  const deltaX = upEvent.clientX - startX;
+                                  const daysDelta = Math.round(deltaX / COLUMN_WIDTH);
+                                  
+                                  window.removeEventListener('pointermove', onPointerMove);
+                                  window.removeEventListener('pointerup', onPointerUp);
+                                  
+                                  // Reset card width to original (context update will handle re-render)
+                                  if (cardElement) cardElement.style.width = '';
+
+                                  if (daysDelta !== 0) {
+                                    const newCheckout = format(addDays(originalCheckout, daysDelta), 'yyyy-MM-dd');
+                                    if (new Date(newCheckout) > new Date(booking.checkin)) {
+                                      setPendingUpdate({ 
+                                        booking, 
+                                        updates: { 
+                                          roomId: getBookingRoomId(booking), 
+                                          checkin: booking.checkin, 
+                                          checkout: newCheckout 
+                                        } 
+                                      });
+                                    }
+                                  }
+                                  
+                                  setTimeout(() => { isResizingRef.current = false; }, 100);
+                                };
+
+                                window.addEventListener('pointermove', onPointerMove);
+                                window.addEventListener('pointerup', onPointerUp);
+                              }}
+                            >
+                              <div className="h-6 w-1.5 bg-white/50 rounded-full shadow-sm" />
                             </div>
                           )}
                         </motion.div>

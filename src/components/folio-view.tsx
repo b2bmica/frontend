@@ -14,6 +14,7 @@ import {
   ArrowRight,
   Banknote,
   Smartphone,
+  Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -37,6 +38,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
   const [settleAmount, setSettleAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'UPI' | 'Card'>('Cash');
+  const [isSettling, setIsSettling] = useState(false);
 
   const filteredBookings = useMemo(() => {
     return bookings.filter(b => {
@@ -142,6 +144,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
      const finalAmount = settleAmount || financials.balance;
      if (finalAmount <= 0) return;
      
+     setIsSettling(true);
      try {
         await updateBooking(booking._id, { 
           advancePayment: (booking.advancePayment || 0) + finalAmount 
@@ -150,6 +153,8 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
         setSettleAmount(0);
      } catch (err) {
         console.error(err);
+     } finally {
+        setIsSettling(false);
      }
   }
 
@@ -489,9 +494,14 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
              </div>
 
              <DialogFooter className="pt-2">
-                <Button onClick={handleSettlePayments} className="w-full h-12 rounded-xl bg-primary text-white font-bold uppercase tracking-widest text-xs">
-                   Confirm Settle <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
+                <Button 
+                   onClick={handleSettlePayments} 
+                   disabled={isSettling}
+                   className="w-full h-12 rounded-xl bg-primary text-white font-bold uppercase tracking-widest text-xs"
+                 >
+                    {isSettling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Confirm Settle <ArrowRight className="ml-2 h-4 w-4" />
+                 </Button>
              </DialogFooter>
           </div>
         </DialogContent>

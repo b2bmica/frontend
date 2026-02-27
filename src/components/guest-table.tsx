@@ -21,11 +21,18 @@ export function GuestTable() {
     idProof: { idType: 'aadhaar', number: '' }
   });
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+
   const filtered = guests.filter(g => {
     if (!search) return true;
     const q = search.toLowerCase();
     return g.name?.toLowerCase().includes(q) || g.phone?.includes(q) || g.email?.toLowerCase().includes(q);
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginatedData = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const handleAddGuest = async () => {
     if (!form.name || !form.phone) return;
@@ -74,14 +81,14 @@ export function GuestTable() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (
+              {paginatedData.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                     {guests.length === 0 ? 'No guests yet. Add your first guest!' : 'No guests match your search.'}
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map(guest => (
+                paginatedData.map(guest => (
                   <TableRow key={guest._id} className="hover:bg-muted/20 transition-colors">
                     <TableCell>
                       <div className="font-semibold">{guest.name}</div>
@@ -124,6 +131,48 @@ export function GuestTable() {
           </Table>
         </div>
       </div>
+
+      {/* Pagination Footer */}
+      {filtered.length > pageSize && (
+        <div className="flex items-center justify-between px-2 py-4">
+          <div className="text-sm text-muted-foreground">
+            Showing <span className="font-bold text-foreground">{(currentPage - 1) * pageSize + 1}</span> to <span className="font-bold text-foreground">{Math.min(currentPage * pageSize, filtered.length)}</span> of <span className="font-bold text-foreground">{filtered.length}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="font-bold"
+            >
+              Previous
+            </Button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                <Button
+                  key={page}
+                  variant={currentPage === page ? "default" : "outline"}
+                  size="sm"
+                  className="w-8 h-8 p-0 font-bold"
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </Button>
+              ))}
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="font-bold"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Guest Cards */}
       <div className="lg:hidden grid grid-cols-1 gap-3">

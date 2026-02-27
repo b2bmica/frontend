@@ -19,6 +19,10 @@ export function BookingTable() {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [actioningId, setActioningId] = useState<string | null>(null);
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   const filtered = bookings.filter(b => {
     const guestName = typeof b.guestId === 'object' ? b.guestId?.name || '' : '';
@@ -29,6 +33,9 @@ export function BookingTable() {
     const matchStatus = statusFilter === 'all' || b.status === statusFilter;
     return matchSearch && matchStatus;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paginatedData = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const statusBadge = (status: string) => {
     const config: Record<string, { label: string; className: string }> = {
@@ -98,14 +105,14 @@ export function BookingTable() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (
+              {paginatedData.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                     No bookings found
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map(booking => {
+                paginatedData.map(booking => {
                   const guest = typeof booking.guestId === 'object' ? booking.guestId : null;
                   const room = typeof booking.roomId === 'object' ? booking.roomId : rooms.find(r => r._id === booking.roomId);
                   const nights = Math.max(1, Math.ceil((new Date(booking.checkout).getTime() - new Date(booking.checkin).getTime()) / (1000 * 60 * 60 * 24)));
@@ -174,6 +181,48 @@ export function BookingTable() {
           </Table>
         </div>
       </div>
+
+      {/* Pagination Footer */}
+      {filtered.length > pageSize && (
+        <div className="flex items-center justify-between px-2 py-4">
+          <div className="text-sm text-muted-foreground">
+            Showing <span className="font-bold text-foreground">{(currentPage - 1) * pageSize + 1}</span> to <span className="font-bold text-foreground">{Math.min(currentPage * pageSize, filtered.length)}</span> of <span className="font-bold text-foreground">{filtered.length}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="font-bold"
+            >
+              Previous
+            </Button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                <Button
+                  key={page}
+                  variant={currentPage === page ? "default" : "outline"}
+                  size="sm"
+                  className="w-8 h-8 p-0 font-bold"
+                  onClick={() => setCurrentPage(page)}
+                >
+                  {page}
+                </Button>
+              ))}
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="font-bold"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Card View */}
       <div className="lg:hidden grid grid-cols-1 gap-4">

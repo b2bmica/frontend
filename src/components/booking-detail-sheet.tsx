@@ -18,7 +18,8 @@ import {
   Trash2,
   CheckCircle2,
   ChevronRight,
-  Info
+  Info,
+  Loader2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/auth-context';
@@ -172,7 +173,9 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                     variant="outline"
                     onClick={() => handleAction((id) => updateBooking(id, { advancePayment: (booking.advancePayment || 0) + balance }))}
                     className="text-[9px] font-black uppercase tracking-tighter h-7 px-3 border-primary/20 text-primary hover:bg-primary/5 rounded-xl transition-all"
+                    disabled={isActioning}
                   >
+                    {isActioning ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
                     Settle Stay
                   </Button>
                 ) : (
@@ -215,7 +218,8 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                 onClick={() => handleAction(checkIn)}
                 disabled={isActioning}
               >
-                <ShieldCheck className="mr-2 h-4 w-4" /> Check-in
+                {isActioning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                Check-in
               </Button>
             )}
             {booking.status === 'checked-in' && (
@@ -224,7 +228,8 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                 onClick={() => handleAction((id) => updateBooking(id, { status: 'checked-out', advancePayment: totalAmount }))}
                 disabled={isActioning}
               >
-                <CheckCircle2 className="mr-2 h-4 w-4" /> Checkout
+                {isActioning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                Checkout
               </Button>
             )}
             <Button variant="outline" className="h-10 w-10 p-0 rounded-xl border-2 shrink-0" title="Generate Invoice">
@@ -239,7 +244,8 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
               onClick={() => handleAction(cancelBooking)}
               disabled={isActioning}
             >
-              <Trash2 className="mr-2 h-3.5 w-3.5" /> Cancel Reservation
+              {isActioning ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Trash2 className="mr-2 h-3.5 w-3.5" />}
+              Cancel Reservation
             </Button>
           )}
         </div>
