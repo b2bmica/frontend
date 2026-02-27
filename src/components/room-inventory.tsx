@@ -217,17 +217,17 @@ export function RoomInventory() {
 
       {/* Simplified Modal */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-[450px] p-0 border-none shadow-2xl">
+        <DialogContent className="sm:max-w-[600px] p-0 border-none shadow-2xl">
           <div className="border-b p-6 bg-muted/30">
             <DialogHeader>
               <DialogTitle className="text-xl font-black tracking-tight">{editingRoom ? 'Update Specification' : 'New Registration'}</DialogTitle>
-              <DialogDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Asset Identifier & Pricing Control</DialogDescription>
+              <DialogDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Room Identity & Pricing Control</DialogDescription>
             </DialogHeader>
           </div>
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 underline underline-offset-4">Unit Identity *</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 underline underline-offset-4">Room Number *</Label>
                 <Input required className="h-11 rounded-xl font-bold" value={form.roomNumber} onChange={e => setForm({ ...form, roomNumber: e.target.value })} placeholder="402" />
               </div>
               <div className="space-y-1.5">
@@ -258,7 +258,7 @@ export function RoomInventory() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 underline underline-offset-4">Asset Class *</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 underline underline-offset-4">Room Type *</Label>
               <Select value={form.roomType} onValueChange={val => setForm({ ...form, roomType: val })}>
                 <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -267,7 +267,7 @@ export function RoomInventory() {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 underline underline-offset-4">Asset Features</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 underline underline-offset-4">Amenities</Label>
               <div className="flex flex-wrap gap-2 pt-1">
                 {AMENITIES_OPTIONS.map(a => (
                   <button
@@ -289,9 +289,9 @@ export function RoomInventory() {
             </div>
             {error && <p className="text-xs font-bold text-destructive bg-destructive/5 p-3 rounded-lg">{error}</p>}
             <DialogFooter className="pt-2 gap-3">
-              <Button type="button" variant="ghost" onClick={() => setIsOpen(false)} className="font-bold text-xs uppercase tracking-widest">Abort</Button>
+              <Button type="button" variant="ghost" onClick={() => setIsOpen(false)} className="font-bold text-xs uppercase tracking-widest">Cancel</Button>
               <Button type="submit" disabled={isSubmitting} className="h-12 rounded-2xl flex-1 font-black shadow-lg shadow-primary/20">
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : editingRoom ? 'Commit Changes' : 'Initialize Record'}
+                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : editingRoom ? 'Update Room' : 'Add Room'}
               </Button>
             </DialogFooter>
           </form>
@@ -302,12 +302,12 @@ export function RoomInventory() {
       <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle className="font-black text-lg">Wipe Record?</DialogTitle>
+            <DialogTitle className="font-black text-lg">Delete Room?</DialogTitle>
             <DialogDescription className="text-xs font-medium text-muted-foreground">This will permanently remove the asset and its history.</DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <Button variant="ghost" onClick={() => setDeleteConfirm(null)} className="font-bold text-xs">ABORT</Button>
-            <Button variant="destructive" className="font-black rounded-xl text-xs" onClick={() => deleteConfirm && handleDelete(deleteConfirm)}>ERASE</Button>
+            <Button variant="ghost" onClick={() => setDeleteConfirm(null)} className="font-bold text-xs">Cancel</Button>
+            <Button variant="destructive" className="font-black rounded-xl text-xs" onClick={() => deleteConfirm && handleDelete(deleteConfirm)}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

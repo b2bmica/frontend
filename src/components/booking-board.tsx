@@ -45,6 +45,7 @@ export function BookingBoard() {
   const { bookings, rooms, loading, updateBooking } = useBookings();
   const boardRef = useRef<HTMLDivElement>(null);
   const boardContentRef = useRef<HTMLDivElement>(null);
+  const isResizingRef = useRef(false);
 
   // Week-based navigation
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
@@ -107,6 +108,8 @@ export function BookingBoard() {
   };
 
   const handleDragEnd = async (event: any, info: any, booking: Booking) => {
+    if (isResizingRef.current) return;
+    if (booking.status === 'checked-out' || booking.status === 'cancelled') return;
     if (!boardContentRef.current) return;
     
     // Calculate final position relative to board content
@@ -142,31 +145,37 @@ export function BookingBoard() {
     
     e.stopPropagation();
     e.preventDefault();
+    isResizingRef.current = true;
     
     const startX = e.clientX;
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
     
     const onPointerUp = async (upEvent: Event) => {
       const pointerEvt = upEvent as PointerEvent;
-      window.removeEventListener('pointerup', onPointerUp);
+      target.releasePointerCapture(pointerEvt.pointerId);
+      target.removeEventListener('pointerup', onPointerUp as any);
       
       const deltaX = pointerEvt.clientX - startX;
       // Calculate how many columns dragged over. Each column is COLUMN_WIDTH
       const deltaDays = Math.round(deltaX / COLUMN_WIDTH);
       
+      setTimeout(() => { isResizingRef.current = false; }, 100);
+      
       if (deltaDays !== 0) {
         if (side === 'left') {
           const newCheckin = format(addDays(new Date(booking.checkin), deltaDays), 'yyyy-MM-dd');
           if (newCheckin >= booking.checkout) return; // prevent invalid state
-          setPendingUpdate({ booking, updates: { checkin: newCheckin } });
+          setPendingUpdate({ booking, updates: { roomId: booking.roomId, checkin: newCheckin, checkout: booking.checkout } });
         } else {
           const newCheckout = format(addDays(new Date(booking.checkout), deltaDays), 'yyyy-MM-dd');
           if (newCheckout <= booking.checkin) return; // prevent invalid state
-          setPendingUpdate({ booking, updates: { checkout: newCheckout } });
+          setPendingUpdate({ booking, updates: { roomId: booking.roomId, checkin: booking.checkin, checkout: newCheckout } });
         }
       }
     };
     
-    window.addEventListener('pointerup', onPointerUp);
+    target.addEventListener('pointerup', onPointerUp as any);
   };
 
   const confirmUpdate = async () => {
@@ -409,11 +418,16 @@ export function BookingBoard() {
                             width:  (clampedDuration * COLUMN_WIDTH) - 2,
                             height: ROW_HEIGHT - 6,
                           }}
-                          onClick={(e) => { e.stopPropagation(); setSelectedBooking(booking); }}
+                          onClick={(e) => { 
+                            if (isResizingRef.current) return;
+                            e.stopPropagation(); 
+                            setSelectedBooking(booking); 
+                          }}
                         >
                           <button
                             className="text-[10px] md:text-xs font-bold truncate text-left hover:underline leading-tight z-10 relative"
                             onClick={(e) => {
+                              if (isResizingRef.current) return;
                               e.stopPropagation();
                               if (guest?._id) setSelectedGuestId(guest._id);
                               else setSelectedBooking(booking);
@@ -429,12 +443,14 @@ export function BookingBoard() {
                           {isEditable && (
                             <>
                               <div 
-                                className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/40 z-20"
+                                className="absolute left-0 top-0 bottom-0 w-4 cursor-ew-resize hover:bg-white/40 z-20"
                                 onPointerDown={(e) => handleResizePointerDown(e, booking, 'left')}
+                                onClick={(e) => e.stopPropagation()}
                               />
                               <div 
-                                className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/40 z-20"
+                                className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize hover:bg-white/40 z-20"
                                 onPointerDown={(e) => handleResizePointerDown(e, booking, 'right')}
+                                onClick={(e) => e.stopPropagation()}
                               />
                             </>
                           )}
@@ -459,10 +475,24 @@ export function BookingBoard() {
           <DialogHeader>
             <DialogTitle className="font-black text-xl tracking-tight">Confirm Modification</DialogTitle>
           </DialogHeader>
-          <div className="py-4 font-bold text-slate-500">
-            Please confirm you want to proceed with structural date and room assignments updates for this itinerary.
+          <div className="py-2 text-sm font-medium text-slate-500 space-y-4">
+            <p>Please confirm you want to proceed with structural date and room assignments updates for this itinerary.</p>
+            {pendingUpdate && (
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3 shadow-inner">
+                <div className="flex justify-between items-center text-slate-400">
+                  <span className="font-black uppercase tracking-widest text-[9px]">Original</span>
+                  <span className="text-xs font-bold">{format(new Date(pendingUpdate.booking.checkin), 'MMM dd')} - {format(new Date(pendingUpdate.booking.checkout), 'MMM dd')}</span>
+                </div>
+                <div className="flex justify-between items-center text-primary">
+                  <span className="font-black uppercase tracking-widest text-[9px]">Proposed</span>
+                  <span className="text-sm font-black text-primary bg-primary/10 px-2 py-0.5 rounded-md">
+                    {format(new Date(pendingUpdate.updates.checkin), 'MMM dd')} - {format(new Date(pendingUpdate.updates.checkout), 'MMM dd')}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
             <Button variant="outline" className="rounded-xl font-bold" onClick={() => setPendingUpdate(null)} disabled={isUpdating}>Cancel</Button>
             <Button className="rounded-xl font-bold px-8 shadow-lg shadow-primary/20" onClick={confirmUpdate} disabled={isUpdating}>
               {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
