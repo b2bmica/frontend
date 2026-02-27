@@ -10,6 +10,9 @@ export interface Room {
   amenities: string[];
   status: 'clean' | 'dirty' | 'occupied' | 'maintenance' | 'under-maintenance';
   floor?: number;
+  baseOccupancy: number;
+  maxOccupancy: number;
+  extraPersonPrice: number;
 }
 
 export interface Booking {
@@ -21,6 +24,8 @@ export interface Booking {
   adults: number;
   children: number;
   roomPrice: number;
+  baseOccupancy: number;
+  extraPersonPrice: number;
   advancePayment: number;
   bookingSource: string;
   status: 'reserved' | 'checked-in' | 'checked-out' | 'cancelled';

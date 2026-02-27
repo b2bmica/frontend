@@ -33,6 +33,10 @@ const defaultForm = {
   roomNumber: '',
   roomType: 'Standard',
   price: 0,
+  floor: 0,
+  baseOccupancy: 2,
+  maxOccupancy: 4,
+  extraPersonPrice: 0,
   amenities: [] as string[],
 };
 
@@ -61,6 +65,10 @@ export function RoomInventory() {
       roomNumber: room.roomNumber,
       roomType: room.roomType,
       price: room.price,
+      floor: room.floor || 0,
+      baseOccupancy: room.baseOccupancy || 2,
+      maxOccupancy: room.maxOccupancy || 4,
+      extraPersonPrice: room.extraPersonPrice || 0,
       amenities: room.amenities || [],
     });
     setError(null);
@@ -173,9 +181,24 @@ export function RoomInventory() {
                   </Badge>
                 </div>
                 
-                <div className="flex items-baseline gap-1 mb-5">
+                <div className="flex items-baseline gap-1 mb-2">
                   <span className="text-2xl font-black text-foreground">₹{room.price.toLocaleString()}</span>
                   <span className="text-[10px] font-bold text-muted-foreground uppercase opacity-40">/ NT</span>
+                </div>
+
+                <div className="flex flex-col gap-1.5 mb-5">
+                  <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    <span>Capacity</span>
+                    <span className="text-slate-900">{room.baseOccupancy || 2} - {room.maxOccupancy || 4} Guests</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    <span>Extra Person</span>
+                    <span className="text-slate-900">₹{room.extraPersonPrice || 0}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    <span>Floor</span>
+                    <span className="text-slate-900">{room.floor || '—'}</span>
+                  </div>
                 </div>
 
                 <div className="flex gap-2 pt-2 border-t mt-auto">
@@ -212,6 +235,25 @@ export function RoomInventory() {
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-black text-sm">₹</span>
                   <Input required type="number" className="h-11 rounded-xl pl-7 font-black" value={form.price || ''} onChange={e => setForm({ ...form, price: Number(e.target.value) })} placeholder="5500" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 underline underline-offset-4">Floor</Label>
+                <Input type="number" className="h-11 rounded-xl font-bold" value={form.floor} onChange={e => setForm({ ...form, floor: Number(e.target.value) })} placeholder="0" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 underline underline-offset-4">Base Limit</Label>
+                <Input type="number" className="h-11 rounded-xl font-bold" value={form.baseOccupancy} onChange={e => setForm({ ...form, baseOccupancy: Number(e.target.value) })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 underline underline-offset-4">Max Limit</Label>
+                <Input type="number" className="h-11 rounded-xl font-bold" value={form.maxOccupancy} onChange={e => setForm({ ...form, maxOccupancy: Number(e.target.value) })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 underline underline-offset-4">Extra Guest Fee</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-black text-sm">₹</span>
+                  <Input type="number" className="h-11 rounded-xl pl-7 font-bold" value={form.extraPersonPrice} onChange={e => setForm({ ...form, extraPersonPrice: Number(e.target.value) })} />
                 </div>
               </div>
             </div>

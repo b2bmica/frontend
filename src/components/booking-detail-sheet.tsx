@@ -24,6 +24,7 @@ import { cn } from '../lib/utils';
 import { useAuth } from '../context/auth-context';
 import { useBookings } from '../context/booking-context';
 import { useState } from 'react';
+import { BookingModal } from './booking-modal';
 
 interface BookingDetailSheetProps {
   booking: any;
@@ -34,13 +35,22 @@ export function BookingDetailSheet({ booking, onClose }: BookingDetailSheetProps
   const { hotel } = useAuth();
   const { cancelBooking, checkIn, checkOut, updateBooking } = useBookings();
   const [isActioning, setIsActioning] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   if (!booking) return null;
 
   const room = typeof booking.roomId === 'object' ? booking.roomId : null;
   const guest = typeof booking.guestId === 'object' ? booking.guestId : null;
   const nights = Math.max(1, differenceInDays(new Date(booking.checkout), new Date(booking.checkin)));
-  const subtotal = (room?.price || 0) * nights;
+  
+  const roomPrice = booking.roomPrice || room?.price || 0;
+  const baseSubtotal = roomPrice * nights;
+  
+  // Extra person calculation
+  const extraAdults = Math.max(0, (booking.adults || 0) - (booking.baseOccupancy || 2));
+  const extraPersonCharge = extraAdults * (booking.extraPersonPrice || 0) * nights;
+  
+  const subtotal = baseSubtotal + extraPersonCharge;
 
   // Tax Logic
   const taxConfig = hotel?.settings?.taxConfig;
@@ -124,9 +134,15 @@ export function BookingDetailSheet({ booking, onClose }: BookingDetailSheetProps
             <div className="rounded-2xl bg-card border shadow-sm p-5 space-y-4">
               <div className="space-y-2.5">
                 <div className="flex justify-between text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                  <span>Room Charge ({nights}N)</span>
-                  <span className="text-foreground">₹{subtotal.toLocaleString()}</span>
+                  <span>Base Rate ({nights}N × ₹{roomPrice.toLocaleString()})</span>
+                  <span className="text-foreground">₹{baseSubtotal.toLocaleString()}</span>
                 </div>
+                {extraAdults > 0 && (
+                  <div className="flex justify-between text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                    <span>Extra Person ({extraAdults} × ₹{booking.extraPersonPrice})</span>
+                    <span className="text-foreground">+ ₹{extraPersonCharge.toLocaleString()}</span>
+                  </div>
+                )}
                 {taxConfig?.enabled && (
                   <div className="flex justify-between text-[11px] font-bold text-orange-600 uppercase tracking-wider">
                     <span>GST (CGST {taxConfig.cgst}% + SGST {taxConfig.sgst}%)</span>
@@ -182,6 +198,17 @@ export function BookingDetailSheet({ booking, onClose }: BookingDetailSheetProps
         {/* Action Panel */}
         <div className="p-6 bg-card border-t flex flex-col gap-3">
           <div className="flex gap-2">
+            {(booking.status === 'reserved' || booking.status === 'checked-in') && (
+              <Button 
+                variant="outline"
+                className="flex-1 h-11 rounded-xl font-bold border-2"
+                onClick={() => setShowEditModal(true)}
+              >
+                Edit Stay
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
             {booking.status === 'reserved' && (
               <Button 
                 className="flex-1 h-11 rounded-xl font-black bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/10"
@@ -216,6 +243,11 @@ export function BookingDetailSheet({ booking, onClose }: BookingDetailSheetProps
             </Button>
           )}
         </div>
+        <BookingModal 
+          isOpen={showEditModal} 
+          onClose={() => setShowEditModal(false)} 
+          initialBooking={booking} 
+        />
       </SheetContent>
     </Sheet>
   );

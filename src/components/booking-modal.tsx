@@ -16,6 +16,7 @@ interface BookingModalProps {
   onClose: () => void;
   selectedRoomId?: string;
   selectedDate?: string;
+  initialBooking?: any;
 }
 
 const OTA_CHANNELS = [
@@ -30,8 +31,8 @@ const OTA_CHANNELS = [
   { value: 'easemytrip', label: 'EaseMyTrip' },
 ];
 
-export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate }: BookingModalProps) {
-  const { rooms, bookings, createBooking, createGuest, searchGuests } = useBookings();
+export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, initialBooking }: BookingModalProps) {
+  const { rooms, bookings, createBooking, updateBooking, createGuest, searchGuests } = useBookings();
   const { hotel } = useAuth();
   const [step, setStep] = useState<'guest' | 'booking'>('guest');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -53,8 +54,36 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate }: 
   // Booking form
   const [bookingForm, setBookingForm] = useState({
     roomId: '', checkin: '', checkout: '', adults: 1, children: 0,
-    advancePayment: 0, bookingSource: 'direct'
+    advancePayment: 0, bookingSource: 'direct',
+    baseOccupancy: 2, extraPersonPrice: 0, roomPrice: 0
   });
+
+  // Derived State
+  const selectedRoom = rooms.find(r => r._id === bookingForm.roomId);
+  const nights = bookingForm.checkin && bookingForm.checkout
+    ? differenceInDays(new Date(bookingForm.checkout), new Date(bookingForm.checkin))
+    : 0;
+  
+  const roomPrice = initialBooking ? bookingForm.roomPrice : (selectedRoom?.price || 0);
+  const baseSubtotal = nights * roomPrice;
+  
+  // Extra person logic
+  const extraAdults = Math.max(0, bookingForm.adults - (bookingForm.baseOccupancy || 2));
+  const extraPersonCharge = extraAdults * (bookingForm.extraPersonPrice || 0) * nights;
+  
+  const subtotal = baseSubtotal + extraPersonCharge;
+  
+  // Tax logic
+  const taxConfig = hotel?.settings?.taxConfig;
+  let taxAmount = 0;
+  if (taxConfig?.enabled && subtotal > 0) {
+    const cgst = (subtotal * (taxConfig.cgst || 0)) / 100;
+    const sgst = (subtotal * (taxConfig.sgst || 0)) / 100;
+    taxAmount = cgst + sgst;
+  }
+  
+  const totalAmount = subtotal + taxAmount;
+  const balanceDue = totalAmount - (bookingForm.advancePayment || 0);
 
   // Available rooms calculation
   const availableRooms = useMemo(() => {
@@ -84,23 +113,54 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate }: 
 
   useEffect(() => {
     if (isOpen) {
-      setStep('guest');
-      setSelectedGuest(null);
-      setGuestQuery('');
-      setGuestResults([]);
-      setShowNewGuest(false);
-      setError(null);
-      setNewGuest({ name: '', phone: '', email: '', nationality: 'Indian', idProof: { idType: 'aadhaar', number: '' } });
-      setBookingForm({
-        roomId: selectedRoomId || '',
-        checkin: selectedDate || format(new Date(), 'yyyy-MM-dd'),
-        checkout: selectedDate ? format(addDays(new Date(selectedDate), 1), 'yyyy-MM-dd') : format(addDays(new Date(), 1), 'yyyy-MM-dd'),
-        adults: 1, children: 0,
-        advancePayment: 0,
-        bookingSource: 'direct'
-      });
+      if (initialBooking) {
+        setStep('booking');
+        setSelectedGuest(typeof initialBooking.guestId === 'object' ? initialBooking.guestId : null);
+        setBookingForm({
+          roomId: (typeof initialBooking.roomId === 'object' ? initialBooking.roomId._id : initialBooking.roomId) || '',
+          checkin: format(new Date(initialBooking.checkin), 'yyyy-MM-dd'),
+          checkout: format(new Date(initialBooking.checkout), 'yyyy-MM-dd'),
+          adults: initialBooking.adults || 1,
+          children: initialBooking.children || 0,
+          advancePayment: initialBooking.advancePayment || 0,
+          bookingSource: initialBooking.bookingSource || 'direct',
+          baseOccupancy: initialBooking.baseOccupancy || 2,
+          extraPersonPrice: initialBooking.extraPersonPrice || 0,
+          roomPrice: initialBooking.roomPrice || 0
+        });
+      } else {
+        setStep('guest');
+        setSelectedGuest(null);
+        setGuestQuery('');
+        setGuestResults([]);
+        setShowNewGuest(false);
+        setError(null);
+        setNewGuest({ name: '', phone: '', email: '', nationality: 'Indian', idProof: { idType: 'aadhaar', number: '' } });
+        setBookingForm({
+          roomId: selectedRoomId || '',
+          checkin: selectedDate || format(new Date(), 'yyyy-MM-dd'),
+          checkout: selectedDate ? format(addDays(new Date(selectedDate), 1), 'yyyy-MM-dd') : format(addDays(new Date(), 1), 'yyyy-MM-dd'),
+          adults: 1, children: 0,
+          advancePayment: 0,
+          bookingSource: 'direct',
+          baseOccupancy: 2,
+          extraPersonPrice: 0,
+          roomPrice: 0
+        });
+      }
     }
-  }, [isOpen, selectedRoomId, selectedDate]);
+  }, [isOpen, selectedRoomId, selectedDate, initialBooking]);
+
+  useEffect(() => {
+    if (selectedRoom && !initialBooking) {
+      setBookingForm(prev => ({
+        ...prev,
+        baseOccupancy: selectedRoom.baseOccupancy || 2,
+        extraPersonPrice: selectedRoom.extraPersonPrice || 0,
+        roomPrice: selectedRoom.price || 0
+      }));
+    }
+  }, [selectedRoom, initialBooking]);
 
   const handleGuestSearch = async (query: string) => {
     setGuestQuery(query);
@@ -126,35 +186,20 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate }: 
     setIsSubmitting(false);
   };
 
-  const selectedRoom = rooms.find(r => r._id === bookingForm.roomId);
-  const nights = bookingForm.checkin && bookingForm.checkout
-    ? differenceInDays(new Date(bookingForm.checkout), new Date(bookingForm.checkin))
-    : 0;
-  
-  const subtotal = selectedRoom ? nights * selectedRoom.price : 0;
-  
-  // Tax logic
-  const taxConfig = hotel?.settings?.taxConfig;
-  let taxAmount = 0;
-  if (taxConfig?.enabled && subtotal > 0) {
-    const cgst = (subtotal * (taxConfig.cgst || 0)) / 100;
-    const sgst = (subtotal * (taxConfig.sgst || 0)) / 100;
-    taxAmount = cgst + sgst;
-  }
-  
-  const totalAmount = subtotal + taxAmount;
-  const balanceDue = totalAmount - (bookingForm.advancePayment || 0);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedGuest || nights <= 0) return;
     setIsSubmitting(true);
     setError(null);
     try {
-      await createBooking({
-        ...bookingForm,
-        guestId: selectedGuest._id,
-      });
+      if (initialBooking) {
+        await updateBooking(initialBooking._id, bookingForm);
+      } else {
+        await createBooking({
+          ...bookingForm,
+          guestId: selectedGuest._id,
+        });
+      }
       onClose();
     } catch (err: any) {
       setError(err.message);
@@ -168,8 +213,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate }: 
         <div className="bg-muted/30 border-b p-6 relative">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold tracking-tight flex items-center gap-2">
-              <span className="p-1 px-2 rounded-lg bg-slate-900 text-white text-[10px] font-bold">NEW</span>
-              {step === 'guest' ? 'Select Traveler' : 'Finalize Reservation'}
+              <span className="p-1 px-2 rounded-lg bg-slate-900 text-white text-[10px] font-bold">{initialBooking ? 'EDIT' : 'NEW'}</span>
+              {step === 'guest' ? 'Select Traveler' : initialBooking ? 'Modify Stay' : 'Finalize Reservation'}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground font-medium text-[11px]">
               {step === 'guest' ? 'Every great stay starts with a profile.' : `Securing room for ${selectedGuest?.name}`}
@@ -267,13 +312,18 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate }: 
                   <SelectTrigger className="h-11 rounded-xl bg-muted/30 border-none font-bold">
                     <SelectValue placeholder="Which room are they staying in?" />
                   </SelectTrigger>
-                  <SelectContent>
+                   <SelectContent>
+                    {initialBooking && (
+                      <SelectItem value={bookingForm.roomId} className="font-medium">
+                        Current: Room {selectedRoom?.roomNumber} — {selectedRoom?.roomType}
+                      </SelectItem>
+                    )}
                     {availableRooms.map(room => (
                       <SelectItem key={room._id} value={room._id} className="font-medium">
-                        Room {room.roomNumber} — {room.roomType} (₹{room.price}/night)
+                        Room {room.roomNumber} — {room.roomType} (₹{room.price}/night) • Limit: {room.baseOccupancy}
                       </SelectItem>
                     ))}
-                    {availableRooms.length === 0 && (
+                    {availableRooms.length === 0 && !initialBooking && (
                       <div className="p-4 text-center text-xs text-muted-foreground font-bold">No rooms available for these dates</div>
                     )}
                   </SelectContent>
@@ -283,7 +333,22 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate }: 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5"><Label className="text-xs font-black uppercase tracking-widest opacity-70">Check-in</Label><Input type="date" className="h-11 rounded-xl" required value={bookingForm.checkin} onChange={e => setBookingForm({ ...bookingForm, checkin: e.target.value })} /></div>
                 <div className="space-y-1.5"><Label className="text-xs font-black uppercase tracking-widest opacity-70">Check-out</Label><Input type="date" className="h-11 rounded-xl" required value={bookingForm.checkout} onChange={e => setBookingForm({ ...bookingForm, checkout: e.target.value })} /></div>
-                <div className="space-y-1.5"><Label className="text-xs font-black uppercase tracking-widest opacity-70">Adults</Label><Select value={bookingForm.adults.toString()} onValueChange={val => setBookingForm({ ...bookingForm, adults: Number(val) })}><SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger><SelectContent>{[1,2,3,4,5,6].map(n => <SelectItem key={n} value={n.toString()}>{n} Adult{n>1?'s':''}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between">
+                    <Label className="text-xs font-black uppercase tracking-widest opacity-70">Adults</Label>
+                    <span className="text-[9px] font-bold text-muted-foreground uppercase">Base: {bookingForm.baseOccupancy}</span>
+                  </div>
+                  <Select value={bookingForm.adults.toString()} onValueChange={val => setBookingForm({ ...bookingForm, adults: Number(val) })}>
+                    <SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {[1,2,3,4,5,6,7,8].map(n => (
+                        <SelectItem key={n} value={n.toString()} disabled={selectedRoom && n > (selectedRoom.maxOccupancy || 6)}>
+                          {n} Adult{n>1?'s':''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="space-y-1.5"><Label className="text-xs font-black uppercase tracking-widest opacity-70">Source</Label>
                   <Select value={bookingForm.bookingSource} onValueChange={val => setBookingForm({ ...bookingForm, bookingSource: val })}>
                     <SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
@@ -317,9 +382,15 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate }: 
                 <div className="rounded-3xl bg-muted/30 border border-primary/5 p-5 space-y-3 overflow-hidden relative">
                   <div className="absolute top-0 right-0 p-4 opacity-5 rotate-12"><IndianRupee className="h-16 w-16" /></div>
                   <div className="flex justify-between text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                    <span>Base Amount ({nights} N)</span>
-                    <span className="text-foreground">₹{subtotal.toLocaleString()}</span>
+                    <span>Base Fare ({nights} N × ₹{roomPrice.toLocaleString()})</span>
+                    <span className="text-foreground">₹{baseSubtotal.toLocaleString()}</span>
                   </div>
+                  {extraAdults > 0 && (
+                    <div className="flex justify-between text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                      <span>Extra Person ({extraAdults} × ₹{bookingForm.extraPersonPrice})</span>
+                      <span className="text-foreground">+ ₹{extraPersonCharge.toLocaleString()}</span>
+                    </div>
+                  )}
                   {taxConfig?.enabled && (
                     <div className="flex justify-between text-xs font-bold text-orange-600">
                       <span>GST (CGST {taxConfig.cgst}% + SGST {taxConfig.sgst}%)</span>
@@ -351,7 +422,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate }: 
               <DialogFooter className="pt-2 gap-3">
                 <Button type="button" variant="ghost" onClick={() => setStep('guest')} className="font-bold">Back</Button>
                 <Button type="submit" className="h-12 rounded-2xl flex-1 font-black shadow-lg shadow-primary/20" disabled={isSubmitting || !bookingForm.roomId || nights <= 0}>
-                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm Reservation'}
+                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : initialBooking ? 'Update Stay' : 'Confirm Reservation'}
                 </Button>
               </DialogFooter>
             </form>

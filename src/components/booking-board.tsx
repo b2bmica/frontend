@@ -4,7 +4,7 @@ import {
   differenceInDays, startOfDay
 } from 'date-fns';
 import { motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Plus, Loader2, Bed, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Bed, X } from 'lucide-react';
 import { useBookings, type Booking } from '../context/booking-context';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -12,6 +12,9 @@ import { Badge } from './ui/badge';
 import { BookingModal } from '@/components/booking-modal';
 import { BookingDetailSheet } from '@/components/booking-detail-sheet';
 import { GuestProfileSheet } from '@/components/guest-profile-sheet';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'All' },
@@ -38,7 +41,9 @@ const getGuest = (b: Booking) =>
   typeof b.guestId === 'object' ? b.guestId : null;
 
 export function BookingBoard() {
-  const { bookings, rooms, loading } = useBookings();
+  const { bookings, rooms, loading, updateBooking } = useBookings();
+  const boardRef = useRef<HTMLDivElement>(null);
+  const boardContentRef = useRef<HTMLDivElement>(null);
 
   // Week-based navigation
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
@@ -98,6 +103,42 @@ export function BookingBoard() {
     setIsModalOpen(true);
   };
 
+  const handleDragEnd = async (event: any, info: any, booking: Booking) => {
+    if (!boardContentRef.current) return;
+    
+    // Calculate final position relative to board content
+    const rect = boardContentRef.current.getBoundingClientRect();
+    const x = info.point.x - rect.left;
+    const y = info.point.y - rect.top;
+
+    // Determine target day and room
+    // Correct for the header height and room col width
+    const HOZ_OFFSET = ROOM_COL;
+    const VER_OFFSET = 40; // sticky header height
+
+    const dayIndex = Math.floor((x - HOZ_OFFSET) / COLUMN_WIDTH);
+    const roomIndex = Math.floor((y - VER_OFFSET) / ROW_HEIGHT);
+
+    if (dayIndex >= 0 && dayIndex < DAYS && roomIndex >= 0 && roomIndex < rooms.length) {
+      const targetDay = addDays(weekStart, dayIndex);
+      const targetRoom = rooms[roomIndex];
+      
+      const duration = differenceInDays(new Date(booking.checkout), new Date(booking.checkin));
+      const newCheckin = format(targetDay, 'yyyy-MM-dd');
+      const newCheckout = format(addDays(targetDay, duration), 'yyyy-MM-dd');
+
+      try {
+        await updateBooking(booking._id, {
+          roomId: targetRoom._id,
+          checkin: newCheckin,
+          checkout: newCheckout
+        });
+      } catch (err) {
+        console.error("Drag move failed", err);
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -133,8 +174,29 @@ export function BookingBoard() {
                 <ChevronLeft className="h-4 w-4 mr-1" /> Earlier
               </Button>
               <div className="flex flex-col items-center">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Viewing Period</span>
-                <span className="text-xs font-black uppercase tracking-tight text-slate-900">{periodLabel}</span>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="flex flex-col items-center hover:bg-slate-100/50 p-1 px-4 rounded-xl transition-colors">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Viewing Period</span>
+                      <span className="text-xs font-black uppercase tracking-tight text-slate-900 flex items-center gap-1">
+                        {periodLabel} <ChevronDown className="h-3 w-3 opacity-40" />
+                      </span>
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-4 rounded-2xl shadow-2xl border-none">
+                    <div className="space-y-3">
+                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Jump to Date</Label>
+                      <Input 
+                        type="date" 
+                        className="h-10 rounded-xl font-bold" 
+                        value={format(weekStart, 'yyyy-MM-dd')}
+                        onChange={(e) => {
+                          if (e.target.value) setWeekStart(startOfWeek(new Date(e.target.value), { weekStartsOn: 1 }));
+                        }}
+                      />
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
               <Button variant="outline" size="sm" className="h-9 px-3 rounded-xl border-slate-200 bg-white shadow-sm font-bold text-xs"
                 onClick={() => setWeekStart(addDays(weekStart, DAYS))}>
@@ -203,8 +265,8 @@ export function BookingBoard() {
         </div>
 
         {/* ── Board ── */}
-        <div className="flex-1 overflow-auto">
-          <div className="inline-block min-w-full">
+        <div className="flex-1 overflow-auto" ref={boardRef}>
+          <div className="inline-block min-w-full relative" ref={boardContentRef}>
 
             {/* Column headers */}
             <div className="flex sticky top-0 z-20 bg-card border-b">
@@ -283,10 +345,15 @@ export function BookingBoard() {
                       return (
                         <motion.div
                           key={booking._id}
+                          drag
+                          dragElastic={0.05}
+                          dragMomentum={false}
+                          onDragEnd={(e, info) => handleDragEnd(e, info, booking)}
+                          whileDrag={{ scale: 1.05, zIndex: 100, opacity: 0.8, cursor: 'grabbing' }}
                           initial={{ opacity: 0, scale: 0.92 }}
                           animate={{ opacity: 1, scale: 1 }}
                           className={cn(
-                            "absolute z-10 rounded-md p-1.5 text-white shadow-md cursor-pointer overflow-hidden flex flex-col justify-between",
+                            "absolute z-10 rounded-md p-1.5 text-white shadow-md cursor-grab overflow-hidden flex flex-col justify-between",
                             getStatusColor(booking.status)
                           )}
                           style={{

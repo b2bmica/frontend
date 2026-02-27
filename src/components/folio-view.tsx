@@ -92,15 +92,29 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
     const rate = booking.roomPrice || room?.price || 0;
     const roomCharge = rate * nights;
     
+    // Extra person logic
+    const extraAdults = Math.max(0, (booking.adults || 0) - (booking.baseOccupancy || 2));
+    const extraPersonCharge = extraAdults * (booking.extraPersonPrice || 0) * nights;
+
     const charges = [
       { id: 'room-1', type: 'room', description: `Stay Charge: Room ${room?.roomNumber || '???'} (${nights}N)`, amount: roomCharge, date: booking.checkin }
     ];
+
+    if (extraPersonCharge > 0) {
+      charges.push({
+        id: 'extra-person-1',
+        type: 'room',
+        description: `Extra Person Charge (${extraAdults} × ₹${booking.extraPersonPrice})`,
+        amount: extraPersonCharge,
+        date: booking.checkin
+      });
+    }
 
     const payments = [
       { id: 'pre-1', method: booking.bookingSource || 'Advance', amount: booking.advancePayment || 0, date: booking.checkin, status: 'completed' }
     ];
 
-    const subtotal = roomCharge;
+    const subtotal = roomCharge + extraPersonCharge;
     const taxConfig = hotel?.settings?.taxConfig;
     let tax = 0;
     
