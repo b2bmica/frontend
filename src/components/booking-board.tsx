@@ -4,7 +4,7 @@ import {
   differenceInDays, startOfDay
 } from 'date-fns';
 import { motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Bed, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Minus, Loader2, Bed, X } from 'lucide-react';
 import { useBookings, type Booking } from '../context/booking-context';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -144,42 +144,17 @@ export function BookingBoard() {
     }
   };
 
-  const handleResizePointerDown = (e: React.PointerEvent, booking: Booking, side: 'left' | 'right') => {
-    if (booking.status === 'checked-out' || booking.status === 'cancelled') return;
-    
+  const handleQuickExtend = (e: React.MouseEvent, booking: Booking) => {
     e.stopPropagation();
-    e.preventDefault();
-    isResizingRef.current = true;
-    
-    const startX = e.clientX;
-    const target = e.currentTarget;
-    target.setPointerCapture(e.pointerId);
-    
-    const onPointerUp = async (upEvent: Event) => {
-      const pointerEvt = upEvent as PointerEvent;
-      target.releasePointerCapture(pointerEvt.pointerId);
-      target.removeEventListener('pointerup', onPointerUp as any);
-      
-      const deltaX = pointerEvt.clientX - startX;
-      // Calculate how many columns dragged over. Each column is COLUMN_WIDTH
-      const deltaDays = Math.round(deltaX / COLUMN_WIDTH);
-      
-      setTimeout(() => { isResizingRef.current = false; }, 100);
-      
-      if (deltaDays !== 0) {
-        if (side === 'left') {
-          const newCheckin = format(addDays(new Date(booking.checkin), deltaDays), 'yyyy-MM-dd');
-          if (newCheckin >= booking.checkout) return; // prevent invalid state
-          setPendingUpdate({ booking, updates: { roomId: getBookingRoomId(booking), checkin: newCheckin, checkout: booking.checkout } });
-        } else {
-          const newCheckout = format(addDays(new Date(booking.checkout), deltaDays), 'yyyy-MM-dd');
-          if (newCheckout <= booking.checkin) return; // prevent invalid state
-          setPendingUpdate({ booking, updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout } });
-        }
-      }
-    };
-    
-    target.addEventListener('pointerup', onPointerUp as any);
+    const newCheckout = format(addDays(new Date(booking.checkout), 1), 'yyyy-MM-dd');
+    setPendingUpdate({ booking, updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout } });
+  };
+
+  const handleQuickReduce = (e: React.MouseEvent, booking: Booking) => {
+    e.stopPropagation();
+    const newCheckout = format(addDays(new Date(booking.checkout), -1), 'yyyy-MM-dd');
+    if (newCheckout <= booking.checkin) return;
+    setPendingUpdate({ booking, updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout } });
   };
 
   const confirmUpdate = async () => {
@@ -413,7 +388,7 @@ export function BookingBoard() {
                           initial={{ opacity: 0, scale: 0.95 }}
                           animate={{ opacity: 1, scale: 1 }}
                           className={cn(
-                            "absolute z-10 rounded-md p-1.5 text-white shadow-md overflow-hidden flex flex-col justify-between transition-all",
+                            "absolute z-10 rounded-md p-1.5 text-white shadow-md overflow-hidden flex flex-col justify-between transition-all group/booking",
                             getStatusColor(booking.status),
                             isEditable ? "cursor-grab" : "cursor-pointer"
                           )}
@@ -424,15 +399,15 @@ export function BookingBoard() {
                             height: ROW_HEIGHT - 6,
                           }}
                           onClick={(e) => { 
-                            if (isResizingRef.current || isDraggingRef.current) return;
+                            if (isDraggingRef.current) return;
                             e.stopPropagation(); 
                             setSelectedBooking(booking); 
                           }}
                         >
                           <button
-                            className="text-[10px] md:text-xs font-bold truncate text-left hover:underline leading-tight z-10 relative"
+                            className="text-[10px] md:text-xs font-bold truncate text-left hover:underline leading-tight z-10 relative pr-6"
                             onClick={(e) => {
-                              if (isResizingRef.current || isDraggingRef.current) return;
+                              if (isDraggingRef.current) return;
                               e.stopPropagation();
                               if (guest?._id) setSelectedGuestId(guest._id);
                               else setSelectedBooking(booking);
@@ -444,20 +419,26 @@ export function BookingBoard() {
                             {booking.status.replace('-', ' ')}
                           </span>
                           
-                          {/* Drag Resize Handles */}
+                          {/* Quick Edit Buttons */}
                           {isEditable && (
-                            <>
-                              <div 
-                                className="absolute left-0 top-0 bottom-0 w-4 cursor-ew-resize hover:bg-white/40 z-20"
-                                onPointerDown={(e) => handleResizePointerDown(e, booking, 'left')}
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                              <div 
-                                className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize hover:bg-white/40 z-20"
-                                onPointerDown={(e) => handleResizePointerDown(e, booking, 'right')}
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                            </>
+                            <div className="absolute right-1 top-0 bottom-0 py-1.5 flex flex-col justify-center gap-1 opacity-0 group-hover/booking:opacity-100 transition-all duration-200 z-30">
+                              <button
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={(e) => handleQuickExtend(e, booking)}
+                                className="size-5 md:size-6 rounded-lg bg-white/20 hover:bg-white/40 active:scale-90 flex items-center justify-center text-white backdrop-blur-md shadow-sm border border-white/20 transition-all"
+                                title="Add 1 Day"
+                              >
+                                <Plus className="size-3 md:size-3.5" />
+                              </button>
+                              <button
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={(e) => handleQuickReduce(e, booking)}
+                                className="size-5 md:size-6 rounded-lg bg-white/20 hover:bg-white/40 active:scale-90 flex items-center justify-center text-white backdrop-blur-md shadow-sm border border-white/20 transition-all"
+                                title="Remove 1 Day"
+                              >
+                                <Minus className="size-3 md:size-3.5" />
+                              </button>
+                            </div>
                           )}
                         </motion.div>
                       );
