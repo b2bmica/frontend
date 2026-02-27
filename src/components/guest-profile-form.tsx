@@ -80,7 +80,15 @@ export function GuestProfileForm({ onSave, onCancel }: { onSave: (data: any) => 
             <div className="space-y-2">
               <Label htmlFor="phone">Phone Number</Label>
               <div className="relative">
-                <Input id="phone" placeholder="+1..." className="pl-8" required />
+                <Input 
+                  id="phone" 
+                  type="tel"
+                  pattern="^[0-9+]{10,15}$"
+                  title="Please enter a valid phone number (10-15 digits)"
+                  placeholder="+1..." 
+                  className="pl-8" 
+                  required 
+                />
                 <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               </div>
             </div>
@@ -132,7 +140,7 @@ export function GuestProfileForm({ onSave, onCancel }: { onSave: (data: any) => 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label htmlFor="idNumber">ID Number</Label>
-                <Input id="idNumber" placeholder={`Enter ${idType} number`} required />
+                <Input id="idNumber" placeholder={`Enter ${idType} number`} />
               </div>
 
               {/* Upload Area */}

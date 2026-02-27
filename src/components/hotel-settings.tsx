@@ -115,14 +115,28 @@ export function HotelSettings() {
                   <Label htmlFor="phone">Phone Number</Label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="phone" className="pl-10" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
+                    <Input 
+                      id="phone" 
+                      type="tel"
+                      pattern="^[0-9+]{10,15}$"
+                      title="Please enter a valid phone number (10-15 digits)"
+                      className="pl-10" 
+                      value={form.phone} 
+                      onChange={e => setForm({...form, phone: e.target.value})} 
+                    />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Public Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input id="email" className="pl-10" value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
+                    <Input 
+                      id="email" 
+                      type="email"
+                      className="pl-10" 
+                      value={form.email} 
+                      onChange={e => setForm({...form, email: e.target.value})} 
+                    />
                   </div>
                 </div>
               </div>

@@ -453,13 +453,15 @@ export function BookingBoard() {
                                     isResizingRef.current = true;
                                   }
 
-                                  if (hasMovedSignificant && cardElement) {
-                                    // Visual snapping to full days makes it feel more "robust" as requested
-                                    const snappedDeltaX = Math.round(deltaX / COLUMN_WIDTH) * COLUMN_WIDTH;
-                                    // Cap visual width to prevent 'way too future' craziness
-                                    const newWidth = Math.max(COLUMN_WIDTH, Math.min(originalWidth + snappedDeltaX, 30 * COLUMN_WIDTH));
-                                    cardElement.style.width = `${newWidth}px`;
-                                  }
+                                    if (hasMovedSignificant && cardElement) {
+                                      // Visual snapping to full days makes it feel more "robust"
+                                      const snappedDeltaX = Math.round(deltaX / COLUMN_WIDTH) * COLUMN_WIDTH;
+                                      // Cap visual width to prevent 'way too future' craziness
+                                      // Use originalWidth as the baseline to avoid shrinking below 1 day
+                                      const minWidth = COLUMN_WIDTH - 2;
+                                      const newWidth = Math.max(minWidth, Math.min(originalWidth + snappedDeltaX, 30 * COLUMN_WIDTH));
+                                      cardElement.style.width = `${newWidth}px`;
+                                    }
                                 };
 
                                   const onPointerUp = (upEvent: PointerEvent) => {
@@ -498,10 +500,12 @@ export function BookingBoard() {
                                       });
 
                                       if (isClashing) {
-                                        // Silent block or simple alert as requested "dont allow extending"
+                                        // Reset and exit
+                                        isResizingRef.current = false;
+                                        setResizingId(null);
                                         return;
                                       }
-
+                                      
                                       if (proposedEnd > proposedStart) {
                                         setPendingUpdate({ 
                                           booking, 
@@ -514,11 +518,9 @@ export function BookingBoard() {
                                       }
                                     }
                                     
-                                    // Delay state release to prevent accidental clicks
-                                    setTimeout(() => { 
-                                      isResizingRef.current = false; 
-                                      setResizingId(null);
-                                    }, 50);
+                                    // Reset state
+                                    isResizingRef.current = false;
+                                    setResizingId(null);
                                   };
 
                                 window.addEventListener('pointermove', onPointerMove);

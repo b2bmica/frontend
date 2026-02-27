@@ -162,6 +162,9 @@ export function AuthPage() {
                       <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Direct Phone</Label>
                       <Input 
                         required 
+                        type="tel"
+                        pattern="^[0-9+]{10,15}$"
+                        title="Please enter a valid phone number (10-15 digits)"
                         className="h-12 rounded-xl border-slate-200 focus:ring-primary font-bold"
                         value={form.phone}
                         onChange={e => setForm({ ...form, phone: e.target.value })}

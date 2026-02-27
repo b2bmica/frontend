@@ -272,11 +272,26 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-black uppercase tracking-widest opacity-70">Mobile *</Label>
-                  <Input required className="h-11 rounded-xl" value={newGuest.phone} onChange={e => setNewGuest({ ...newGuest, phone: e.target.value })} placeholder="+91..." />
+                  <Input 
+                    required 
+                    type="tel"
+                    pattern="^[0-9+]{10,15}$"
+                    title="Please enter a valid phone number (10-15 digits)"
+                    className="h-11 rounded-xl" 
+                    value={newGuest.phone} 
+                    onChange={e => setNewGuest({ ...newGuest, phone: e.target.value })} 
+                    placeholder="+91..." 
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-black uppercase tracking-widest opacity-70">E-mail</Label>
-                  <Input className="h-11 rounded-xl" value={newGuest.email} onChange={e => setNewGuest({ ...newGuest, email: e.target.value })} placeholder="guest@domain.com" />
+                  <Input 
+                    type="email"
+                    className="h-11 rounded-xl" 
+                    value={newGuest.email} 
+                    onChange={e => setNewGuest({ ...newGuest, email: e.target.value })} 
+                    placeholder="guest@domain.com" 
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-black uppercase tracking-widest opacity-70">Document Type</Label>
@@ -290,8 +305,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-black uppercase tracking-widest opacity-70">ID Number *</Label>
-                  <Input required className="h-11 rounded-xl" value={newGuest.idProof.number} onChange={e => setNewGuest({ ...newGuest, idProof: { ...newGuest.idProof, number: e.target.value } })} placeholder="Document number" />
+                  <Label className="text-xs font-black uppercase tracking-widest opacity-70">ID Number</Label>
+                  <Input className="h-11 rounded-xl" value={newGuest.idProof.number} onChange={e => setNewGuest({ ...newGuest, idProof: { ...newGuest.idProof, number: e.target.value } })} placeholder="Document number" />
                 </div>
               </div>
               {error && <p className="text-xs font-bold text-destructive bg-destructive/5 p-3 rounded-lg flex items-center gap-2"><Info className="h-4 w-4" /> {error}</p>}

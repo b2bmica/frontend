@@ -14,13 +14,14 @@ import {
   Users,
   CreditCard,
   Receipt,
-  Download,
+  Printer,
   Trash2,
   CheckCircle2,
   ChevronRight,
   Info,
   Loader2,
-  X
+  X,
+  FileText
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/auth-context';
@@ -171,37 +172,32 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                   </p>
                 </div>
                 {balance > 0 ? (
-                  <div className="flex items-center gap-2">
-                    <div className="flex bg-muted/50 rounded-lg p-0.5 gap-0.5 border">
+                  <div className="flex items-center gap-3">
+                    <div className="flex bg-muted/80 rounded-xl p-1 gap-1 border shadow-inner">
                       {['cash', 'card', 'upi'].map((m) => (
                         <button
                           key={m}
-                          onClick={() => setPaymentMethod(m as any)}
+                          disabled={isActioning}
+                          onClick={() => handleAction((id) => updateBooking(id, { 
+                            advancePayment: (booking.advancePayment || 0) + balance,
+                            paymentMethod: m
+                          }))}
                           className={cn(
-                            "h-5 px-1.5 text-[8px] font-black uppercase rounded transition-colors",
-                            paymentMethod === m ? "bg-primary text-white" : "text-muted-foreground hover:bg-white"
+                            "h-7 px-2.5 text-[9px] font-black uppercase rounded-lg transition-all active:scale-95",
+                            "bg-white border text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200"
                           )}
                         >
                           {m}
                         </button>
                       ))}
                     </div>
-                    <Button 
-                      size="sm" 
-                      onClick={() => handleAction((id) => updateBooking(id, { 
-                        advancePayment: (booking.advancePayment || 0) + balance,
-                        paymentMethod: paymentMethod
-                      }))}
-                      className="text-[9px] font-black uppercase tracking-tighter h-7 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm transition-all"
-                      disabled={isActioning}
-                    >
-                      {isActioning ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                      Settle Balance
-                    </Button>
+                    <div className="hidden sm:block">
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">Select payment <br/>mode to settle</p>
+                    </div>
                   </div>
                 ) : (
-                  <Badge variant="outline" className="text-[9px] font-black uppercase tracking-tighter h-6 px-2.5 border-emerald-200 text-emerald-700 bg-emerald-50">
-                    Settled
+                  <Badge variant="outline" className="text-[10px] font-black uppercase tracking-tight h-7 px-3 border-emerald-200 text-emerald-700 bg-emerald-50/50">
+                    Full Amount Settled
                   </Badge>
                 )}
               </div>
@@ -221,14 +217,14 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
           </div>
         </div>
 
-        {/* Action Panel - Ultra Compact Layout */}
-        <div className="p-3 bg-card border-t flex flex-col gap-2 relative z-10 shrink-0">
-          <div className="flex items-stretch gap-1.5 w-full h-9">
-            {/* Edit / Cancel Row */}
+        {/* Action Panel - Optimized Layout */}
+        <div className="p-4 bg-white border-t flex flex-col gap-2 relative z-10 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.03)]">
+          <div className="flex items-stretch gap-2 w-full h-11">
+            {/* Edit Button */}
             {(booking.status === 'reserved' || booking.status === 'checked-in') && !showPaymentSelection && (
               <Button 
                 variant="outline"
-                className="flex-shrink-0 h-full rounded-lg font-bold border-2 text-[10px] uppercase px-2 hover:bg-slate-50 text-slate-600"
+                className="flex-shrink-0 h-full rounded-xl font-black border-2 text-[10px] uppercase px-4 hover:bg-slate-50 text-slate-600 transition-all active:scale-95"
                 onClick={() => setShowEditModal(true)}
               >
                 Edit
@@ -238,89 +234,83 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
             {/* Check-in Action */}
             {booking.status === 'reserved' && (
               <Button 
-                className="flex-1 h-full rounded-lg font-black bg-blue-600 hover:bg-blue-700 text-[10px] uppercase tracking-wider shadow-md shadow-blue-500/10"
+                className="flex-1 h-full rounded-xl font-black bg-blue-600 hover:bg-blue-700 text-[11px] uppercase tracking-wider shadow-lg shadow-blue-500/20 transition-all active:scale-95"
                 onClick={() => handleAction(checkIn)}
                 disabled={isActioning || isBefore(new Date(), startOfDay(new Date(booking.checkin)))}
               >
-                {isActioning ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />}
-                {isBefore(new Date(), startOfDay(new Date(booking.checkin))) ? 'Check-in Locked' : 'Check-in'}
+                {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                {isBefore(new Date(), startOfDay(new Date(booking.checkin))) ? 'Stay Locked' : 'Check-in Guest'}
               </Button>
             )}
 
             {/* Settle & Checkout Action */}
             {booking.status === 'checked-in' && (
-              <div className="flex-1 flex gap-1.5 min-w-0">
+              <div className="flex-1 flex gap-2 min-w-0">
                 {!showPaymentSelection ? (
                   <Button 
                     variant="outline"
-                    className="flex-1 h-full rounded-lg font-black border-orange-200 text-orange-600 hover:bg-orange-50 text-[10px] uppercase tracking-wider truncate"
+                    className="flex-1 h-full rounded-xl font-black border-orange-200 text-orange-600 hover:bg-orange-600 hover:text-white text-[11px] uppercase tracking-wider truncate shadow-sm transition-all active:scale-95"
                     onClick={() => setShowPaymentSelection(true)}
                   >
                     Settle & Checkout
                   </Button>
                 ) : (
-                  <div className="flex-1 flex items-center gap-1.5 px-1.5 bg-orange-50/50 rounded-lg border border-orange-100 animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
-                    <div className="flex bg-white rounded-md border p-0.5 gap-0.5 shrink-0">
+                  <div className="flex-1 flex items-center justify-between gap-2 px-2.5 bg-orange-600 rounded-xl animate-in slide-in-from-right-4 duration-300 overflow-hidden">
+                    <span className="text-[10px] font-black text-white uppercase tracking-tighter whitespace-nowrap">Mode:</span>
+                    <div className="flex bg-white/20 rounded-lg p-0.5 gap-0.5 shrink-0">
                       {['cash', 'card', 'upi'].map((m) => (
                         <button
                           key={m}
-                          onClick={() => setPaymentMethod(m as any)}
+                          disabled={isActioning}
+                          onClick={() => handleAction((id) => updateBooking(id, { 
+                            status: 'checked-out', 
+                            advancePayment: totalAmount,
+                            paymentMethod: m 
+                          }))}
                           className={cn(
-                            "h-5 px-1.5 text-[8px] font-black uppercase rounded transition-colors",
-                            paymentMethod === m ? "bg-orange-600 text-white" : "text-slate-400 hover:bg-slate-50"
+                            "h-7 px-3 text-[9px] font-black uppercase rounded-md transition-all active:scale-90",
+                            "bg-white text-orange-600 shadow-sm"
                           )}
                         >
                           {m}
                         </button>
                       ))}
                     </div>
-                    <Button 
-                      size="sm"
-                      className="flex-1 h-6 rounded-md font-black bg-orange-600 hover:bg-orange-700 text-[8px] uppercase tracking-tight shadow-sm whitespace-nowrap"
-                      onClick={() => handleAction((id) => updateBooking(id, { 
-                        status: 'checked-out', 
-                        advancePayment: totalAmount,
-                        paymentMethod: paymentMethod 
-                      }))}
-                      disabled={isActioning}
-                    >
-                      {isActioning ? <Loader2 className="h-2 w-2 animate-spin" /> : "Confirm"}
-                    </Button>
                     <button 
                       onClick={() => setShowPaymentSelection(false)} 
-                      className="text-slate-400 hover:text-slate-600 p-0.5 shrink-0"
+                      className="text-white/60 hover:text-white transition-colors ml-1"
                     >
-                      <X className="h-3 w-3" />
+                      <X className="h-4 w-4" />
                     </button>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Invoice Button (Compact unless checked-out) */}
+            {/* Print Button */}
             <Button 
               variant="outline" 
               className={cn(
-                "h-full rounded-lg border-2 flex items-center justify-center gap-1.5 font-bold transition-all shrink-0",
-                booking.status === 'checked-out' ? "flex-1 bg-primary text-white border-primary shadow-lg shadow-primary/20 hover:bg-primary/90" : "w-10 p-0 text-slate-400 border-slate-100 hover:border-primary/30"
+                "h-full rounded-xl border-2 flex items-center justify-center gap-2 font-black transition-all shrink-0 active:scale-95",
+                booking.status === 'checked-out' ? "flex-1 bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-900/20 hover:bg-slate-800" : "w-11 p-0 text-slate-400 border-slate-100 hover:border-slate-300"
               )}
-              onClick={() => alert('Downloading invoice & receipt PDF...')}
-              title="Download Invoice"
+              onClick={() => window.print()}
+              title="Print Receipt"
             >
-              <Download className={cn("h-4 w-4", booking.status === 'checked-out' ? "text-white" : "text-slate-500")} />
-              {booking.status === 'checked-out' && <span className="text-[10px] uppercase font-black tracking-widest">Receipt</span>}
+              <Printer className={cn("h-4 w-4", booking.status === 'checked-out' ? "text-white" : "text-slate-500")} />
+              {booking.status === 'checked-out' && <span className="text-[11px] uppercase tracking-widest">Print Receipt</span>}
             </Button>
 
-            {/* Cancel (Icon only to save space) */}
+            {/* Cancel (Icon only) */}
             {booking.status !== 'cancelled' && booking.status !== 'checked-out' && !showPaymentSelection && (
               <Button 
                 variant="outline" 
                 size="icon"
-                className="h-full w-9 rounded-lg border-2 border-red-50 text-red-400 hover:bg-red-50 hover:text-red-600 hover:border-red-100 shrink-0"
+                className="h-full w-11 rounded-xl border-2 border-red-50 text-red-400 hover:bg-red-50 hover:text-red-600 hover:border-red-100 shrink-0 transition-all active:scale-95"
                 onClick={() => handleAction(cancelBooking)}
                 disabled={isActioning}
               >
-                {isActioning ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
               </Button>
             )}
           </div>
