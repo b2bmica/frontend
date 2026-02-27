@@ -46,16 +46,27 @@ const defaultForm = {
 };
 
 export function RoomInventory() {
-  const { rooms, createRoom, updateRoom, deleteRoom, loading } = useBookings();
+  const { rooms, bookings, createRoom, updateRoom, deleteRoom, loading } = useBookings();
   const [isOpen, setIsOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [form, setForm] = useState({ ...defaultForm });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [error, setError] = useState<string | null>(null);
 
-  const filteredRooms = filterType === 'all' ? rooms : rooms.filter(r => r.roomType === filterType);
+  const filteredRooms = rooms.filter(r => {
+    const matchesType = filterType === 'all' || r.roomType === filterType;
+    const matchesStatus = statusFilter === 'all' || 
+                         (statusFilter === 'repair' ? (r.status === 'maintenance' || r.status === 'under-maintenance') : r.status === statusFilter);
+    return matchesType && matchesStatus;
+  });
+
+  const getBookingRoomId = (b: any): string => {
+    if (!b.roomId) return '';
+    return typeof b.roomId === 'object' ? b.roomId._id : b.roomId;
+  };
 
   const openCreateModal = () => {
     setEditingRoom(null);
@@ -99,6 +110,15 @@ export function RoomInventory() {
   };
 
   const handleDelete = async (id: string) => {
+    const hasActiveBookings = bookings.some(b => 
+      getBookingRoomId(b) === id && (b.status === 'reserved' || b.status === 'checked-in')
+    );
+
+    if (hasActiveBookings) {
+      setError("Cannot delete room with active or upcoming bookings. Please cancel or move bookings first.");
+      return;
+    }
+
     try {
       await deleteRoom(id);
       setDeleteConfirm(null);
@@ -129,16 +149,23 @@ export function RoomInventory() {
       {/* Shared Stats Header */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
-          { label: 'Total Inventory', value: stats.total, color: 'text-slate-900' },
-          { label: 'Available', value: stats.clean, color: 'text-emerald-600' },
-          { label: 'Occupied', value: stats.occupied, color: 'text-blue-600' },
-          { label: 'Dirty', value: stats.dirty, color: 'text-orange-600' },
-          { label: 'Repair', value: stats.maintenance, color: 'text-red-600' },
+          { key: 'all', label: 'Total Inventory', value: stats.total, color: 'text-slate-900' },
+          { key: 'clean', label: 'Clean', value: stats.clean, color: 'text-emerald-600' },
+          { key: 'dirty', label: 'Dirty', value: stats.dirty, color: 'text-orange-600' },
+          { key: 'occupied', label: 'Occupied', value: stats.occupied, color: 'text-blue-600' },
+          { key: 'repair', label: 'Repair', value: stats.maintenance, color: 'text-red-600' },
         ].map(s => (
-          <div key={s.label} className="bg-white border rounded-2xl p-4 shadow-sm flex flex-col items-center justify-center text-center group hover:border-slate-200 transition-colors">
+          <button 
+            key={s.label} 
+            onClick={() => setStatusFilter(s.key)}
+            className={cn(
+              "bg-white border rounded-2xl p-4 shadow-sm flex flex-col items-center justify-center text-center group hover:border-primary/30 transition-all",
+              statusFilter === s.key ? "ring-2 ring-primary border-transparent" : "border-slate-100"
+            )}
+          >
             <p className={cn("text-2xl font-bold tracking-tight", s.color)}>{s.value}</p>
             <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mt-1">{s.label}</p>
-          </div>
+          </button>
         ))}
       </div>
 

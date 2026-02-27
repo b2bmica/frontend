@@ -52,7 +52,8 @@ export function HousekeepingBoard() {
   );
 
   const counts = rooms.reduce((acc, r) => {
-    acc[r.status] = (acc[r.status] || 0) + 1;
+    const s = (r.status === 'maintenance' || r.status === 'under-maintenance') ? 'repair' : r.status;
+    acc[s] = (acc[s] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
@@ -161,8 +162,9 @@ export function HousekeepingBoard() {
 
         <div className="divide-y divide-slate-100">
           {filtered.map((room, i) => {
-            const meta = STATUS_META[room.status] || STATUS_META.dirty;
-            const transitions = TRANSITIONS[room.status] || [];
+            const effectiveStatus = (room.status === 'maintenance' || room.status === 'under-maintenance') ? 'repair' : room.status;
+            const meta = STATUS_META[effectiveStatus] || STATUS_META.dirty;
+            const transitions = TRANSITIONS[effectiveStatus] || [];
             const isActioning = actioningId === room._id;
 
             return (

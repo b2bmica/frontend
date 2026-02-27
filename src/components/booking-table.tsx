@@ -121,7 +121,8 @@ export function BookingTable() {
                   const guest = typeof booking.guestId === 'object' ? booking.guestId : null;
                   const room = typeof booking.roomId === 'object' ? booking.roomId : rooms.find(r => r._id === booking.roomId);
                   const nights = Math.max(1, Math.ceil((new Date(booking.checkout).getTime() - new Date(booking.checkin).getTime()) / (1000 * 60 * 60 * 24)));
-                  const amount = room?.price ? nights * room.price : 0;
+                  const roomRate = booking.roomPrice || room?.price || 0;
+                  const amount = roomRate * nights;
 
                   return (
                     <TableRow key={booking._id} className="hover:bg-muted/20 transition-colors">
@@ -130,8 +131,8 @@ export function BookingTable() {
                         <div className="text-xs text-muted-foreground">{guest?.phone || ''}</div>
                       </TableCell>
                       <TableCell>
-                        <div className="font-medium">{room?.roomNumber || '—'}</div>
-                        <div className="text-xs text-muted-foreground">{room?.roomType || ''}</div>
+                        <div className="font-medium">{room?.roomNumber || '[Deleted]'}</div>
+                        <div className="text-xs text-muted-foreground">{room?.roomType || 'Asset Removed'}</div>
                       </TableCell>
                       <TableCell className="text-sm">{format(new Date(booking.checkin), 'dd MMM yy')}</TableCell>
                       <TableCell className="text-sm">{format(new Date(booking.checkout), 'dd MMM yy')}</TableCell>

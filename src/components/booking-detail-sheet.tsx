@@ -99,7 +99,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
           </div>
           <div className="space-y-1">
             <h2 className="text-xl font-black tracking-tight flex items-center gap-2">
-               Room {room?.roomNumber} <span className="text-muted-foreground font-normal">/</span> {room?.roomType}
+               Room {room?.roomNumber || '[Deleted]'} <span className="text-muted-foreground font-normal">/</span> {room?.roomType || 'Asset Removed'}
             </h2>
             <p className="text-muted-foreground font-medium text-xs flex items-center gap-2">
               Stay Duration: {nights} Night{nights > 1 ? 's' : ''} • {format(new Date(booking.checkin), 'MMM dd')} - {format(new Date(booking.checkout), 'MMM dd')}
@@ -232,8 +232,20 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                 Checkout
               </Button>
             )}
-            <Button variant="outline" className="h-10 w-10 p-0 rounded-xl border-2 shrink-0" title="Generate Invoice">
+            <Button 
+              variant="outline" 
+              className={cn(
+                "h-10 rounded-xl border-2 flex items-center gap-2 font-bold transition-all",
+                booking.status === 'checked-out' ? "flex-1 bg-primary text-white border-primary shadow-lg shadow-primary/20 hover:bg-primary/90" : "w-10 p-0 shrink-0"
+              )}
+              title="Generate & Download Invoice"
+              onClick={() => {
+                // Mock download for now, but label it clearly
+                alert('Generating Invoice PDF...');
+              }}
+            >
               <Download className="h-4 w-4" />
+              {booking.status === 'checked-out' && <span className="text-xs uppercase tracking-widest">Download Invoice</span>}
             </Button>
           </div>
           
