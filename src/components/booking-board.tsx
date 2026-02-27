@@ -257,7 +257,18 @@ export function BookingBoard() {
               return (
                 <button
                   key={key}
-                  onClick={() => setStatusFilter(key)}
+                  onClick={() => {
+                    setStatusFilter(key);
+                    // Navigate to latest booking of this status
+                    if (key !== 'all') {
+                      const latest = [...bookings]
+                        .filter(b => b.status === key)
+                        .sort((a, b) => new Date(b.checkin).getTime() - new Date(a.checkin).getTime())[0];
+                      if (latest) {
+                        setWeekStart(startOfWeek(new Date(latest.checkin), { weekStartsOn: 1 }));
+                      }
+                    }
+                  }}
                   className={cn(
                     "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all",
                     statusFilter === key
@@ -525,6 +536,10 @@ export function BookingBoard() {
 
                                 window.addEventListener('pointermove', onPointerMove);
                                 window.addEventListener('pointerup', onPointerUp);
+                              }}
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
                               }}
                             >
                               <div className="h-6 w-1.5 bg-white/50 rounded-full shadow-sm" />

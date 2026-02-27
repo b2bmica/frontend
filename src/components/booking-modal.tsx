@@ -10,6 +10,7 @@ import { differenceInDays, format, addDays } from 'date-fns';
 import { Loader2, Search, UserPlus, IndianRupee, Info } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -54,7 +55,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   // Booking form
   const [bookingForm, setBookingForm] = useState({
     roomId: '', checkin: '', checkout: '', adults: 1, children: 0,
-    advancePayment: 0, bookingSource: 'direct',
+    advancePayment: 0, bookingSource: 'direct', paymentMethod: 'cash',
     baseOccupancy: 2, extraPersonPrice: 0, roomPrice: 0
   });
 
@@ -124,6 +125,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           children: initialBooking.children || 0,
           advancePayment: initialBooking.advancePayment || 0,
           bookingSource: initialBooking.bookingSource || 'direct',
+          paymentMethod: 'cash',
           baseOccupancy: initialBooking.baseOccupancy || 2,
           extraPersonPrice: initialBooking.extraPersonPrice || 0,
           roomPrice: initialBooking.roomPrice || 0
@@ -142,6 +144,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           checkout: selectedDate ? format(addDays(new Date(selectedDate), 1), 'yyyy-MM-dd') : format(addDays(new Date(), 1), 'yyyy-MM-dd'),
           adults: 1, children: 0,
           advancePayment: 0,
+          paymentMethod: 'cash',
           bookingSource: 'direct',
           baseOccupancy: 2,
           extraPersonPrice: 0,
@@ -195,10 +198,12 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       if (initialBooking) {
         await updateBooking(initialBooking._id, bookingForm);
       } else {
-        await createBooking({
-          ...bookingForm,
-          guestId: selectedGuest._id,
-        });
+        const finalData = { 
+          ...bookingForm, 
+          guestId: selectedGuest?._id,
+          paymentMethod: bookingForm.advancePayment > 0 ? bookingForm.paymentMethod : undefined
+        };
+        await createBooking(finalData);
       }
       onClose();
     } catch (err: any) {
@@ -378,18 +383,39 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                 <div className="flex items-center justify-between px-1">
                   <Label className="text-xs font-black uppercase tracking-widest opacity-70">Advance Payment Received</Label>
                   {totalAmount > 0 && balanceDue > 0 && (
-                    <button 
-                      type="button" 
-                      onClick={() => setBookingForm({ ...bookingForm, advancePayment: totalAmount })}
-                      className="text-[10px] font-black text-primary uppercase tracking-widest hover:underline"
-                    >
-                      Settle Full (₹{totalAmount.toLocaleString()})
-                    </button>
+                    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-300">
+                      <span className="text-[9px] font-black text-muted-foreground uppercase opacity-40">Settle Full:</span>
+                      <div className="flex bg-primary/10 rounded-lg p-0.5 gap-0.5 border border-primary/20 shadow-sm">
+                        {['cash', 'card', 'upi'].map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setBookingForm({ ...bookingForm, advancePayment: totalAmount, paymentMethod: m as any })}
+                            className={cn(
+                              "h-6 px-2 text-[8px] font-black uppercase rounded transition-all active:scale-90",
+                              bookingForm.advancePayment === totalAmount && bookingForm.paymentMethod === m 
+                                ? "bg-primary text-white" 
+                                : "text-primary hover:bg-primary/10"
+                            )}
+                          >
+                            {m}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
                 <div className="relative">
                   <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input type="number" className="h-11 rounded-xl pl-10" min="0" value={bookingForm.advancePayment || ''} onChange={e => setBookingForm({ ...bookingForm, advancePayment: Number(e.target.value) })} placeholder="Amount in INR" />
+                  <Input 
+                    type="number" 
+                    step="any"
+                    className="h-11 rounded-xl pl-10" 
+                    min="0" 
+                    value={bookingForm.advancePayment || ''} 
+                    onChange={e => setBookingForm({ ...bookingForm, advancePayment: parseFloat(e.target.value) || 0 })} 
+                    placeholder="Amount in INR" 
+                  />
                 </div>
               </div>
 

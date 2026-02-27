@@ -41,6 +41,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
   const [isActioning, setIsActioning] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPaymentSelection, setShowPaymentSelection] = useState(false);
+  const [showBalanceSettle, setShowBalanceSettle] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi'>('cash');
 
   if (!booking) return null;
@@ -172,28 +173,45 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                   </p>
                 </div>
                 {balance > 0 ? (
-                  <div className="flex items-center gap-3">
-                    <div className="flex bg-muted/80 rounded-xl p-1 gap-1 border shadow-inner">
-                      {['cash', 'card', 'upi'].map((m) => (
-                        <button
-                          key={m}
-                          disabled={isActioning}
-                          onClick={() => handleAction((id) => updateBooking(id, { 
-                            advancePayment: (booking.advancePayment || 0) + balance,
-                            paymentMethod: m
-                          }))}
-                          className={cn(
-                            "h-7 px-2.5 text-[9px] font-black uppercase rounded-lg transition-all active:scale-95",
-                            "bg-white border text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200"
-                          )}
+                  <div className="flex items-center gap-2">
+                    {!showBalanceSettle ? (
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => setShowBalanceSettle(true)}
+                        className="text-[10px] font-black uppercase tracking-widest h-8 px-4 border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all shadow-sm"
+                      >
+                        Settle Balance
+                      </Button>
+                    ) : (
+                      <div className="flex items-center gap-1.5 p-1 bg-emerald-600 rounded-xl animate-in fade-in slide-in-from-right-2 duration-300">
+                        <div className="flex bg-white/20 rounded-lg p-0.5 gap-0.5">
+                          {['cash', 'card', 'upi'].map((m) => (
+                            <button
+                              key={m}
+                              disabled={isActioning}
+                              onClick={() => handleAction((id) => updateBooking(id, { 
+                                advancePayment: (booking.advancePayment || 0) + balance,
+                                paymentMethod: m
+                              }))}
+                              className={cn(
+                                "h-6 px-3 text-[8px] font-black uppercase rounded-md transition-all active:scale-90",
+                                isActioning ? "opacity-50 cursor-not-allowed" : "bg-white text-emerald-600 shadow-sm"
+                              )}
+                            >
+                              {m}
+                            </button>
+                          ))}
+                        </div>
+                        <button 
+                          onClick={() => setShowBalanceSettle(false)} 
+                          className="p-1 text-white/60 hover:text-white"
                         >
-                          {m}
+                          <X className="h-3 w-3" />
                         </button>
-                      ))}
-                    </div>
-                    <div className="hidden sm:block">
-                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">Select payment <br/>mode to settle</p>
-                    </div>
+                        {isActioning && <Loader2 className="h-3.5 w-3.5 text-white animate-spin ml-1" />}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <Badge variant="outline" className="text-[10px] font-black uppercase tracking-tight h-7 px-3 border-emerald-200 text-emerald-700 bg-emerald-50/50">
@@ -269,7 +287,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                           }))}
                           className={cn(
                             "h-7 px-3 text-[9px] font-black uppercase rounded-md transition-all active:scale-90",
-                            "bg-white text-orange-600 shadow-sm"
+                            isActioning ? "opacity-50 cursor-not-allowed" : "bg-white text-orange-600 shadow-sm"
                           )}
                         >
                           {m}
@@ -282,6 +300,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                     >
                       <X className="h-4 w-4" />
                     </button>
+                    {isActioning && <Loader2 className="h-4 w-4 text-white animate-spin ml-1" />}
                   </div>
                 )}
               </div>
