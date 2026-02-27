@@ -91,33 +91,33 @@ export function AppSidebar({
 
       <SidebarContent className="px-2">
         {sections.filter(s => s.title !== "Settings").map((section) => (
-          <div key={section.title} className="mb-4">
-             <h4 className="px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 opacity-80">
-                {section.title}
-             </h4>
-             <SidebarMenu>
-               {section.items.map((item) => {
-                 const isActive = currentPathSegment === item.id
-                 return (
-                   <SidebarMenuItem key={item.title}>
-                     <SidebarMenuButton
-                       asChild
-                       tooltip={item.title}
-                       isActive={isActive}
-                       className="w-full h-11 px-4 text-[13px] font-bold tracking-tight data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:shadow-sm transition-all duration-200 rounded-xl mb-0.5"
-                     >
-                       <Link to={`/dashboard/${item.id}`} onClick={() => setOpenMobile(false)} className="flex items-center gap-3">
-                         <div className={cn(
-                           "flex items-center justify-center size-7 rounded-lg transition-colors shadow-xs",
-                           isActive ? "bg-primary text-primary-foreground" : "bg-slate-100 text-slate-500"
-                         )}>
-                           {item.icon && <item.icon className="size-3.5" />}
-                         </div>
-                         <span>{item.title}</span>
-                       </Link>
-                     </SidebarMenuButton>
-                   </SidebarMenuItem>
-                 )
+            <div key={section.title} className="mb-4">
+               <h4 className="px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 opacity-80 group-data-[collapsible=icon]:hidden">
+                  {section.title}
+               </h4>
+               <SidebarMenu>
+                 {section.items.map((item) => {
+                   const isActive = currentPathSegment === item.id;
+                   return (
+                     <SidebarMenuItem key={item.title}>
+                       <SidebarMenuButton
+                         asChild
+                         tooltip={item.title}
+                         isActive={isActive}
+                         className="w-full h-11 px-4 text-[13px] font-bold tracking-tight data-[active=true]:bg-primary/10 data-[active=true]:text-primary data-[active=true]:shadow-sm transition-all duration-200 rounded-xl mb-0.5"
+                       >
+                         <Link to={`/dashboard/${item.id}`} onClick={() => setOpenMobile(false)} className="flex items-center gap-3">
+                           <div className={cn(
+                             "flex items-center justify-center size-7 rounded-lg transition-colors shadow-xs shrink-0",
+                             isActive ? "bg-primary text-primary-foreground" : "bg-slate-100 text-slate-500"
+                           )}>
+                             {item.icon && <item.icon className="size-3.5" />}
+                           </div>
+                           <span className="truncate group-data-[collapsible=icon]:hidden">{item.title}</span>
+                         </Link>
+                       </SidebarMenuButton>
+                     </SidebarMenuItem>
+                   )
                })}
              </SidebarMenu>
           </div>
