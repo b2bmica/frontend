@@ -367,9 +367,10 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                 className="flex-1 h-full rounded-xl font-black bg-blue-600 hover:bg-blue-700 text-[11px] uppercase tracking-wider shadow-lg shadow-blue-500/20 transition-all active:scale-95"
                 onClick={() => handleAction(checkIn)}
                 disabled={isActioning || isBefore(new Date(), startOfDay(new Date(booking.checkin)))}
+                title={isBefore(new Date(), startOfDay(new Date(booking.checkin))) ? `Check-in will be enabled on ${format(new Date(booking.checkin), 'MMM dd, yyyy')}` : undefined}
               >
                 {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                {isBefore(new Date(), startOfDay(new Date(booking.checkin))) ? 'Stay Locked' : 'Check-in Guest'}
+                {isBefore(new Date(), startOfDay(new Date(booking.checkin))) ? 'Check-in Locked' : 'Check-in Guest'}
               </Button>
             )}
 
