@@ -158,17 +158,9 @@ function DashboardContent() {
               {isRegisteringGuest ? (
                 <GuestProfileForm onSave={() => setIsRegisteringGuest(false)} onCancel={() => setIsRegisteringGuest(false)} />
               ) : (
-                <AnimatePresence mode="wait">
-                  <motion.div 
-                    key={location.pathname} 
-                    initial={{ opacity: 0, y: 4 }} 
-                    animate={{ opacity: 1, y: 0 }} 
-                    exit={{ opacity: 0, y: -4 }} 
-                    transition={{ duration: 0.1 }} 
-                    className={cn(activeTab === 'board' ? "h-full" : "space-y-6")}
-                  >
-                    <Routes>
-                      <Route path="overview" element={
+                <div className={cn(activeTab === 'board' ? "h-full" : "space-y-6")}>
+                  <Routes>
+                    <Route path="overview" element={
                         <>
                           <DashboardStats />
                           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
@@ -196,9 +188,8 @@ function DashboardContent() {
                       <Route path="reports" element={<PerformanceReport />} />
                       <Route path="settings" element={<HotelSettings />} />
                       <Route path="*" element={<Navigate to="board" replace />} />
-                    </Routes>
-                  </motion.div>
-                </AnimatePresence>
+                  </Routes>
+                </div>
               )}
             </div>
           </Suspense>
@@ -299,12 +290,10 @@ function App() {
     <BookingProvider>
       <NotificationProvider>
         <div className="contents">
-          <AnimatePresence mode="wait">
-            <Routes>
-              <Route path="dashboard/*" element={<DashboardContent />} />
-              <Route path="*" element={<DashboardContent />} />
-            </Routes>
-          </AnimatePresence>
+          <Routes>
+            <Route path="dashboard/*" element={<DashboardContent />} />
+            <Route path="*" element={<DashboardContent />} />
+          </Routes>
         </div>
         <Toaster position="top-right" expand={true} richColors closeButton />
       </NotificationProvider>

@@ -46,6 +46,7 @@ export function BookingBoard() {
   const boardRef = useRef<HTMLDivElement>(null);
   const boardContentRef = useRef<HTMLDivElement>(null);
   const isResizingRef = useRef(false);
+  const isDraggingRef = useRef(false);
 
   // Week-based navigation
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
@@ -108,6 +109,7 @@ export function BookingBoard() {
   };
 
   const handleDragEnd = async (event: any, info: any, booking: Booking) => {
+    setTimeout(() => { isDraggingRef.current = false; }, 100);
     if (isResizingRef.current) return;
     if (booking.status === 'checked-out' || booking.status === 'cancelled') return;
     if (!boardContentRef.current) return;
@@ -134,7 +136,7 @@ export function BookingBoard() {
       const newCheckout = format(addDays(targetDay, duration), 'yyyy-MM-dd');
       
       // If dropped in the same place approximately, don't update
-      if (newCheckin === booking.checkin && targetRoom._id === booking.roomId) return;
+      if (newCheckin === booking.checkin && targetRoom._id === getBookingRoomId(booking)) return;
 
       setPendingUpdate({ booking, updates: { roomId: targetRoom._id, checkin: newCheckin, checkout: newCheckout } });
     }
@@ -166,11 +168,11 @@ export function BookingBoard() {
         if (side === 'left') {
           const newCheckin = format(addDays(new Date(booking.checkin), deltaDays), 'yyyy-MM-dd');
           if (newCheckin >= booking.checkout) return; // prevent invalid state
-          setPendingUpdate({ booking, updates: { roomId: booking.roomId, checkin: newCheckin, checkout: booking.checkout } });
+          setPendingUpdate({ booking, updates: { roomId: getBookingRoomId(booking), checkin: newCheckin, checkout: booking.checkout } });
         } else {
           const newCheckout = format(addDays(new Date(booking.checkout), deltaDays), 'yyyy-MM-dd');
           if (newCheckout <= booking.checkin) return; // prevent invalid state
-          setPendingUpdate({ booking, updates: { roomId: booking.roomId, checkin: booking.checkin, checkout: newCheckout } });
+          setPendingUpdate({ booking, updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout } });
         }
       }
     };
@@ -403,6 +405,7 @@ export function BookingBoard() {
                           dragSnapToOrigin
                           dragElastic={0}
                           dragMomentum={false}
+                          onDragStart={() => { isDraggingRef.current = true; }}
                           onDragEnd={(e, info) => handleDragEnd(e, info, booking)}
                           whileDrag={{ scale: 1.02, zIndex: 100, opacity: 0.8, cursor: 'grabbing' }}
                           initial={{ opacity: 0, scale: 0.95 }}
@@ -419,7 +422,7 @@ export function BookingBoard() {
                             height: ROW_HEIGHT - 6,
                           }}
                           onClick={(e) => { 
-                            if (isResizingRef.current) return;
+                            if (isResizingRef.current || isDraggingRef.current) return;
                             e.stopPropagation(); 
                             setSelectedBooking(booking); 
                           }}
@@ -427,7 +430,7 @@ export function BookingBoard() {
                           <button
                             className="text-[10px] md:text-xs font-bold truncate text-left hover:underline leading-tight z-10 relative"
                             onClick={(e) => {
-                              if (isResizingRef.current) return;
+                              if (isResizingRef.current || isDraggingRef.current) return;
                               e.stopPropagation();
                               if (guest?._id) setSelectedGuestId(guest._id);
                               else setSelectedBooking(booking);
@@ -478,16 +481,41 @@ export function BookingBoard() {
           <div className="py-2 text-sm font-medium text-slate-500 space-y-4">
             <p>Please confirm you want to proceed with structural date and room assignments updates for this itinerary.</p>
             {pendingUpdate && (
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-3 shadow-inner">
-                <div className="flex justify-between items-center text-slate-400">
-                  <span className="font-black uppercase tracking-widest text-[9px]">Original</span>
-                  <span className="text-xs font-bold">{format(new Date(pendingUpdate.booking.checkin), 'MMM dd')} - {format(new Date(pendingUpdate.booking.checkout), 'MMM dd')}</span>
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-4 shadow-inner relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-1 opacity-5">
+                  <Bed className="h-12 w-12" />
                 </div>
-                <div className="flex justify-between items-center text-primary">
-                  <span className="font-black uppercase tracking-widest text-[9px]">Proposed</span>
-                  <span className="text-sm font-black text-primary bg-primary/10 px-2 py-0.5 rounded-md">
-                    {format(new Date(pendingUpdate.updates.checkin), 'MMM dd')} - {format(new Date(pendingUpdate.updates.checkout), 'MMM dd')}
-                  </span>
+                
+                <div className="flex justify-between items-start text-slate-400">
+                  <span className="font-black uppercase tracking-widest text-[9px] mt-1">Current State</span>
+                  <div className="text-right">
+                    <span className="text-sm font-bold text-slate-600">
+                      {format(new Date(pendingUpdate.booking.checkin), 'MMM dd')} — {format(new Date(pendingUpdate.booking.checkout), 'MMM dd')}
+                    </span>
+                    <div className="text-[10px] font-black uppercase text-slate-400 mt-0.5 tracking-tight">
+                      Room {rooms.find(r => r._id === getBookingRoomId(pendingUpdate.booking))?.roomNumber || 'Unknown'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="h-px bg-slate-200/50 w-full" />
+
+                <div className="flex justify-between items-start text-primary">
+                  <span className="font-black uppercase tracking-widest text-[9px] mt-1">Proposed Update</span>
+                  <div className="text-right flex flex-col items-end">
+                    <span className="text-sm font-black text-primary bg-primary/10 px-2.5 py-1 rounded-lg w-fit shadow-xs">
+                      {format(new Date(pendingUpdate.updates.checkin), 'MMM dd')} — {format(new Date(pendingUpdate.updates.checkout), 'MMM dd')}
+                    </span>
+                    {pendingUpdate.updates.roomId && pendingUpdate.updates.roomId !== getBookingRoomId(pendingUpdate.booking) ? (
+                      <div className="text-[10px] font-black uppercase mt-2 inline-flex items-center gap-1.5 bg-amber-100 text-amber-700 px-2 py-1 rounded-lg tracking-tight w-fit shadow-xs border border-amber-200">
+                        <Plus className="h-3 w-3" /> Relocate to Room {rooms.find(r => r._id === pendingUpdate.updates.roomId)?.roomNumber || 'Unknown'}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] font-black uppercase text-slate-400 mt-1 tracking-tight">
+                        Same Room Assignment
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
