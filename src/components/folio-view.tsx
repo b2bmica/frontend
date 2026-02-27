@@ -477,12 +477,13 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                 ].map(m => (
                   <button 
                     key={m.id}
+                    disabled={isSettling}
                     onClick={() => setPaymentMethod(m.id as any)}
                     className={cn(
                        "h-14 rounded-xl border flex flex-col items-center justify-center transition-all gap-1",
                        paymentMethod === m.id 
                          ? "bg-primary border-primary text-white shadow-md shadow-primary/20" 
-                         : "bg-white border-slate-100 text-slate-400 hover:bg-slate-50"
+                         : isSettling ? "opacity-30 border-slate-100 cursor-not-allowed" : "bg-white border-slate-100 text-slate-400 hover:bg-slate-50"
                     )}
                   >
                     <m.icon className={cn("h-4 w-4", paymentMethod === m.id ? "text-white" : "text-slate-400")} />

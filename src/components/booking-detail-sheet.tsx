@@ -60,9 +60,9 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
   const subtotal = baseSubtotal + extraPersonCharge;
 
   // Tax Logic
-  const taxConfig = hotel?.settings?.taxConfig;
+  const taxConfig = hotel?.settings?.taxConfig || { enabled: false, cgst: 0, sgst: 0 };
   let taxAmount = 0;
-  if (taxConfig?.enabled && subtotal > 0) {
+  if (taxConfig.enabled && subtotal > 0) {
     taxAmount = (subtotal * (taxConfig.cgst || 0) / 100) + (subtotal * (taxConfig.sgst || 0) / 100);
   }
 
@@ -111,8 +111,97 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
             </p>
           </div>
         </div>
+        
+        {/* Printable Receipt (Hidden in UI, Visible in Print) */}
+        <div className="hidden print:block p-8 text-black bg-white min-h-screen font-sans">
+          <div className="flex justify-between items-start mb-8 border-b-2 border-slate-900 pb-6">
+            <div>
+              <h1 className="text-3xl font-black uppercase tracking-tighter">{hotel?.name || 'Hotel Receipt'}</h1>
+              <p className="text-sm font-bold text-slate-500">{hotel?.address || 'Property Address'}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest mt-1">GSTIN: {hotel?.gstin || 'N/A'}</p>
+            </div>
+            <div className="text-right">
+              <div className="inline-block bg-slate-900 text-white px-3 py-1 text-[10px] font-black uppercase tracking-widest mb-2">Invoice</div>
+              <p className="text-xs font-bold text-slate-500">#{booking._id?.slice(-8).toUpperCase()}</p>
+              <p className="text-[10px] font-black uppercase text-slate-400 mt-1">{format(new Date(), 'PPPP')}</p>
+            </div>
+          </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide">
+          <div className="grid grid-cols-2 gap-12 mb-10">
+            <div className="space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 border-b border-slate-100 pb-1">Client Details</p>
+              <p className="text-lg font-black tracking-tight">{guest?.name}</p>
+              <p className="text-xs font-bold text-slate-600">{guest?.phone}</p>
+              <p className="text-xs font-bold text-slate-600">{guest?.email}</p>
+            </div>
+            <div className="space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 border-b border-slate-100 pb-1">Stay Period</p>
+              <p className="text-lg font-black tracking-tight truncate">Room {room?.roomNumber} ({room?.roomType})</p>
+              <p className="text-xs font-bold text-slate-600">{format(new Date(booking.checkin), 'MMM dd, yyyy')} — {format(new Date(booking.checkout), 'MMM dd, yyyy')}</p>
+              <p className="text-xs font-bold text-slate-600">{nights} Night{nights > 1 ? 's' : ''} Stay</p>
+            </div>
+          </div>
+
+          <table className="w-full mb-10">
+            <thead>
+              <tr className="border-b-2 border-slate-900 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                <th className="text-left py-3">Description</th>
+                <th className="text-right py-3">Rate</th>
+                <th className="text-right py-3">Qty</th>
+                <th className="text-right py-3">Total</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              <tr className="text-sm font-bold">
+                <td className="py-4">Room Accommodation ({room?.roomType})</td>
+                <td className="text-right py-4">₹{roomPrice.toLocaleString()}</td>
+                <td className="text-right py-4">{nights}</td>
+                <td className="text-right py-4">₹{baseSubtotal.toLocaleString()}</td>
+              </tr>
+              {extraAdults > 0 && (
+                <tr className="text-sm font-bold">
+                  <td className="py-4">Extra Adult Charges</td>
+                  <td className="text-right py-4">₹{booking.extraPersonPrice?.toLocaleString()}</td>
+                  <td className="text-right py-4">{extraAdults * nights}</td>
+                  <td className="text-right py-4">₹{extraPersonCharge.toLocaleString()}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+
+          <div className="flex justify-end">
+            <div className="w-64 space-y-3">
+              <div className="flex justify-between text-xs font-bold text-slate-500 uppercase">
+                <span>Subtotal</span>
+                <span>₹{subtotal.toLocaleString()}</span>
+              </div>
+              {taxConfig.enabled && (
+                <div className="flex justify-between text-xs font-bold text-slate-500 uppercase">
+                  <span>GST ({taxConfig.cgst + taxConfig.sgst}%)</span>
+                  <span>₹{taxAmount.toLocaleString()}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-lg font-black border-t-2 border-slate-900 pt-3">
+                <span>Total</span>
+                <span>₹{totalAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-xs font-bold text-emerald-600 pt-1">
+                <span className="uppercase tracking-widest">Amount Paid</span>
+                <span>- ₹{(booking.advancePayment || 0).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-base font-black border-t border-slate-100 pt-2 text-primary">
+                <span>Balance Due</span>
+                <span>₹{balance.toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-20 pt-10 border-t border-slate-100 text-[9px] font-bold text-slate-400 text-center uppercase tracking-[0.3em]">
+            Thank you for staying at {hotel?.name}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide print:hidden">
           {/* Guest Information */}
           <div className="space-y-3">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground px-1">Traveler Details</h3>
@@ -185,21 +274,28 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                       </Button>
                     ) : (
                       <div className="flex items-center gap-1.5 p-1 bg-emerald-600 rounded-xl animate-in fade-in slide-in-from-right-2 duration-300">
-                        <div className="flex bg-white/20 rounded-lg p-0.5 gap-0.5">
+                        <div className="flex bg-white/20 rounded-lg p-0.5 gap-0.5 relative overflow-hidden">
                           {['cash', 'card', 'upi'].map((m) => (
                             <button
                               key={m}
                               disabled={isActioning}
-                              onClick={() => handleAction((id) => updateBooking(id, { 
-                                advancePayment: (booking.advancePayment || 0) + balance,
-                                paymentMethod: m
-                              }))}
+                              onClick={() => {
+                                setPaymentMethod(m as any);
+                                handleAction((id) => updateBooking(id, { 
+                                  advancePayment: (booking.advancePayment || 0) + balance,
+                                  paymentMethod: m
+                                }));
+                              }}
                               className={cn(
-                                "h-6 px-3 text-[8px] font-black uppercase rounded-md transition-all active:scale-90",
-                                isActioning ? "opacity-50 cursor-not-allowed" : "bg-white text-emerald-600 shadow-sm"
+                                "h-6 px-3 text-[8px] font-black uppercase rounded-md transition-all active:scale-95",
+                                isActioning 
+                                  ? (paymentMethod === m ? "bg-white text-emerald-600 scale-105 shadow-inner" : "opacity-30 cursor-not-allowed") 
+                                  : "bg-white text-emerald-600 shadow-sm hover:bg-white/90"
                               )}
                             >
-                              {m}
+                              {isActioning && paymentMethod === m ? (
+                                <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                              ) : m}
                             </button>
                           ))}
                         </div>
@@ -238,14 +334,15 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
         {/* Action Panel - Optimized Layout */}
         <div className="p-4 bg-white border-t flex flex-col gap-2 relative z-10 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.03)]">
           <div className="flex items-stretch gap-2 w-full h-11">
-            {/* Edit Button */}
-            {(booking.status === 'reserved' || booking.status === 'checked-in') && !showPaymentSelection && (
+            {/* Edit Button - Always visible for active bookings */}
+            {(booking.status === 'reserved' || booking.status === 'checked-in') && (
               <Button 
                 variant="outline"
-                className="flex-shrink-0 h-full rounded-xl font-black border-2 text-[10px] uppercase px-4 hover:bg-slate-50 text-slate-600 transition-all active:scale-95"
+                className="w-11 h-11 p-0 rounded-xl border-2 text-slate-400 border-slate-100 hover:border-slate-300 hover:text-slate-600 transition-all active:scale-95 shrink-0"
                 onClick={() => setShowEditModal(true)}
+                title="Edit Booking"
               >
-                Edit
+                <FileText className="h-4 w-4" />
               </Button>
             )}
             
@@ -275,22 +372,29 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                 ) : (
                   <div className="flex-1 flex items-center justify-between gap-2 px-2.5 bg-orange-600 rounded-xl animate-in slide-in-from-right-4 duration-300 overflow-hidden">
                     <span className="text-[10px] font-black text-white uppercase tracking-tighter whitespace-nowrap">Mode:</span>
-                    <div className="flex bg-white/20 rounded-lg p-0.5 gap-0.5 shrink-0">
+                    <div className="flex bg-white/20 rounded-lg p-0.5 gap-0.5 shrink-0 relative overflow-hidden">
                       {['cash', 'card', 'upi'].map((m) => (
                         <button
                           key={m}
                           disabled={isActioning}
-                          onClick={() => handleAction((id) => updateBooking(id, { 
-                            status: 'checked-out', 
-                            advancePayment: totalAmount,
-                            paymentMethod: m 
-                          }))}
+                          onClick={() => {
+                            setPaymentMethod(m as any);
+                            handleAction((id) => updateBooking(id, { 
+                              status: 'checked-out', 
+                              advancePayment: totalAmount,
+                              paymentMethod: m 
+                            }));
+                          }}
                           className={cn(
-                            "h-7 px-3 text-[9px] font-black uppercase rounded-md transition-all active:scale-90",
-                            isActioning ? "opacity-50 cursor-not-allowed" : "bg-white text-orange-600 shadow-sm"
+                            "h-7 px-3 text-[9px] font-black uppercase rounded-md transition-all active:scale-95",
+                            isActioning 
+                              ? (paymentMethod === m ? "bg-white text-orange-600 scale-105 shadow-inner" : "opacity-30 cursor-not-allowed") 
+                              : "bg-white text-orange-600 shadow-sm hover:bg-white/90"
                           )}
                         >
-                          {m}
+                          {isActioning && paymentMethod === m ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : m}
                         </button>
                       ))}
                     </div>

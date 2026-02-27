@@ -1,10 +1,10 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { 
-  format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, 
-  differenceInDays, startOfDay, isBefore
+import {
+  format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay,
+  differenceInDays, startOfDay, isBefore, parseISO
 } from 'date-fns';
 import { motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Bed, X, ShieldCheck } from 'lucide-react';
+import { Loader2, Search, UserPlus, IndianRupee, Info, Printer, ChevronLeft, ChevronRight, ChevronDown, Plus, Bed, X, ShieldCheck } from 'lucide-react';
 import { useBookings, type Booking } from '../context/booking-context';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -190,7 +190,7 @@ export function BookingBoard() {
     );
   }
 
-  const periodLabel = `${format(weekStart, 'MMM dd')} – ${format(addDays(weekStart, DAYS - 1), 'MMM dd, yyyy')}`;
+  const periodLabel = `${format(weekStart, "MMM dd")} – ${format(addDays(weekStart, DAYS - 1), "MMM dd, yyyy")}`;
 
   return (
     <>
@@ -257,18 +257,7 @@ export function BookingBoard() {
               return (
                 <button
                   key={key}
-                  onClick={() => {
-                    setStatusFilter(key);
-                    // Navigate to latest booking of this status
-                    if (key !== 'all') {
-                      const latest = [...bookings]
-                        .filter(b => b.status === key)
-                        .sort((a, b) => new Date(b.checkin).getTime() - new Date(a.checkin).getTime())[0];
-                      if (latest) {
-                        setWeekStart(startOfWeek(new Date(latest.checkin), { weekStartsOn: 1 }));
-                      }
-                    }
-                  }}
+                  onClick={() => setStatusFilter(key)}
                   className={cn(
                     "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all",
                     statusFilter === key
@@ -437,8 +426,10 @@ export function BookingBoard() {
                           {isEditable && (
                             <div 
                               className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize hover:bg-white/30 z-50 flex items-center justify-center opacity-0 group-hover/booking:opacity-100 transition-opacity touch-none"
-                              onPointerDown={(e) => {
+                                onPointerDown={(e) => {
                                 e.stopPropagation();
+                                if (isResizingRef.current) return; // Prevent starting a new resize if one is already in progress
+                                
                                 const handleEl = e.currentTarget as HTMLDivElement;
                                 try {
                                   handleEl.setPointerCapture(e.pointerId);
@@ -446,12 +437,13 @@ export function BookingBoard() {
                                 
                                 setResizingId(booking._id);
                                 const startX = e.clientX;
-                                const originalCheckout = new Date(booking.checkout);
+                                // Use date-fns for robust parsing
+                                const originalCheckout = parseISO(booking.checkout);
                                 const cardElement = handleEl.parentElement as HTMLElement;
-                                const originalWidth = cardElement.offsetWidth;
+                                // Use getBoundingClientRect for more precise measurements during rapid clicks
+                                const originalWidth = cardElement.getBoundingClientRect().width;
 
-                                 // Boost z-index during resize - stay below z-50 overlay
-                                 cardElement.style.zIndex = '40';
+                                cardElement.style.zIndex = '40';
                                 cardElement.style.transition = 'none'; 
                                 
                                 let hasMovedSignificant = false;
@@ -459,63 +451,63 @@ export function BookingBoard() {
                                 const onPointerMove = (moveEvent: PointerEvent) => {
                                   const deltaX = moveEvent.clientX - startX;
                                   
-                                  if (!hasMovedSignificant && Math.abs(deltaX) > 8) {
+                                  if (!hasMovedSignificant && Math.abs(deltaX) > 4) { // Reduced threshold for 'significant' move
                                     hasMovedSignificant = true;
                                     isResizingRef.current = true;
                                   }
 
-                                    if (hasMovedSignificant && cardElement) {
-                                      // Visual snapping to full days makes it feel more "robust"
-                                      const snappedDeltaX = Math.round(deltaX / COLUMN_WIDTH) * COLUMN_WIDTH;
-                                      // Cap visual width to prevent 'way too future' craziness
-                                      // Use originalWidth as the baseline to avoid shrinking below 1 day
-                                      const minWidth = COLUMN_WIDTH - 2;
-                                      const newWidth = Math.max(minWidth, Math.min(originalWidth + snappedDeltaX, 30 * COLUMN_WIDTH));
-                                      cardElement.style.width = `${newWidth}px`;
-                                    }
+                                  if (hasMovedSignificant && cardElement) {
+                                    const snappedDeltaX = Math.round(deltaX / COLUMN_WIDTH) * COLUMN_WIDTH;
+                                    const minWidth = COLUMN_WIDTH - 2;
+                                    const newWidth = Math.max(minWidth, originalWidth + snappedDeltaX);
+                                    cardElement.style.width = newWidth + "px";
+                                  }
                                 };
-
                                   const onPointerUp = (upEvent: PointerEvent) => {
-                                    const deltaX = upEvent.clientX - startX;
-                                    // Cap daysDelta to prevent accidental 'way too future' dates
-                                    const rawDaysDelta = Math.round(deltaX / COLUMN_WIDTH);
-                                    const daysDelta = Math.max(-30, Math.min(30, rawDaysDelta));
-                                    
                                     try {
                                       handleEl.releasePointerCapture(upEvent.pointerId);
                                     } catch (err) {}
                                     window.removeEventListener('pointermove', onPointerMove);
                                     window.removeEventListener('pointerup', onPointerUp);
+
+                                    const deltaX = upEvent.clientX - startX;
+                                    const rawDaysDelta = Math.round(deltaX / COLUMN_WIDTH);
                                     
-                                    // Reset card styles immediately - ALWAYS clear inline width to let React's style prop take over
+                                    // Reset visuals immediately
                                     if (cardElement) {
-                                      cardElement.style.width = ''; // CRITICAL: Reset width so React state can manage it
-                                      cardElement.style.zIndex = '';
-                                      cardElement.style.transition = '';
-                                      cardElement.style.opacity = '';
+                                      cardElement.style.width = ""; 
+                                      cardElement.style.zIndex = "";
+                                      cardElement.style.transition = "";
                                     }
 
-                                    if (hasMovedSignificant && daysDelta !== 0) {
-                                      const newCheckout = format(addDays(originalCheckout, daysDelta), 'yyyy-MM-dd');
+                                    const finalHasMoved = hasMovedSignificant;
+                                    
+                                    // Always reset resizing state promptly
+                                    setResizingId(null);
+                                    setTimeout(() => {
+                                      isResizingRef.current = false;
+                                    }, 100);
+
+                                    if (finalHasMoved && rawDaysDelta !== 0) {
+                                      const originalCheckin = parseISO(booking.checkin);
+                                      const originalCheckout = parseISO(booking.checkout);
+                                      const originalNights = differenceInDays(originalCheckout, originalCheckin);
+                                      const newNights = Math.max(1, originalNights + rawDaysDelta);
+                                      const newCheckout = format(addDays(originalCheckin, newNights), 'yyyy-MM-dd');
                                       
-                                      // Overlap Check: Prevent extending into an existing booking
-                                      const proposedEnd = new Date(newCheckout);
-                                      const proposedStart = new Date(booking.checkin);
+                                      // Overlap Check
+                                      const proposedEnd = parseISO(newCheckout);
+                                      const proposedStart = parseISO(booking.checkin);
                                       
                                       const isClashing = bookings.some(b => {
                                         if (b._id === booking._id || b.status === 'cancelled') return false;
                                         if (getBookingRoomId(b) !== getBookingRoomId(booking)) return false;
-                                        const bStart = new Date(b.checkin);
-                                        const bEnd = new Date(b.checkout);
+                                        const bStart = parseISO(b.checkin);
+                                        const bEnd = parseISO(b.checkout);
                                         return proposedStart < bEnd && proposedEnd > bStart;
                                       });
 
-                                      if (isClashing) {
-                                        // Reset and exit
-                                        isResizingRef.current = false;
-                                        setResizingId(null);
-                                        return;
-                                      }
+                                      if (isClashing) return;
                                       
                                       if (proposedEnd > proposedStart) {
                                         setPendingUpdate({ 
@@ -528,10 +520,6 @@ export function BookingBoard() {
                                         });
                                       }
                                     }
-                                    
-                                    // Reset state
-                                    isResizingRef.current = false;
-                                    setResizingId(null);
                                   };
 
                                 window.addEventListener('pointermove', onPointerMove);
@@ -541,6 +529,7 @@ export function BookingBoard() {
                                 e.stopPropagation();
                                 e.preventDefault();
                               }}
+                              onClick={(e) => e.stopPropagation()} // Prevent click events from propagating during resize
                             >
                               <div className="h-6 w-1.5 bg-white/50 rounded-full shadow-sm" />
                             </div>

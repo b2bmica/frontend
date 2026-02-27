@@ -56,6 +56,11 @@ export function RoomInventory() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [error, setError] = useState<string | null>(null);
 
+  const getBookingRoomId = (b: any): string => {
+    if (!b.roomId) return '';
+    return typeof b.roomId === 'object' ? b.roomId._id : b.roomId;
+  };
+
   const checkedInRoomIds = new Set(
     bookings
       .filter(b => b.status === 'checked-in')
@@ -77,10 +82,7 @@ export function RoomInventory() {
     return matchesType && matchesStatus;
   });
 
-  const getBookingRoomId = (b: any): string => {
-    if (!b.roomId) return '';
-    return typeof b.roomId === 'object' ? b.roomId._id : b.roomId;
-  };
+
 
   const openCreateModal = () => {
     setEditingRoom(null);

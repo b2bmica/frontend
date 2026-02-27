@@ -54,7 +54,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
   // Booking form
   const [bookingForm, setBookingForm] = useState({
-    roomId: '', checkin: '', checkout: '', adults: 1, children: 0,
+    roomId: '', checkin: '', checkout: '', adults: 2, children: 0,
     advancePayment: 0, bookingSource: 'direct', paymentMethod: 'cash',
     baseOccupancy: 2, extraPersonPrice: 0, roomPrice: 0
   });
@@ -75,9 +75,9 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const subtotal = baseSubtotal + extraPersonCharge;
   
   // Tax logic
-  const taxConfig = hotel?.settings?.taxConfig;
+  const taxConfig = hotel?.settings?.taxConfig || { enabled: false, cgst: 0, sgst: 0 };
   let taxAmount = 0;
-  if (taxConfig?.enabled && subtotal > 0) {
+  if (taxConfig.enabled && subtotal > 0) {
     const cgst = (subtotal * (taxConfig.cgst || 0)) / 100;
     const sgst = (subtotal * (taxConfig.sgst || 0)) / 100;
     taxAmount = cgst + sgst;
@@ -142,7 +142,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           roomId: selectedRoomId || '',
           checkin: selectedDate || format(new Date(), 'yyyy-MM-dd'),
           checkout: selectedDate ? format(addDays(new Date(selectedDate), 1), 'yyyy-MM-dd') : format(addDays(new Date(), 1), 'yyyy-MM-dd'),
-          adults: 1, children: 0,
+          adults: 2, children: 0,
           advancePayment: 0,
           paymentMethod: 'cash',
           bookingSource: 'direct',
@@ -390,12 +390,13 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                           <button
                             key={m}
                             type="button"
+                            disabled={isSubmitting}
                             onClick={() => setBookingForm({ ...bookingForm, advancePayment: totalAmount, paymentMethod: m as any })}
                             className={cn(
                               "h-6 px-2 text-[8px] font-black uppercase rounded transition-all active:scale-90",
                               bookingForm.advancePayment === totalAmount && bookingForm.paymentMethod === m 
                                 ? "bg-primary text-white" 
-                                : "text-primary hover:bg-primary/10"
+                                : isSubmitting ? "opacity-50 cursor-not-allowed" : "text-primary hover:bg-primary/10"
                             )}
                           >
                             {m}
@@ -432,7 +433,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                       <span className="text-foreground">+ ₹{extraPersonCharge.toLocaleString()}</span>
                     </div>
                   )}
-                  {taxConfig?.enabled && (
+                  {taxConfig.enabled && (
                     <div className="flex justify-between text-xs font-bold text-orange-600">
                       <span>GST (CGST {taxConfig.cgst}% + SGST {taxConfig.sgst}%)</span>
                       <span>+ ₹{taxAmount.toLocaleString()}</span>
