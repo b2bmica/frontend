@@ -31,6 +31,7 @@ export function MaintenanceTickets() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'pending' | 'in-progress' | 'resolved'>('all');
   
   const [newTicket, setNewTicket] = useState({
     roomId: '',
@@ -102,18 +103,35 @@ export function MaintenanceTickets() {
         </Button>
       </div>
 
-      <ScrollArea className="h-[calc(100vh-320px)] pr-4 scrollbar-hide">
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+        {(['all', 'pending', 'in-progress', 'resolved'] as const).map(f => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={cn(
+              "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap",
+              filter === f 
+                ? "bg-slate-900 text-white shadow-md" 
+                : "bg-slate-50 text-slate-500 hover:bg-slate-100"
+            )}
+          >
+            {f.replace('-', ' ')}
+          </button>
+        ))}
+      </div>
+
+      <ScrollArea className="h-[calc(100vh-370px)] pr-4 scrollbar-hide">
         <div className="space-y-4">
-          {tickets.length === 0 ? (
+          {tickets.filter(t => filter === 'all' || t.status === filter).length === 0 ? (
             <div className="py-24 text-center bg-white rounded-[40px] border border-dashed border-slate-200">
                <div className="h-16 w-16 rounded-3xl bg-emerald-50 flex items-center justify-center mx-auto mb-6">
                   <ShieldCheck className="h-8 w-8 text-emerald-500/40" />
                </div>
-               <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">Zero Deficiencies Reported</h3>
-               <p className="text-xs text-slate-300 mt-2">All hotel systems are reporting normal operational parameters.</p>
+               <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">Zero Deficiencies Found</h3>
+               <p className="text-xs text-slate-300 mt-2">No tickets matching the current filter.</p>
             </div>
           ) : (
-            tickets.map((ticket) => (
+            tickets.filter(t => filter === 'all' || t.status === filter).map((ticket) => (
               <Card key={ticket._id} className="border-none shadow-sm hover:shadow-md transition-all group overflow-hidden bg-white border border-transparent hover:border-orange-500/10 rounded-[32px]">
                 <CardContent className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-center">
