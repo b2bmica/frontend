@@ -224,8 +224,11 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[550px] max-h-[90dvh] overflow-y-auto p-0 border-none shadow-2xl [&>button]:z-50">
-        <div className="bg-muted/30 border-b p-6 relative">
+      <DialogContent 
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="sm:max-w-[550px] max-h-[90dvh] overflow-y-auto p-0 border-none shadow-2xl [&>button]:z-50 gap-0"
+      >
+        <div className="bg-muted/30 border-b p-5 relative">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold tracking-tight flex items-center gap-2">
               <span className="p-1 px-2 rounded-lg bg-slate-900 text-white text-[10px] font-bold">{initialBooking ? 'EDIT' : 'NEW'}</span>
@@ -237,9 +240,9 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           </DialogHeader>
         </div>
 
-        <div className="p-6">
+        <div className="p-5">
           {step === 'guest' && !showNewGuest && (
-            <div className="space-y-4 py-2">
+            <div className="space-y-4 py-0">
               <div className="relative group">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                 <Input
@@ -279,7 +282,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           )}
 
           {step === 'guest' && showNewGuest && (
-            <div className="space-y-6 py-2">
+            <div className="space-y-4 py-0">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5 col-span-2">
                   <Label className="text-xs font-black uppercase tracking-widest opacity-70">Guest Identity *</Label>
@@ -335,7 +338,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           )}
 
           {step === 'booking' && (
-            <form onSubmit={handleSubmit} className="space-y-6 py-2">
+            <form onSubmit={handleSubmit} className="space-y-4 py-0">
               <div className="space-y-2">
                 <Label className="text-xs font-black uppercase tracking-widest opacity-70">Inventory Selection *</Label>
                 <Select value={bookingForm.roomId} onValueChange={val => setBookingForm({ ...bookingForm, roomId: val })}>
