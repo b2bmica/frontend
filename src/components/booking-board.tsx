@@ -4,7 +4,7 @@ import {
   differenceInDays, startOfDay
 } from 'date-fns';
 import { motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, Minus, Loader2, Bed, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Minus, Pencil, Loader2, Bed, X } from 'lucide-react';
 import { useBookings, type Booking } from '../context/booking-context';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -55,6 +55,7 @@ export function BookingBoard() {
   const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>();
   const [selectedDate, setSelectedDate] = useState<string | undefined>();
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
   const [pendingUpdate, setPendingUpdate] = useState<{booking: Booking, updates: any} | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -418,26 +419,36 @@ export function BookingBoard() {
                           <span className="text-[8px] md:text-[10px] bg-black/20 px-1 rounded truncate capitalize w-fit z-10 relative pointer-events-none">
                             {booking.status.replace('-', ' ')}
                           </span>
-                          
-                          {/* Quick Edit Buttons */}
+                          {/* Premium Quick Action Pill - Improved with Glassmorphism and better spacing */}
                           {isEditable && (
-                            <div className="absolute right-1 top-0 bottom-0 py-1.5 flex flex-col justify-center gap-1 opacity-0 group-hover/booking:opacity-100 transition-all duration-200 z-30">
-                              <button
-                                onPointerDown={(e) => e.stopPropagation()}
-                                onClick={(e) => handleQuickExtend(e, booking)}
-                                className="size-5 md:size-6 rounded-lg bg-white/20 hover:bg-white/40 active:scale-90 flex items-center justify-center text-white backdrop-blur-md shadow-sm border border-white/20 transition-all"
-                                title="Add 1 Day"
-                              >
-                                <Plus className="size-3 md:size-3.5" />
-                              </button>
-                              <button
-                                onPointerDown={(e) => e.stopPropagation()}
-                                onClick={(e) => handleQuickReduce(e, booking)}
-                                className="size-5 md:size-6 rounded-lg bg-white/20 hover:bg-white/40 active:scale-90 flex items-center justify-center text-white backdrop-blur-md shadow-sm border border-white/20 transition-all"
-                                title="Remove 1 Day"
-                              >
-                                <Minus className="size-3 md:size-3.5" />
-                              </button>
+                            <div className="absolute top-1/2 -translate-y-1/2 right-1.5 flex flex-col gap-1.5 opacity-0 group-hover/booking:opacity-100 transition-all duration-300 translate-x-3 group-hover/booking:translate-x-0 z-30">
+                              <div className="flex flex-col bg-white/10 backdrop-blur-xl rounded-xl border border-white/20 p-1 shadow-2xl">
+                                <button
+                                  onPointerDown={(e) => e.stopPropagation()}
+                                  onClick={(e) => { e.stopPropagation(); setEditingBooking(booking); }}
+                                  className="size-7 rounded-lg hover:bg-white/30 flex items-center justify-center text-white transition-all active:scale-90"
+                                  title="Edit Stay"
+                                >
+                                  <Pencil className="size-3.5" />
+                                </button>
+                                <div className="h-px bg-white/10 mx-1" />
+                                <button
+                                  onPointerDown={(e) => e.stopPropagation()}
+                                  onClick={(e) => handleQuickExtend(e, booking)}
+                                  className="size-7 rounded-lg hover:bg-white/30 flex items-center justify-center text-white transition-all active:scale-90"
+                                  title="Ext. 1 Day"
+                                >
+                                  <Plus className="size-3.5" />
+                                </button>
+                                <button
+                                  onPointerDown={(e) => e.stopPropagation()}
+                                  onClick={(e) => handleQuickReduce(e, booking)}
+                                  className="size-7 rounded-lg hover:bg-white/30 flex items-center justify-center text-white transition-all active:scale-90"
+                                  title="Red. 1 Day"
+                                >
+                                  <Minus className="size-3.5" />
+                                </button>
+                              </div>
                             </div>
                           )}
                         </motion.div>
@@ -451,8 +462,8 @@ export function BookingBoard() {
         </div>
       </div>
 
-      <BookingModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}
-        selectedRoomId={selectedRoomId} selectedDate={selectedDate} />
+      <BookingModal isOpen={isModalOpen || !!editingBooking} onClose={() => { setIsModalOpen(false); setEditingBooking(null); }}
+        selectedRoomId={selectedRoomId} selectedDate={selectedDate} initialBooking={editingBooking} />
       <BookingDetailSheet booking={selectedBooking} onClose={() => setSelectedBooking(null)} onOpenGuest={(id) => setSelectedGuestId(id)} />
       <GuestProfileSheet guestId={selectedGuestId} onClose={() => setSelectedGuestId(null)} onBookingClick={(b) => setSelectedBooking(b)} />
       

@@ -12,7 +12,12 @@ import { cn } from '../lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { HousekeepingBoard } from './housekeeping-board';
 
-const ROOM_TYPES = ['Standard', 'Deluxe', 'Suite', 'Penthouse', 'Presidential'];
+const ROOM_TYPES = [
+  'Standard AC', 'Standard Non-AC', 
+  'Deluxe AC', 'Deluxe Non-AC', 
+  'Premium AC', 'Executive Suite', 
+  'Penthouse', 'Presidential'
+];
 const AMENITIES_OPTIONS = [
   { id: 'wifi', label: 'WiFi', icon: Wifi },
   { id: 'tv', label: 'TV', icon: Tv },
@@ -144,7 +149,7 @@ export function RoomInventory() {
               <SelectValue placeholder="All Categories" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Everywhere</SelectItem>
+              <SelectItem value="all">All Categories</SelectItem>
               {ROOM_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
             </SelectContent>
           </Select>

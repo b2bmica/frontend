@@ -6,9 +6,10 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { ChevronRight, Eye, Globe, Loader2, LogIn, LogOut, Mail, MoreHorizontal, Phone, Search, User, UserPlus, XCircle } from 'lucide-react';
+import { ChevronRight, Eye, Globe, Loader2, LogIn, LogOut, Mail, MoreHorizontal, Pencil, Phone, Search, User, UserPlus, XCircle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { BookingDetailSheet } from './booking-detail-sheet';
+import { BookingModal } from './booking-modal';
 import { cn } from '../lib/utils';
 
 export function BookingTable() {
@@ -16,6 +17,7 @@ export function BookingTable() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [actioningId, setActioningId] = useState<string | null>(null);
 
   const filtered = bookings.filter(b => {
@@ -139,6 +141,12 @@ export function BookingTable() {
                                 <Eye className="h-4 w-4 mr-2" /> View Details
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
+                              {(booking.status === 'reserved' || booking.status === 'checked-in') && (
+                                <DropdownMenuItem onClick={() => setEditingBooking(booking)}>
+                                  <Pencil className="h-4 w-4 mr-2" /> Edit Reservation
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
                               {booking.status === 'reserved' && (
                                 <DropdownMenuItem onClick={() => handleAction(booking._id, checkIn)}>
                                   <LogIn className="h-4 w-4 mr-2" /> Check In
@@ -224,6 +232,11 @@ export function BookingTable() {
       </div>
 
       <BookingDetailSheet booking={selectedBooking} onClose={() => setSelectedBooking(null)} />
+      <BookingModal 
+        isOpen={!!editingBooking} 
+        onClose={() => setEditingBooking(null)} 
+        initialBooking={editingBooking} 
+      />
     </div>
   );
 }
