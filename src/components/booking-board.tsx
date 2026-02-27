@@ -19,18 +19,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'All' },
-  { key: 'reserved', label: 'Reserved', color: 'bg-indigo-600' },
-  { key: 'checked-in', label: 'Checked-in', color: 'bg-emerald-600' },
-  { key: 'checked-out', label: 'Checked-out', color: 'bg-slate-500' },
+  { key: 'reserved', label: 'Reserved', color: 'bg-emerald-500' },
+  { key: 'checked-in', label: 'Checked-in', color: 'bg-blue-500' },
+  { key: 'checked-out', label: 'Checked-out', color: 'bg-orange-500' },
 ] as const;
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case 'reserved':    return 'bg-indigo-600 border-indigo-700/30';
-    case 'checked-in':  return 'bg-emerald-600 border-emerald-700/30';
-    case 'checked-out': return 'bg-slate-500 border-slate-600/30';
-    case 'cancelled':   return 'bg-red-500 border-red-600/30';
-    default:            return 'bg-slate-400 border-slate-500/30';
+    case 'checked-in':  return 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20';
+    case 'reserved':    return 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20';
+    case 'checked-out': return 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/20';
+    default:            return 'bg-gray-400';
   }
 };
 
@@ -199,7 +198,7 @@ export function BookingBoard() {
         style={{ minHeight: 480 }}>
 
         {/* ── Header ── */}
-        <div className="flex flex-col gap-2.5 p-4 border-b bg-white shadow-sm z-50">
+        <div className="flex flex-col gap-2.5 p-4 border-b bg-card/40 backdrop-blur-md">
           {/* Row 1: nav */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center justify-between w-full">
@@ -240,7 +239,7 @@ export function BookingBoard() {
           </div>
 
           <div className="flex items-center justify-center">
-            <Button variant="ghost" size="sm" className="h-7 px-4 rounded-full text-[9px] font-black uppercase tracking-[0.2em] text-primary hover:bg-primary/5 bg-primary/5"
+            <Button variant="secondary" size="sm" className="h-7 px-4 rounded-full text-[10px] font-bold uppercase tracking-widest"
               onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}>
               Go to Today
             </Button>
@@ -303,37 +302,27 @@ export function BookingBoard() {
           <div className="inline-block min-w-full relative" ref={boardContentRef}>
 
             {/* Column headers */}
-            <div className="flex sticky top-0 z-40 bg-white border-b shadow-xs">
-              <div 
-                className="sticky left-0 z-50 bg-white border-r flex items-center justify-center shadow-[1px_0_3px_rgba(0,0,0,0.02)]"
-                style={{ width: ROOM_COL, height: 40, minWidth: ROOM_COL }}
-              >
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Inventory</span>
+            <div className="flex sticky top-0 z-30 bg-card border-b">
+              <div className="sticky left-0 z-50 bg-slate-50 border-r shadow-[2px_0_10px_rgba(0,0,0,0.05)] flex items-center px-2 md:px-3 font-bold text-muted-foreground uppercase text-[10px] tracking-wider"
+                style={{ width: ROOM_COL, height: 40, minWidth: ROOM_COL }}>
+                Rooms
               </div>
-              {timeline.map((day) => {
-                const isToday = isSameDay(day, new Date());
-                return (
-                  <div key={day.toISOString()}
-                    className={cn(
-                      "flex flex-col items-center justify-center border-r shrink-0 transition-colors",
-                      isToday ? "bg-primary/[0.03]" : "bg-white"
-                    )}
-                    style={{ width: COLUMN_WIDTH, height: 40, minWidth: COLUMN_WIDTH }}>
-                    <span className={cn(
-                      "text-[9px] font-bold uppercase tracking-widest opacity-40",
-                      isToday && "text-primary opacity-100"
-                    )}>
-                      {format(day, 'EEE')}
-                    </span>
-                    <span className={cn(
-                      "text-[11px] font-black mt-0.5",
-                      isToday ? "text-primary" : "text-slate-900"
-                    )}>
-                      {format(day, 'dd')}
-                    </span>
-                  </div>
-                );
-              })}
+              {timeline.map((day) => (
+                <div key={day.toISOString()}
+                  className={cn(
+                    "flex flex-col items-center justify-center border-r text-xs flex-shrink-0",
+                    isSameDay(day, new Date()) && "bg-primary/10 text-primary font-bold"
+                  )}
+                  style={{ width: COLUMN_WIDTH, height: 40, minWidth: COLUMN_WIDTH }}>
+                  <span className="text-[10px] uppercase">{format(day, 'EEE')}</span>
+                  <span className={cn(
+                    "text-xs leading-tight",
+                    isSameDay(day, new Date()) && "bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-[10px]"
+                  )}>
+                    {format(day, 'dd')}
+                  </span>
+                </div>
+              ))}
             </div>
 
             {/* Room rows */}
@@ -341,43 +330,34 @@ export function BookingBoard() {
               {rooms.map((room) => {
                 const roomBookings = filteredBookings.filter(b => getBookingRoomId(b) === room._id);
                 return (
-                  <div key={room._id} className="flex relative group/row" style={{ height: ROW_HEIGHT }}>
+                  <div key={room._id} className="flex border-b group relative" style={{ height: ROW_HEIGHT }}>
 
                     {/* Room label - High Z to stay above scrollable cards */}
-                    <div className="sticky left-0 z-40 bg-white border-r border-b flex flex-col justify-center px-4 md:px-5 shadow-[4px_0_12px_rgba(0,0,0,0.03)] flex-shrink-0 group-hover/row:bg-slate-50 transition-colors whitespace-nowrap overflow-hidden"
+                    <div className="sticky left-0 z-40 bg-white border-r flex flex-col justify-center px-2 md:px-3 shadow-[2px_0_10px_rgba(0,0,0,0.05)] flex-shrink-0"
                       style={{ width: ROOM_COL, minWidth: ROOM_COL }}>
-                      <div className="flex items-center gap-1.5 font-black text-xs md:text-sm text-slate-900 tracking-tight">
-                        Room {room.roomNumber}
-                        <span className={cn("w-1.5 h-1.5 rounded-full",
-                          room.status === 'clean'        ? 'bg-emerald-500' :
+                      <div className="font-bold text-xs md:text-sm flex items-center gap-1">
+                        {room.roomNumber}
+                        <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0",
+                          room.status === 'clean'        ? 'bg-green-500' :
                           room.status === 'occupied'     ? 'bg-blue-500'  :
                           room.status === 'dirty'        ? 'bg-yellow-500': 'bg-red-500'
                         )} />
                       </div>
-                      <div className="flex flex-col mt-0.5">
-                        <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 opacity-80">{room.roomType}</span>
-                        <span className="text-[10px] font-bold text-emerald-600 mt-0.5">₹{room.price}</span>
-                      </div>
+                      <div className="text-[10px] text-muted-foreground truncate">{room.roomType}</div>
+                      <div className="text-[10px] text-muted-foreground">₹{room.price}</div>
                     </div>
 
                     {/* Day cells */}
-                    {timeline.map((day) => {
-                      const isToday = isSameDay(day, new Date());
-                      return (
-                        <div key={day.toISOString()}
-                          className={cn(
-                            "border-r border-b cursor-cell hover:bg-slate-100/50 transition-all flex-shrink-0 relative",
-                            isToday && "bg-primary/[0.02]"
-                          )}
-                          style={{ width: COLUMN_WIDTH, minWidth: COLUMN_WIDTH }}
-                          onClick={() => handleCellClick(room._id, day)}
-                        >
-                          {isToday && (
-                            <div className="absolute inset-y-0 left-0 w-px bg-primary/10 pointer-events-none" />
-                          )}
-                        </div>
-                      );
-                    })}
+                    {timeline.map((day) => (
+                      <div key={day.toISOString()}
+                        className={cn(
+                          "border-r cursor-pointer hover:bg-primary/5 transition-colors flex-shrink-0",
+                          isSameDay(day, new Date()) && "bg-primary/5"
+                        )}
+                        style={{ width: COLUMN_WIDTH, minWidth: COLUMN_WIDTH }}
+                        onClick={() => handleCellClick(room._id, day)}
+                      />
+                    ))}
 
                     {/* Booking bars — absolutely positioned within the row */}
                     {roomBookings.map(booking => {
@@ -406,21 +386,19 @@ export function BookingBoard() {
                           dragMomentum={false}
                           onDragStart={() => { isDraggingRef.current = true; }}
                           onDragEnd={(e, info) => handleDragEnd(e, info, booking)}
-                          whileDrag={{ scale: 1.01, zIndex: 100, boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)' }}
-                          initial={{ opacity: 0, y: 5 }}
-                          animate={{ opacity: 1, y: 0 }}
+                          whileDrag={{ scale: 1.02, zIndex: 100, opacity: 0.8, cursor: 'grabbing' }}
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
                           className={cn(
-                            "absolute z-10 rounded-xl p-3 text-white shadow-sm overflow-hidden flex flex-col justify-between transition-all group/booking",
+                            "absolute z-10 rounded-md p-1.5 text-white shadow-md overflow-hidden flex flex-col justify-between transition-all group/booking",
                             getStatusColor(booking.status),
-                            isEditable ? "cursor-grab" : "cursor-pointer",
-                            "border-l-[4px]"
+                            isEditable ? "cursor-grab" : "cursor-pointer"
                           )}
                           style={{
-                            left:   ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 4,
-                            top:    6,
-                            width:  (clampedDuration * COLUMN_WIDTH) - 8,
-                            height: ROW_HEIGHT - 12,
-                            borderLeftColor: 'rgba(255,255,255,0.4)'
+                            left:   ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 1,
+                            top:    3,
+                            width:  (clampedDuration * COLUMN_WIDTH) - 2,
+                            height: ROW_HEIGHT - 6,
                           }}
                           onClick={(e) => { 
                             if (isDraggingRef.current || isResizingRef.current) return;
@@ -428,57 +406,55 @@ export function BookingBoard() {
                             setSelectedBooking(booking); 
                           }}
                         >
-                          <div className="flex flex-col gap-0.5 pointer-events-none">
-                            <h4 className="text-[10px] md:text-xs font-black truncate leading-none tracking-tight">
-                              {guest?.name || 'Guest'}
-                            </h4>
-                            <div className="flex items-center gap-1.5 opacity-80">
-                              <span className="text-[8px] font-black uppercase tracking-widest whitespace-nowrap">
-                                {booking.status.replace('-', ' ')}
-                              </span>
-                              <span className="h-0.5 w-0.5 rounded-full bg-white/40" />
-                              <span className="text-[8px] font-bold uppercase tracking-tighter">
-                                {differenceInDays(new Date(booking.checkout), new Date(booking.checkin))}N
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between mt-auto pointer-events-none opacity-60">
-                             <div className="bg-black/10 px-1.5 py-0.5 rounded-md text-[7px] font-black uppercase tracking-widest">
-                               {booking.bookingSource}
-                             </div>
-                          </div>
+                          <button
+                            className="text-[10px] md:text-xs font-bold truncate text-left hover:underline leading-tight z-10 relative pr-6"
+                            onClick={(e) => {
+                              if (isDraggingRef.current || isResizingRef.current) return;
+                              e.stopPropagation();
+                              if (guest?._id) setSelectedGuestId(guest._id);
+                              else setSelectedBooking(booking);
+                            }}
+                          >
+                            {guest?.name || 'Guest'}
+                          </button>
+                          <span className="text-[8px] md:text-[10px] bg-black/20 px-1 rounded truncate capitalize w-fit z-10 relative pointer-events-none">
+                            {booking.status.replace('-', ' ')}
+                          </span>
                           {/* Resize handle (Right edge) - Robust tracking with PointerCapture */}
                           {isEditable && (
                             <div 
                               className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize hover:bg-white/30 z-50 flex items-center justify-center opacity-0 group-hover/booking:opacity-100 transition-opacity touch-none"
                               onPointerDown={(e) => {
                                 e.stopPropagation();
-                                (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
-                                setResizingId(booking._id);
+                                const handleEl = e.currentTarget as HTMLDivElement;
+                                try {
+                                  handleEl.setPointerCapture(e.pointerId);
+                                } catch (err) {}
                                 
+                                setResizingId(booking._id);
                                 const startX = e.clientX;
                                 const originalCheckout = new Date(booking.checkout);
-                                const cardElement = e.currentTarget.parentElement as HTMLElement;
+                                const cardElement = handleEl.parentElement as HTMLElement;
                                 const originalWidth = cardElement.offsetWidth;
 
                                 // Boost z-index during resize
                                 cardElement.style.zIndex = '100';
-                                cardElement.style.transition = 'none'; // Disable transition for pure raw move
+                                cardElement.style.transition = 'none'; 
                                 
                                 let hasMovedSignificant = false;
 
                                 const onPointerMove = (moveEvent: PointerEvent) => {
                                   const deltaX = moveEvent.clientX - startX;
                                   
-                                  // Threshold of 12px to start resizing (more robust)
-                                  if (!hasMovedSignificant && Math.abs(deltaX) > 12) {
+                                  if (!hasMovedSignificant && Math.abs(deltaX) > 8) {
                                     hasMovedSignificant = true;
                                     isResizingRef.current = true;
                                   }
 
                                   if (hasMovedSignificant && cardElement) {
-                                    cardElement.style.width = `${Math.max(COLUMN_WIDTH, originalWidth + deltaX)}px`;
+                                    // Visual snapping to full days makes it feel more "robust" as requested
+                                    const snappedDeltaX = Math.round(deltaX / COLUMN_WIDTH) * COLUMN_WIDTH;
+                                    cardElement.style.width = `${Math.max(COLUMN_WIDTH, originalWidth + snappedDeltaX)}px`;
                                   }
                                 };
 
@@ -486,24 +462,20 @@ export function BookingBoard() {
                                   const deltaX = upEvent.clientX - startX;
                                   const daysDelta = Math.round(deltaX / COLUMN_WIDTH);
                                   
-                                  (e.currentTarget as HTMLDivElement).releasePointerCapture(upEvent.pointerId);
+                                  try {
+                                    handleEl.releasePointerCapture(upEvent.pointerId);
+                                  } catch (err) {}
                                   window.removeEventListener('pointermove', onPointerMove);
                                   window.removeEventListener('pointerup', onPointerUp);
                                   
-                                  setResizingId(null);
-                                  // Reset card styles
+                                  // Reset card styles immediately
                                   if (cardElement) {
                                     cardElement.style.width = '';
                                     cardElement.style.zIndex = '';
                                     cardElement.style.transition = '';
                                   }
 
-                                  if (!hasMovedSignificant) {
-                                    setTimeout(() => { isResizingRef.current = false; }, 50);
-                                    return;
-                                  }
-
-                                  if (daysDelta !== 0) {
+                                  if (hasMovedSignificant && daysDelta !== 0) {
                                     const newCheckout = format(addDays(originalCheckout, daysDelta), 'yyyy-MM-dd');
                                     if (new Date(newCheckout) > new Date(booking.checkin)) {
                                       setPendingUpdate({ 
@@ -517,7 +489,11 @@ export function BookingBoard() {
                                     }
                                   }
                                   
-                                  setTimeout(() => { isResizingRef.current = false; }, 100);
+                                  // Delay state release to prevent accidental clicks
+                                  setTimeout(() => { 
+                                    isResizingRef.current = false; 
+                                    setResizingId(null);
+                                  }, 150);
                                 };
 
                                 window.addEventListener('pointermove', onPointerMove);
