@@ -493,7 +493,7 @@ export function BookingBoard() {
                                   setTimeout(() => { 
                                     isResizingRef.current = false; 
                                     setResizingId(null);
-                                  }, 150);
+                                  }, 50);
                                 };
 
                                 window.addEventListener('pointermove', onPointerMove);
@@ -520,7 +520,7 @@ export function BookingBoard() {
       <GuestProfileSheet guestId={selectedGuestId} onClose={() => setSelectedGuestId(null)} onBookingClick={(b) => setSelectedBooking(b)} />
       
       <Dialog open={!!pendingUpdate} onOpenChange={(open) => !open && !isUpdating && setPendingUpdate(null)}>
-        <DialogContent className="sm:max-w-[400px] border-none shadow-2xl rounded-2xl">
+        <DialogContent className="sm:max-w-[400px] border-none shadow-2xl rounded-2xl z-[500]">
           <DialogHeader>
             <DialogTitle className="font-black text-xl tracking-tight">Confirm Modification</DialogTitle>
           </DialogHeader>
@@ -561,7 +561,7 @@ export function BookingBoard() {
                         <div className="text-[10px] font-black uppercase text-slate-400 tracking-tight">
                           Same Room Assignment
                         </div>
-                        {pendingUpdate && (() => {
+                        {(() => {
                           const oldDays = differenceInDays(new Date(pendingUpdate.booking.checkout), new Date(pendingUpdate.booking.checkin));
                           const newDays = differenceInDays(new Date(pendingUpdate.updates.checkout), new Date(pendingUpdate.updates.checkin));
                           const diff = newDays - oldDays;
