@@ -1,10 +1,10 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, 
-  differenceInDays, startOfDay
+  differenceInDays, startOfDay, isBefore
 } from 'date-fns';
 import { motion } from 'framer-motion';
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Bed, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Loader2, Bed, X, ShieldCheck } from 'lucide-react';
 import { useBookings, type Booking } from '../context/booking-context';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -361,8 +361,9 @@ export function BookingBoard() {
 
                     {/* Booking bars — absolutely positioned within the row */}
                     {roomBookings.map(booking => {
-                      const checkinDate  = startOfDay(new Date(booking.checkin));
-                      const checkoutDate = startOfDay(new Date(booking.checkout));
+                      const isPending = pendingUpdate?.booking?._id === booking._id;
+                      const checkinDate  = startOfDay(new Date(isPending ? pendingUpdate.updates.checkin : booking.checkin));
+                      const checkoutDate = startOfDay(new Date(isPending ? pendingUpdate.updates.checkout : booking.checkout));
                       const weekStartDay = startOfDay(weekStart);
 
                       const offsetDays   = differenceInDays(checkinDate, weekStartDay);
@@ -387,7 +388,7 @@ export function BookingBoard() {
                           onDragStart={() => { isDraggingRef.current = true; }}
                           onDragEnd={(e, info) => handleDragEnd(e, info, booking)}
                           whileDrag={{ scale: 1.02, zIndex: 100, opacity: 0.8, cursor: 'grabbing' }}
-                          initial={{ opacity: 0, scale: 0.95 }}
+                          initial={{ opacity: 0, scale: 1 }}
                           animate={{ opacity: 1, scale: 1 }}
                           className={cn(
                             "absolute z-10 rounded-md p-1.5 text-white shadow-md overflow-hidden flex flex-col justify-between transition-all group/booking",
@@ -399,6 +400,7 @@ export function BookingBoard() {
                             top:    3,
                             width:  (clampedDuration * COLUMN_WIDTH) - 2,
                             height: ROW_HEIGHT - 6,
+                            transition: resizingId === booking._id ? 'none' : 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                           }}
                           onClick={(e) => { 
                             if (isDraggingRef.current || isResizingRef.current) return;
@@ -407,7 +409,7 @@ export function BookingBoard() {
                           }}
                         >
                           <button
-                            className="text-[10px] md:text-xs font-bold truncate text-left hover:underline leading-tight z-10 relative pr-6"
+                            className="text-[10px] md:text-xs font-bold truncate text-left hover:underline leading-tight z-10 relative w-fit outline-none"
                             onClick={(e) => {
                               if (isDraggingRef.current || isResizingRef.current) return;
                               e.stopPropagation();
@@ -472,13 +474,12 @@ export function BookingBoard() {
                                     window.removeEventListener('pointermove', onPointerMove);
                                     window.removeEventListener('pointerup', onPointerUp);
                                     
-                                    // Reset card styles immediately - clear entirely to let React's style prop take over
+                                    // Reset card styles immediately - ALWAYS clear inline width to let React's style prop take over
                                     if (cardElement) {
-                                      cardElement.style.width = '';
+                                      cardElement.style.width = ''; // CRITICAL: Reset width so React state can manage it
                                       cardElement.style.zIndex = '';
                                       cardElement.style.transition = '';
                                       cardElement.style.opacity = '';
-                                      // Force a reflow/re-render feel by ensuring no stale visual state
                                     }
 
                                     if (hasMovedSignificant && daysDelta !== 0) {

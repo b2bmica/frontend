@@ -56,10 +56,24 @@ export function RoomInventory() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [error, setError] = useState<string | null>(null);
 
+  const checkedInRoomIds = new Set(
+    bookings
+      .filter(b => b.status === 'checked-in')
+      .map(b => getBookingRoomId(b))
+  );
+
   const filteredRooms = rooms.filter(r => {
     const matchesType = filterType === 'all' || r.roomType === filterType;
-    const matchesStatus = statusFilter === 'all' || 
-                         (statusFilter === 'repair' ? (r.status === 'maintenance' || r.status === 'under-maintenance') : r.status === statusFilter);
+    let matchesStatus = true;
+    if (statusFilter !== 'all') {
+      const isRepair = r.status === 'maintenance' || r.status === 'under-maintenance';
+      const isOccupied = checkedInRoomIds.has(r._id);
+      
+      if (statusFilter === 'repair') matchesStatus = isRepair;
+      else if (statusFilter === 'occupied') matchesStatus = isOccupied;
+      else if (statusFilter === 'clean') matchesStatus = r.status === 'clean' && !isOccupied && !isRepair;
+      else if (statusFilter === 'dirty') matchesStatus = r.status === 'dirty' && !isOccupied && !isRepair;
+    }
     return matchesType && matchesStatus;
   });
 
@@ -138,10 +152,10 @@ export function RoomInventory() {
 
   const stats = {
     total: rooms.length,
-    clean: rooms.filter(r => r.status === 'clean').length,
-    occupied: rooms.filter(r => r.status === 'occupied').length,
-    dirty: rooms.filter(r => r.status === 'dirty').length,
-    maintenance: rooms.filter(r => r.status === 'under-maintenance' || r.status === 'maintenance').length,
+    occupied: checkedInRoomIds.size,
+    maintenance: rooms.filter(r => r.status === 'maintenance' || r.status === 'under-maintenance').length,
+    clean: rooms.filter(r => r.status === 'clean' && !checkedInRoomIds.has(r._id)).length,
+    dirty: rooms.filter(r => r.status === 'dirty' && !checkedInRoomIds.has(r._id)).length,
   };
 
   return (
