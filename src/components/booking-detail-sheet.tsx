@@ -78,15 +78,22 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
 
   const config = statusConfig[booking.status] || statusConfig.reserved;
 
-  const handleAction = async (action: (id: string) => Promise<void>) => {
+  const [isSettled, setIsSettled] = useState(false);
+
+  const handleAction = async (action: (id: string) => Promise<void>, isSettlement?: boolean) => {
     setIsActioning(true);
     try {
       await action(booking._id);
+      if (isSettlement) {
+        setIsSettled(true);
+        await new Promise(r => setTimeout(r, 1500));
+      }
       onClose();
     } catch (err) {
       console.error(err);
     }
     setIsActioning(false);
+    setIsSettled(false);
   };
 
   return (
@@ -273,39 +280,46 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                         Settle Balance
                       </Button>
                     ) : (
-                      <div className="flex items-center gap-1.5 p-1 bg-emerald-600 rounded-xl animate-in fade-in slide-in-from-right-2 duration-300">
-                        <div className="flex bg-white/20 rounded-lg p-0.5 gap-0.5 relative overflow-hidden">
-                          {['cash', 'card', 'upi'].map((m) => (
-                            <button
-                              key={m}
-                              disabled={isActioning}
-                              onClick={() => {
-                                setPaymentMethod(m as any);
-                                handleAction((id) => updateBooking(id, { 
-                                  advancePayment: (booking.advancePayment || 0) + balance,
-                                  paymentMethod: m
-                                }));
-                              }}
-                              className={cn(
-                                "h-6 px-3 text-[8px] font-black uppercase rounded-md transition-all active:scale-95",
-                                isActioning 
-                                  ? (paymentMethod === m ? "bg-white text-emerald-600 scale-105 shadow-inner" : "opacity-30 cursor-not-allowed") 
-                                  : "bg-white text-emerald-600 shadow-sm hover:bg-white/90"
-                              )}
+                      <div className={cn(
+                        "flex items-center gap-1.5 p-1 rounded-xl animate-in fade-in slide-in-from-right-2 duration-300 min-h-10",
+                        isSettled ? "bg-emerald-500 text-white px-4" : "bg-emerald-600"
+                      )}>
+                        {isSettled ? (
+                          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest py-1">
+                            <CheckCircle2 className="h-4 w-4" /> Account Settled
+                          </div>
+                        ) : isActioning ? (
+                          <div className="flex items-center gap-3 px-3 py-1 text-white pr-4">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span className="text-[9px] font-black uppercase tracking-widest opacity-80 whitespace-nowrap">Processing Payment...</span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex bg-white/20 rounded-lg p-0.5 gap-0.5 relative overflow-hidden">
+                              {['cash', 'card', 'upi'].map((m) => (
+                                <button
+                                  key={m}
+                                  onClick={() => {
+                                    setPaymentMethod(m as any);
+                                    handleAction((id) => updateBooking(id, { 
+                                      advancePayment: (booking.advancePayment || 0) + balance,
+                                      paymentMethod: m
+                                    }), true);
+                                  }}
+                                  className="h-6 px-3 text-[8px] font-black uppercase rounded-md transition-all active:scale-95 bg-white text-emerald-600 shadow-sm hover:bg-white/90"
+                                >
+                                  {m}
+                                </button>
+                              ))}
+                            </div>
+                            <button 
+                              onClick={() => setShowBalanceSettle(false)} 
+                              className="p-1 text-white/60 hover:text-white ml-1"
                             >
-                              {isActioning && paymentMethod === m ? (
-                                <Loader2 className="h-2.5 w-2.5 animate-spin" />
-                              ) : m}
+                              <X className="h-3 w-3" />
                             </button>
-                          ))}
-                        </div>
-                        <button 
-                          onClick={() => setShowBalanceSettle(false)} 
-                          className="p-1 text-white/60 hover:text-white"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                        {isActioning && <Loader2 className="h-3.5 w-3.5 text-white animate-spin ml-1" />}
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
@@ -370,41 +384,48 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                     Settle & Checkout
                   </Button>
                 ) : (
-                  <div className="flex-1 flex items-center justify-between gap-2 px-2.5 bg-orange-600 rounded-xl animate-in slide-in-from-right-4 duration-300 overflow-hidden">
-                    <span className="text-[10px] font-black text-white uppercase tracking-tighter whitespace-nowrap">Mode:</span>
-                    <div className="flex bg-white/20 rounded-lg p-0.5 gap-0.5 shrink-0 relative overflow-hidden">
-                      {['cash', 'card', 'upi'].map((m) => (
-                        <button
-                          key={m}
-                          disabled={isActioning}
-                          onClick={() => {
-                            setPaymentMethod(m as any);
-                            handleAction((id) => updateBooking(id, { 
-                              status: 'checked-out', 
-                              advancePayment: totalAmount,
-                              paymentMethod: m 
-                            }));
-                          }}
-                          className={cn(
-                            "h-7 px-3 text-[9px] font-black uppercase rounded-md transition-all active:scale-95",
-                            isActioning 
-                              ? (paymentMethod === m ? "bg-white text-orange-600 scale-105 shadow-inner" : "opacity-30 cursor-not-allowed") 
-                              : "bg-white text-orange-600 shadow-sm hover:bg-white/90"
-                          )}
+                  <div className={cn(
+                    "flex-1 flex items-center gap-2 rounded-xl animate-in slide-in-from-right-4 duration-300 overflow-hidden min-h-11",
+                    isSettled ? "bg-emerald-500 text-white justify-center" : "bg-orange-600"
+                  )}>
+                    {isSettled ? (
+                      <div className="flex items-center gap-3 text-xs font-black uppercase tracking-widest py-2">
+                        <CheckCircle2 className="h-5 w-5" /> Settled & Checked Out
+                      </div>
+                    ) : isActioning ? (
+                      <div className="flex items-center gap-3 px-4 py-2 text-white">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Syncing Records...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="text-[10px] font-black text-white uppercase tracking-tighter whitespace-nowrap ml-3">Mode:</span>
+                        <div className="flex bg-white/20 rounded-lg p-0.5 gap-0.5 shrink-0 relative overflow-hidden">
+                          {['cash', 'card', 'upi'].map((m) => (
+                            <button
+                              key={m}
+                              onClick={() => {
+                                setPaymentMethod(m as any);
+                                handleAction((id) => updateBooking(id, { 
+                                  status: 'checked-out', 
+                                  advancePayment: totalAmount,
+                                  paymentMethod: m 
+                                }), true);
+                              }}
+                              className="h-7 px-3 text-[9px] font-black uppercase rounded-md transition-all active:scale-95 bg-white text-orange-600 shadow-sm hover:bg-white/90"
+                            >
+                              {m}
+                            </button>
+                          ))}
+                        </div>
+                        <button 
+                          onClick={() => setShowPaymentSelection(false)} 
+                          className="text-white/60 hover:text-white transition-colors ml-auto mr-3"
                         >
-                          {isActioning && paymentMethod === m ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : m}
+                          <X className="h-4 w-4" />
                         </button>
-                      ))}
-                    </div>
-                    <button 
-                      onClick={() => setShowPaymentSelection(false)} 
-                      className="text-white/60 hover:text-white transition-colors ml-1"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                    {isActioning && <Loader2 className="h-4 w-4 text-white animate-spin ml-1" />}
+                      </>
+                    )}
                   </div>
                 )}
               </div>

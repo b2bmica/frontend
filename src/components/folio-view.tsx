@@ -39,6 +39,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
   const [settleAmount, setSettleAmount] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'UPI' | 'Card'>('Cash');
   const [isSettling, setIsSettling] = useState(false);
+  const [isSettled, setIsSettled] = useState(false);
 
   const filteredBookings = useMemo(() => {
     return bookings.filter(b => {
@@ -144,18 +145,21 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
      const finalAmount = settleAmount || financials.balance;
      if (finalAmount <= 0) return;
      
-     setIsSettling(true);
-     try {
-        await updateBooking(booking._id, { 
-          advancePayment: (booking.advancePayment || 0) + finalAmount 
-        });
-        setIsSettleModalOpen(false);
-        setSettleAmount(0);
-     } catch (err) {
-        console.error(err);
-     } finally {
-        setIsSettling(false);
-     }
+      setIsSettling(true);
+      try {
+         await updateBooking(booking._id, { 
+           advancePayment: (booking.advancePayment || 0) + finalAmount 
+         });
+         setIsSettled(true);
+         await new Promise(r => setTimeout(r, 1500));
+         setIsSettleModalOpen(false);
+         setSettleAmount(0);
+      } catch (err) {
+         console.error(err);
+      } finally {
+         setIsSettling(false);
+         setIsSettled(false);
+      }
   }
 
   const handlePrint = () => { window.print(); };
@@ -455,55 +459,76 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                 <DialogDescription className="text-white/40 text-[10px] font-bold uppercase tracking-widest">Collecting for {financials.guestName}</DialogDescription>
              </DialogHeader>
           </div>
-          <div className="p-6 space-y-4 bg-white">
-             <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Amount (INR)</label>
-                <div className="relative">
-                   <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
-                   <Input 
-                      type="number" 
-                      className="h-12 rounded-xl bg-slate-50 border-none pl-10 text-base font-bold" 
-                      value={settleAmount || ''} 
-                      onChange={e => setSettleAmount(Number(e.target.value))}
-                   />
-                </div>
-             </div>
+          <div className="p-6 space-y-4 bg-white min-h-[280px] flex flex-col justify-center">
+             {isSettled ? (
+               <div className="text-center space-y-4 py-8 animate-in fade-in zoom-in-95 duration-300">
+                  <div className="h-20 w-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                    <CheckCircle2 className="h-10 w-10" />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Payment Settled</h3>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Transaction Recorded Successfully</p>
+               </div>
+             ) : isSettling ? (
+               <div className="text-center space-y-6 py-8 animate-in fade-in duration-300">
+                  <div className="relative h-20 w-20 mx-auto">
+                    <div className="absolute inset-0 rounded-full border-4 border-primary/10" />
+                    <Loader2 className="h-20 w-20 text-primary animate-spin" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Authorizing...</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest opacity-60 italic">Please do not refresh the page</p>
+                  </div>
+               </div>
+             ) : (
+               <>
+                 <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Amount (INR)</label>
+                    <div className="relative">
+                       <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
+                       <Input 
+                          type="number" 
+                          className="h-12 rounded-xl bg-slate-50 border-none pl-10 text-base font-bold" 
+                          value={settleAmount || ''} 
+                          onChange={e => setSettleAmount(Number(e.target.value))}
+                       />
+                    </div>
+                 </div>
 
-             <div className="grid grid-cols-3 gap-2">
-                {[
-                  { id: 'Cash', icon: Banknote },
-                  { id: 'UPI', icon: Smartphone },
-                  { id: 'Card', icon: CreditCard }
-                ].map(m => (
-                  <button 
-                    key={m.id}
-                    disabled={isSettling}
-                    onClick={() => setPaymentMethod(m.id as any)}
-                    className={cn(
-                       "h-14 rounded-xl border flex flex-col items-center justify-center transition-all gap-1",
-                       paymentMethod === m.id 
-                         ? "bg-primary border-primary text-white shadow-md shadow-primary/20" 
-                         : isSettling ? "opacity-30 border-slate-100 cursor-not-allowed" : "bg-white border-slate-100 text-slate-400 hover:bg-slate-50"
-                    )}
-                  >
-                    <m.icon className={cn("h-4 w-4", paymentMethod === m.id ? "text-white" : "text-slate-400")} />
-                    <span className={cn("text-[9px] font-black uppercase tracking-widest", paymentMethod === m.id ? "text-white" : "text-slate-500")}>
-                      {m.id}
-                    </span>
-                  </button>
-                ))}
-             </div>
+                 <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: 'Cash', icon: Banknote },
+                      { id: 'UPI', icon: Smartphone },
+                      { id: 'Card', icon: CreditCard }
+                    ].map(m => (
+                      <button 
+                        key={m.id}
+                        disabled={isSettling}
+                        onClick={() => setPaymentMethod(m.id as any)}
+                        className={cn(
+                           "h-14 rounded-xl border flex flex-col items-center justify-center transition-all gap-1",
+                           paymentMethod === m.id 
+                             ? "bg-primary border-primary text-white shadow-md shadow-primary/20" 
+                             : "bg-white border-slate-100 text-slate-400 hover:bg-slate-50"
+                        )}
+                      >
+                        <m.icon className={cn("h-4 w-4", paymentMethod === m.id ? "text-white" : "text-slate-400")} />
+                        <span className={cn("text-[9px] font-black uppercase tracking-widest", paymentMethod === m.id ? "text-white" : "text-slate-500")}>
+                          {m.id}
+                        </span>
+                      </button>
+                    ))}
+                 </div>
 
-             <DialogFooter className="pt-2">
-                <Button 
-                   onClick={handleSettlePayments} 
-                   disabled={isSettling}
-                   className="w-full h-12 rounded-xl bg-primary text-white font-bold uppercase tracking-widest text-xs"
-                 >
-                    {isSettling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Confirm Settle <ArrowRight className="ml-2 h-4 w-4" />
-                 </Button>
-             </DialogFooter>
+                 <DialogFooter className="pt-2">
+                    <Button 
+                       onClick={handleSettlePayments} 
+                       className="w-full h-12 rounded-xl bg-primary text-white font-bold uppercase tracking-widest text-xs"
+                     >
+                        Confirm Settle <ArrowRight className="ml-2 h-4 w-4" />
+                     </Button>
+                 </DialogFooter>
+               </>
+             )}
           </div>
         </DialogContent>
       </Dialog>
