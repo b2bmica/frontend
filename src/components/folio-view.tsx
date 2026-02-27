@@ -16,7 +16,7 @@ import {
   Smartphone,
   Loader2
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './ui/button';
 import { CardContent } from './ui/card';
@@ -40,6 +40,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'UPI' | 'Card'>('Cash');
   const [isSettling, setIsSettling] = useState(false);
   const [isSettled, setIsSettled] = useState(false);
+  const [showTodayOnly, setShowTodayOnly] = useState(false);
 
   const filteredBookings = useMemo(() => {
     return bookings.filter(b => {
@@ -50,6 +51,15 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
       const matchesSearch = searchStr.includes(searchQuery.toLowerCase());
 
       if (!matchesSearch) return false;
+
+      // Today's Filter
+      if (showTodayOnly) {
+         const today = new Date();
+         const isArrivingToday = isSameDay(new Date(b.checkin), today);
+         const isDepartingToday = isSameDay(new Date(b.checkout), today);
+         const isCheckedIn = b.status === 'checked-in';
+         if (!isArrivingToday && !isDepartingToday && !isCheckedIn) return false;
+      }
 
       // Logic Filter
       if (showHistory) return true; // Show everything if history is toggled on
@@ -200,20 +210,44 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
         {/* Guest Directory Sidebar - Responsive: Top on mobile, Left on large */}
         <div className="lg:col-span-1 flex flex-col gap-4">
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-3 px-1">
-                 <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Guest Directory</h4>
-                 <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{showHistory ? 'All Data' : 'Active Only'}</span>
+              <div className="flex flex-col gap-2 mb-3">
+                 <div className="flex items-center justify-between px-1">
+                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Guest Directory</h4>
+                    <div className="flex items-center gap-2">
+                       <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{showHistory ? 'All Data' : 'Active Only'}</span>
+                       <button 
+                          onClick={() => {
+                             setShowHistory(!showHistory);
+                             if (!showHistory) setShowTodayOnly(false);
+                          }}
+                          className={cn(
+                             "relative inline-flex h-4 w-8 items-center rounded-full transition-colors",
+                             showHistory ? "bg-primary" : "bg-slate-200"
+                          )}
+                       >
+                          <span className={cn(
+                             "inline-block h-2.5 w-2.5 transform rounded-full bg-white transition-transform",
+                             showHistory ? "translate-x-4.5" : "translate-x-1"
+                          )} />
+                       </button>
+                    </div>
+                 </div>
+                 
+                 <div className="flex items-center justify-between px-1">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Today's Bookings</span>
                     <button 
-                       onClick={() => setShowHistory(!showHistory)}
+                       onClick={() => {
+                          setShowTodayOnly(!showTodayOnly);
+                          if (!showTodayOnly) setShowHistory(false);
+                       }}
                        className={cn(
                           "relative inline-flex h-4 w-8 items-center rounded-full transition-colors",
-                          showHistory ? "bg-primary" : "bg-slate-200"
+                          showTodayOnly ? "bg-emerald-500" : "bg-slate-200"
                        )}
                     >
                        <span className={cn(
                           "inline-block h-2.5 w-2.5 transform rounded-full bg-white transition-transform",
-                          showHistory ? "translate-x-4.5" : "translate-x-1"
+                          showTodayOnly ? "translate-x-4.5" : "translate-x-1"
                        )} />
                     </button>
                  </div>

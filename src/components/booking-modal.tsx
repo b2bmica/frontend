@@ -159,15 +159,16 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   }, [isOpen, selectedRoomId, selectedDate, initialBooking]);
 
   useEffect(() => {
-    if (selectedRoom && !initialBooking) {
+    if (selectedRoom) {
       setBookingForm(prev => ({
         ...prev,
         baseOccupancy: selectedRoom.baseOccupancy || 2,
         extraPersonPrice: selectedRoom.extraPersonPrice || 0,
+        // Always update roomPrice when room is selected/changed (both new and edit)
         roomPrice: selectedRoom.price || 0
       }));
     }
-  }, [selectedRoom, initialBooking]);
+  }, [selectedRoom]);
 
   const handleGuestSearch = async (query: string) => {
     setGuestQuery(query);
