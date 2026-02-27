@@ -16,7 +16,7 @@ import {
   Smartphone,
   Loader2
 } from 'lucide-react';
-import { format, isSameDay } from 'date-fns';
+import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './ui/button';
 import { CardContent } from './ui/card';
@@ -40,7 +40,6 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'UPI' | 'Card'>('Cash');
   const [isSettling, setIsSettling] = useState(false);
   const [isSettled, setIsSettled] = useState(false);
-  const [showTodayOnly, setShowTodayOnly] = useState(false);
 
   const filteredBookings = useMemo(() => {
     return bookings.filter(b => {
@@ -52,14 +51,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
 
       if (!matchesSearch) return false;
 
-      // Today's Filter
-      if (showTodayOnly) {
-         const today = new Date();
-         const isArrivingToday = isSameDay(new Date(b.checkin), today);
-         const isDepartingToday = isSameDay(new Date(b.checkout), today);
-         const isCheckedIn = b.status === 'checked-in';
-         if (!isArrivingToday && !isDepartingToday && !isCheckedIn) return false;
-      }
+      if (!matchesSearch) return false;
 
       // Logic Filter
       if (showHistory) return true; // Show everything if history is toggled on
@@ -125,7 +117,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
 
     const payments: Array<{ id: string; method: string; amount: number; date: string; note?: string }> = [];
 
-    // Build payments list from paymentLogs (the detailed per-transaction log)
+    // Build payments list from paymentLogs
     if (booking.paymentLogs && booking.paymentLogs.length > 0) {
       booking.paymentLogs.forEach((log, i) => {
         payments.push({
@@ -136,6 +128,18 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
           note: log.note,
         });
       });
+      
+      // Check if there's a discrepancy (e.g. advancePayment is higher than logs sum)
+      const logsTotal = booking.paymentLogs.reduce((sum, l) => sum + l.amount, 0);
+      if (booking.advancePayment > logsTotal) {
+        payments.unshift({
+          id: 'diff-initial',
+          method: booking.paymentMethod || 'advance',
+          amount: booking.advancePayment - logsTotal,
+          date: booking.checkin,
+          note: 'Initial payment discrepancy',
+        });
+      }
     } else if (booking.advancePayment > 0) {
       // Fallback: show the advance payment as a single entry
       payments.push({
@@ -143,7 +147,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
         method: booking.paymentMethod || booking.bookingSource || 'advance',
         amount: booking.advancePayment,
         date: booking.checkin,
-        note: 'Advance payment',
+        note: 'Initial advance',
       });
     }
 
@@ -158,8 +162,8 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
     }
 
     const total = subtotal + tax;
-    const paid = payments.reduce((sum, p) => sum + p.amount, 0);
-    const balance = total - paid;
+    const paid = booking.advancePayment; // Use the actual field as source of truth
+    const balance = Math.max(0, total - paid);
 
     return { charges, payments, subtotal, tax, total, paid, balance, nights, guestName: (typeof booking.guestId === 'object' ? booking.guestId.name : guests.find(g => g._id === booking.guestId)?.name) || 'Guest' };
   }, [booking, hotel, rooms, guests]);
@@ -210,44 +214,20 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
         {/* Guest Directory Sidebar - Responsive: Top on mobile, Left on large */}
         <div className="lg:col-span-1 flex flex-col gap-4">
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
-              <div className="flex flex-col gap-2 mb-3">
-                 <div className="flex items-center justify-between px-1">
-                    <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Guest Directory</h4>
-                    <div className="flex items-center gap-2">
-                       <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{showHistory ? 'All Data' : 'Active Only'}</span>
-                       <button 
-                          onClick={() => {
-                             setShowHistory(!showHistory);
-                             if (!showHistory) setShowTodayOnly(false);
-                          }}
-                          className={cn(
-                             "relative inline-flex h-4 w-8 items-center rounded-full transition-colors",
-                             showHistory ? "bg-primary" : "bg-slate-200"
-                          )}
-                       >
-                          <span className={cn(
-                             "inline-block h-2.5 w-2.5 transform rounded-full bg-white transition-transform",
-                             showHistory ? "translate-x-4.5" : "translate-x-1"
-                          )} />
-                       </button>
-                    </div>
-                 </div>
-                 
-                 <div className="flex items-center justify-between px-1">
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Today's Bookings</span>
+              <div className="flex items-center justify-between mb-3 px-1">
+                 <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Guest Directory</h4>
+                 <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{showHistory ? 'All Data' : 'Active Only'}</span>
                     <button 
-                       onClick={() => {
-                          setShowTodayOnly(!showTodayOnly);
-                          if (!showTodayOnly) setShowHistory(false);
-                       }}
+                       onClick={() => setShowHistory(!showHistory)}
                        className={cn(
                           "relative inline-flex h-4 w-8 items-center rounded-full transition-colors",
-                          showTodayOnly ? "bg-emerald-500" : "bg-slate-200"
+                          showHistory ? "bg-primary" : "bg-slate-200"
                        )}
                     >
                        <span className={cn(
                           "inline-block h-2.5 w-2.5 transform rounded-full bg-white transition-transform",
-                          showTodayOnly ? "translate-x-4.5" : "translate-x-1"
+                          showHistory ? "translate-x-4.5" : "translate-x-1"
                        )} />
                     </button>
                  </div>
