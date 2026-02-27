@@ -28,6 +28,7 @@ import { useAuth } from '../context/auth-context';
 import { useBookings } from '../context/booking-context';
 import { useState } from 'react';
 import { BookingModal } from './booking-modal';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from './ui/dialog';
 
 interface BookingDetailSheetProps {
   booking: any;
@@ -42,6 +43,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPaymentSelection, setShowPaymentSelection] = useState(false);
   const [showBalanceSettle, setShowBalanceSettle] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi'>('cash');
   const [isSettled, setIsSettled] = useState(false);
 
@@ -447,16 +449,15 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
               {booking.status === 'checked-out' && <span className="text-[11px] uppercase tracking-widest">Print Receipt</span>}
             </Button>
 
-            {/* Cancel (Icon only) */}
+            {/* Cancel Booking Button */}
             {booking.status !== 'cancelled' && booking.status !== 'checked-out' && !showPaymentSelection && (
               <Button 
                 variant="outline" 
-                size="icon"
-                className="h-full w-11 rounded-xl border-2 border-red-50 text-red-400 hover:bg-red-50 hover:text-red-600 hover:border-red-100 shrink-0 transition-all active:scale-95"
-                onClick={() => handleAction(cancelBooking)}
+                className="h-full px-4 rounded-xl border-2 border-red-50 text-red-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200 shrink-0 transition-all active:scale-95 text-[10px] font-black uppercase tracking-widest"
+                onClick={() => setShowCancelConfirm(true)}
                 disabled={isActioning}
               >
-                {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Cancel
               </Button>
             )}
           </div>
@@ -466,6 +467,30 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
           onClose={() => setShowEditModal(false)} 
           initialBooking={booking} 
         />
+
+        {/* Cancel Confirmation Dialog */}
+        <Dialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
+          <DialogContent className="sm:max-w-[360px] rounded-2xl border-none shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-black tracking-tight">Cancel Booking?</DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground font-medium">
+                This will cancel the reservation for <span className="font-bold text-foreground">{typeof booking.guestId === 'object' ? booking.guestId?.name : 'this guest'}</span> in Room <span className="font-bold text-foreground">{typeof booking.roomId === 'object' ? booking.roomId?.roomNumber : ''}</span>. This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 pt-2">
+              <Button variant="outline" className="rounded-xl font-bold flex-1" onClick={() => setShowCancelConfirm(false)} disabled={isActioning}>
+                Keep Booking
+              </Button>
+              <Button
+                className="rounded-xl font-bold flex-1 bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-500/20"
+                onClick={() => { setShowCancelConfirm(false); handleAction(cancelBooking); }}
+                disabled={isActioning}
+              >
+                {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Yes, Cancel'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </SheetContent>
     </Sheet>
   );

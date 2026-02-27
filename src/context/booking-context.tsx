@@ -28,6 +28,8 @@ export interface Booking {
   extraPersonPrice: number;
   advancePayment: number;
   bookingSource: string;
+  paymentMethod?: string;
+  paymentLogs?: Array<{ _id?: string; amount: number; method: string; date: string; note?: string }>;
   status: 'reserved' | 'checked-in' | 'checked-out' | 'cancelled';
 }
 

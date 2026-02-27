@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Receipt, 
   CreditCard, 
@@ -113,9 +113,29 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
       });
     }
 
-    const payments = [
-      { id: 'pre-1', method: booking.bookingSource || 'Advance', amount: booking.advancePayment || 0, date: booking.checkin, status: 'completed' }
-    ];
+    const payments: Array<{ id: string; method: string; amount: number; date: string; note?: string }> = [];
+
+    // Build payments list from paymentLogs (the detailed per-transaction log)
+    if (booking.paymentLogs && booking.paymentLogs.length > 0) {
+      booking.paymentLogs.forEach((log, i) => {
+        payments.push({
+          id: log._id || `log-${i}`,
+          method: log.method,
+          amount: log.amount,
+          date: log.date,
+          note: log.note,
+        });
+      });
+    } else if (booking.advancePayment > 0) {
+      // Fallback: show the advance payment as a single entry
+      payments.push({
+        id: 'pre-1',
+        method: booking.paymentMethod || booking.bookingSource || 'advance',
+        amount: booking.advancePayment,
+        date: booking.checkin,
+        note: 'Advance payment',
+      });
+    }
 
     const subtotal = roomCharge + extraPersonCharge;
     const taxConfig = hotel?.settings?.taxConfig;
@@ -148,7 +168,8 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
       setIsSettling(true);
       try {
          await updateBooking(booking._id, { 
-           advancePayment: (booking.advancePayment || 0) + finalAmount 
+           advancePayment: (booking.advancePayment || 0) + finalAmount,
+           paymentMethod: paymentMethod.toLowerCase()
          });
          setIsSettled(true);
          await new Promise(r => setTimeout(r, 1500));
@@ -350,49 +371,63 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                               </div>
                             )}
                           </>
-                       ) : (
-                          <>
-                            <div className="hidden md:block">
-                               {financials.payments.map(p => (
-                                 <div key={p.id} className="flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-100 hover:border-emerald-200 transition-all mb-3">
+                        ) : (
+                           <>
+                             {/* Desktop Payments */}
+                             <div className="hidden md:block space-y-3">
+                               {financials.payments.length === 0 ? (
+                                 <div className="py-12 text-center text-slate-300">
+                                   <p className="text-xs font-bold uppercase tracking-widest">No payments recorded</p>
+                                 </div>
+                               ) : financials.payments.map(p => {
+                                 const mk = (p.method || '').toLowerCase();
+                                 const Icon = mk.includes('upi') || mk.includes('phone') ? Smartphone : mk.includes('card') ? CreditCard : Banknote;
+                                 return (
+                                   <div key={p.id} className="flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-100 hover:border-emerald-200 transition-all">
                                      <div className="flex items-center gap-4">
-                                        <div className="h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
-                                           <CheckCircle2 className="h-5 w-5" />
-                                        </div>
-                                        <div>
-                                           <p className="text-sm font-bold text-slate-900">{p.method}</p>
-                                           <p className="text-[10px] font-medium text-emerald-600 uppercase tracking-widest mt-0.5">{new Date(p.date).toLocaleDateString()}</p>
-                                        </div>
+                                       <div className="h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
+                                         <Icon className="h-5 w-5" />
+                                       </div>
+                                       <div>
+                                         <p className="text-sm font-bold text-slate-900 capitalize">{p.method}</p>
+                                         <div className="flex items-center gap-2 mt-0.5">
+                                           <p className="text-[10px] font-medium text-emerald-600 uppercase tracking-widest">{new Date(p.date).toLocaleDateString()}</p>
+                                           {(p as any).note && <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest"> {(p as any).note}</span>}
+                                         </div>
+                                       </div>
                                      </div>
-                                     <p className="font-bold text-sm text-emerald-600">₹{p.amount.toLocaleString()}</p>
+                                     <p className="font-bold text-sm text-emerald-600">+ ₹{p.amount.toLocaleString()}</p>
+                                   </div>
+                                 );
+                               })}
+                             </div>
+                             {/* Mobile Payments */}
+                             <div className="md:hidden space-y-3">
+                               {financials.payments.length === 0 ? (
+                                 <div className="py-10 text-center text-slate-300">
+                                   <p className="text-[10px] font-bold uppercase tracking-widest">No payments recorded</p>
                                  </div>
-                               ))}
-                            </div>
-
-                            <div className="md:hidden space-y-3">
-                               {financials.payments.map(p => (
-                                 <div key={p.id} className="flex items-center justify-between p-4 rounded-xl bg-emerald-50/50 border border-emerald-100">
+                               ) : financials.payments.map(p => {
+                                 const mk = (p.method || '').toLowerCase();
+                                 const Icon = mk.includes('upi') || mk.includes('phone') ? Smartphone : mk.includes('card') ? CreditCard : Banknote;
+                                 return (
+                                   <div key={p.id} className="flex items-center justify-between p-3 rounded-xl bg-emerald-50/50 border border-emerald-100">
                                      <div className="flex items-center gap-3">
-                                        <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center text-emerald-600 border border-emerald-100">
-                                           <CheckCircle2 className="h-4 w-4" />
-                                        </div>
-                                        <div>
-                                           <p className="text-[11px] font-bold text-slate-800 leading-tight">{p.method}</p>
-                                           <p className="text-[9px] font-medium text-emerald-600 uppercase tracking-widest mt-0.5">{format(new Date(p.date), 'dd MMM')}</p>
-                                        </div>
+                                       <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center text-emerald-600 border border-emerald-100">
+                                         <Icon className="h-4 w-4" />
+                                       </div>
+                                       <div>
+                                         <p className="text-[11px] font-bold text-slate-800 capitalize">{p.method}</p>
+                                          <p className="text-[9px] font-medium text-emerald-600 uppercase tracking-widest mt-0.5">{format(new Date(p.date), 'dd MMM')}{(p as any).note ?  /  + (p as any).note : ''}</p>
+                                       </div>
                                      </div>
-                                     <p className="font-bold text-xs text-emerald-600 ml-2 whitespace-nowrap">₹{p.amount.toLocaleString()}</p>
-                                 </div>
-                               ))}
-                            </div>
-
-                            {financials.payments.length === 0 && (
-                              <div className="py-12 text-center text-slate-300">
-                                 <p className="text-xs font-bold uppercase tracking-widest">No payments recorded</p>
-                              </div>
-                            )}
-                          </>
-                       )}
+                                     <p className="font-bold text-xs text-emerald-600 ml-2 whitespace-nowrap">+ ₹{p.amount.toLocaleString()}</p>
+                                   </div>
+                                 );
+                               })}
+                             </div>
+                           </>
+                        )}
                     </div>
                   </CardContent>
                 </div>
