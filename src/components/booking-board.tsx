@@ -126,6 +126,9 @@ export function BookingBoard() {
       const duration = differenceInDays(new Date(booking.checkout), new Date(booking.checkin));
       const newCheckin = format(targetDay, 'yyyy-MM-dd');
       const newCheckout = format(addDays(targetDay, duration), 'yyyy-MM-dd');
+      
+      // If dropped in the same place approximately, don't update
+      if (newCheckin === booking.checkin && targetRoom._id === booking.roomId) return;
 
       try {
         await updateBooking(booking._id, {
@@ -137,6 +140,32 @@ export function BookingBoard() {
         console.error("Drag move failed", err);
       }
     }
+  };
+
+  const handleResizePointerDown = (e: React.PointerEvent, booking: Booking, side: 'left' | 'right') => {
+    e.stopPropagation();
+    const startX = e.clientX;
+    
+    const onPointerUp = async (upEvent: PointerEvent) => {
+      const deltaX = upEvent.clientX - startX;
+      const deltaDays = Math.round(deltaX / COLUMN_WIDTH);
+      
+      document.removeEventListener('pointerup', onPointerUp);
+      
+      if (deltaDays !== 0) {
+        if (side === 'left') {
+          const newCheckin = format(addDays(new Date(booking.checkin), deltaDays), 'yyyy-MM-dd');
+          if (newCheckin >= booking.checkout) return; // prevent invalid state
+          await updateBooking(booking._id, { checkin: newCheckin });
+        } else {
+          const newCheckout = format(addDays(new Date(booking.checkout), deltaDays), 'yyyy-MM-dd');
+          if (newCheckout <= booking.checkin) return; // prevent invalid state
+          await updateBooking(booking._id, { checkout: newCheckout });
+        }
+      }
+    };
+    
+    document.addEventListener('pointerup', onPointerUp);
   };
 
   if (loading) {
@@ -344,39 +373,42 @@ export function BookingBoard() {
 
                       return (
                         <motion.div
-                          key={booking._id}
+                          key={`${booking._id}-${booking.checkin}-${booking.checkout}`}
                           drag
-                          dragElastic={0.05}
+                          dragSnapToOrigin
+                          dragElastic={0}
                           dragMomentum={false}
                           onDragEnd={(e, info) => handleDragEnd(e, info, booking)}
-                          whileDrag={{ scale: 1.05, zIndex: 100, opacity: 0.8, cursor: 'grabbing' }}
-                          initial={{ opacity: 0, scale: 0.92 }}
+                          whileDrag={{ scale: 1.02, zIndex: 100, opacity: 0.8, cursor: 'grabbing' }}
+                          initial={{ opacity: 0, scale: 0.95 }}
                           animate={{ opacity: 1, scale: 1 }}
                           className={cn(
-                            "absolute z-10 rounded-md p-1.5 text-white shadow-md cursor-grab overflow-hidden flex flex-col justify-between",
+                            "absolute z-10 rounded shadow-sm cursor-grab overflow-hidden flex flex-col justify-center border border-black/10 transition-all",
                             getStatusColor(booking.status)
                           )}
                           style={{
-                            left:   ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 3,
-                            top:    5,
-                            width:  (clampedDuration * COLUMN_WIDTH) - 6,
-                            height: ROW_HEIGHT - 10,
+                            left:   ROOM_COL + (clampedOffset * COLUMN_WIDTH),
+                            top:    2,
+                            width:  (clampedDuration * COLUMN_WIDTH),
+                            height: ROW_HEIGHT - 4,
                           }}
-                          onClick={(e) => { e.stopPropagation(); setSelectedBooking(booking); }}
+                          onDoubleClick={(e) => { e.stopPropagation(); setSelectedBooking(booking); }}
                         >
-                          <button
-                            className="text-[10px] md:text-xs font-bold truncate text-left hover:underline leading-tight"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (guest?._id) setSelectedGuestId(guest._id);
-                              else setSelectedBooking(booking);
-                            }}
-                          >
-                            {guest?.name || 'Guest'}
-                          </button>
-                          <span className="text-[8px] md:text-[10px] bg-black/20 px-1 rounded truncate capitalize w-fit">
-                            {booking.status.replace('-', ' ')}
-                          </span>
+                          <div className="px-2 w-full truncate h-full flex flex-col justify-center pointer-events-none">
+                            <span className="text-[10px] md:text-sm font-bold truncate leading-tight block">
+                              {guest?.name || 'Guest'}
+                            </span>
+                          </div>
+                          
+                          {/* Drag Resize Handles */}
+                          <div 
+                            className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/40 z-20"
+                            onPointerDown={(e) => handleResizePointerDown(e, booking, 'left')}
+                          />
+                          <div 
+                            className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/40 z-20"
+                            onPointerDown={(e) => handleResizePointerDown(e, booking, 'right')}
+                          />
                         </motion.div>
                       );
                     })}
