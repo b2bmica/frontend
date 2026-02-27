@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { useBookings, type Booking } from '../context/booking-context';
 import { Badge } from './ui/badge';
@@ -23,6 +23,11 @@ export function BookingTable() {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
+
+  // Reset page on search or filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter]);
 
   const filtered = bookings.filter(b => {
     const guestName = typeof b.guestId === 'object' ? b.guestId?.name || '' : '';

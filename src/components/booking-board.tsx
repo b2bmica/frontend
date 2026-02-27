@@ -419,22 +419,27 @@ export function BookingBoard() {
                           <span className="text-[8px] md:text-[10px] bg-black/20 px-1 rounded truncate capitalize w-fit z-10 relative pointer-events-none">
                             {booking.status.replace('-', ' ')}
                           </span>
-                          {/* Resize handle (Right edge) - Improved for real horizontal drag feedback */}
+                          {/* Resize handle (Right edge) - Robust tracking with PointerCapture */}
                           {isEditable && (
                             <div 
-                              className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/20 z-40 flex items-center justify-center group-hover/booking:opacity-100 opacity-0 transition-opacity"
+                              className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize hover:bg-white/30 z-50 flex items-center justify-center opacity-0 group-hover/booking:opacity-100 transition-opacity touch-none"
                               onPointerDown={(e) => {
                                 e.stopPropagation();
+                                (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+                                
                                 const startX = e.clientX;
                                 const originalCheckout = new Date(booking.checkout);
                                 const cardElement = e.currentTarget.parentElement as HTMLElement;
                                 const originalWidth = cardElement.offsetWidth;
+
+                                // Boost z-index during resize
+                                cardElement.style.zIndex = '100';
+                                cardElement.style.transition = 'none'; // Disable transition for pure raw move
                                 
                                 const onPointerMove = (moveEvent: PointerEvent) => {
                                   isResizingRef.current = true;
                                   const deltaX = moveEvent.clientX - startX;
                                   
-                                  // Live visual feedback by stretching the card DOM element
                                   if (cardElement) {
                                     cardElement.style.width = `${Math.max(COLUMN_WIDTH, originalWidth + deltaX)}px`;
                                   }
@@ -444,11 +449,16 @@ export function BookingBoard() {
                                   const deltaX = upEvent.clientX - startX;
                                   const daysDelta = Math.round(deltaX / COLUMN_WIDTH);
                                   
+                                  (e.currentTarget as HTMLDivElement).releasePointerCapture(upEvent.pointerId);
                                   window.removeEventListener('pointermove', onPointerMove);
                                   window.removeEventListener('pointerup', onPointerUp);
                                   
-                                  // Reset card width to original (context update will handle re-render)
-                                  if (cardElement) cardElement.style.width = '';
+                                  // Reset card styles
+                                  if (cardElement) {
+                                    cardElement.style.width = '';
+                                    cardElement.style.zIndex = '';
+                                    cardElement.style.transition = '';
+                                  }
 
                                   if (daysDelta !== 0) {
                                     const newCheckout = format(addDays(originalCheckout, daysDelta), 'yyyy-MM-dd');

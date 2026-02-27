@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, UserPlus, Phone, Mail, Globe, Eye, Loader2, User, ChevronRight } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -24,6 +24,11 @@ export function GuestTable() {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
+
+  // Reset page on search change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
 
   const filtered = guests.filter(g => {
     if (!search) return true;
