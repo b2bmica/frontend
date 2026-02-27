@@ -23,9 +23,9 @@ const STATUS_META: Record<string, { label: string; badge: string; bar: string }>
 };
 
 const TRANSITIONS: Record<string, { label: string; newStatus: string }[]> = {
-  dirty:    [{ label: 'Mark Clean',    newStatus: 'clean'    }, { label: 'Mark Occupied', newStatus: 'occupied' }],
-  occupied: [{ label: 'Mark Dirty',    newStatus: 'dirty'    }, { label: 'Mark Clean',    newStatus: 'clean'    }],
-  clean:    [{ label: 'Mark Occupied', newStatus: 'occupied' }, { label: 'Mark Dirty',    newStatus: 'dirty'    }],
+  dirty:    [{ label: 'Mark Clean',    newStatus: 'clean'    }, { label: 'Mark Occupied', newStatus: 'occupied' }, { label: 'Move to Repair', newStatus: 'maintenance' }],
+  occupied: [{ label: 'Mark Dirty',    newStatus: 'dirty'    }, { label: 'Mark Clean',    newStatus: 'clean'    }, { label: 'Move to Repair', newStatus: 'maintenance' }],
+  clean:    [{ label: 'Mark Occupied', newStatus: 'occupied' }, { label: 'Mark Dirty',    newStatus: 'dirty'    }, { label: 'Move to Repair', newStatus: 'maintenance' }],
   repair:   [{ label: 'Mark Clean',    newStatus: 'clean'    }, { label: 'Mark Dirty',    newStatus: 'dirty'    }],
 };
 

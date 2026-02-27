@@ -43,6 +43,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
   const [showPaymentSelection, setShowPaymentSelection] = useState(false);
   const [showBalanceSettle, setShowBalanceSettle] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi'>('cash');
+  const [isSettled, setIsSettled] = useState(false);
 
   if (!booking) return null;
 
@@ -78,7 +79,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
 
   const config = statusConfig[booking.status] || statusConfig.reserved;
 
-  const [isSettled, setIsSettled] = useState(false);
+
 
   const handleAction = async (action: (id: string) => Promise<void>, isSettlement?: boolean) => {
     setIsActioning(true);

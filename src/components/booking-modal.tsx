@@ -37,6 +37,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const { hotel } = useAuth();
   const [step, setStep] = useState<'guest' | 'booking'>('guest');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Guest search
@@ -108,9 +109,12 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         return start < bEnd && end > bStart;
       });
 
-      return !hasConflict;
-    });
-  }, [rooms, bookings, bookingForm.checkin, bookingForm.checkout]);
+        // Exclude rooms under maintenance
+        const isMaintenance = room.status === 'maintenance' || room.status === 'under-maintenance';
+
+        return !hasConflict && !isMaintenance;
+      });
+    }, [rooms, bookings, bookingForm.checkin, bookingForm.checkout]);
 
   useEffect(() => {
     if (isOpen) {
@@ -197,6 +201,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
     try {
       if (initialBooking) {
         await updateBooking(initialBooking._id, bookingForm);
+        onClose();
       } else {
         const finalData = { 
           ...bookingForm, 
@@ -204,8 +209,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           paymentMethod: bookingForm.advancePayment > 0 ? bookingForm.paymentMethod : undefined
         };
         await createBooking(finalData);
+        setShowSuccess(true);
       }
-      onClose();
     } catch (err: any) {
       setError(err.message);
     }
@@ -228,7 +233,24 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         </div>
 
         <div className="p-6">
-          {step === 'guest' && !showNewGuest && (
+          {showSuccess ? (
+            <div className="py-8 text-center space-y-6 animate-in fade-in zoom-in-95 duration-300">
+              <div className="h-24 w-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                <Info className="h-12 w-12" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Reservation Confirmed!</h3>
+                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest max-w-[300px] mx-auto leading-relaxed">
+                  Room {selectedRoom?.roomNumber} has been secured for {selectedGuest?.name}.
+                </p>
+              </div>
+              <div className="pt-4">
+                <Button onClick={onClose} className="w-full h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black uppercase tracking-widest text-xs shadow-xl shadow-slate-900/20">
+                  Finish & Close
+                </Button>
+              </div>
+            </div>
+          ) : step === 'guest' && !showNewGuest && (
             <div className="space-y-4 py-2">
               <div className="relative group">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />

@@ -49,7 +49,7 @@ export function BookingBoard() {
   const isDraggingRef = useRef(false);
 
   // Week-based navigation
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [weekStart, setWeekStart] = useState(() => addDays(startOfDay(new Date()), -1));
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>();
@@ -90,7 +90,8 @@ export function BookingBoard() {
     const periodEnd = addDays(weekStart, DAYS);
     return bookings.filter(b => {
       if (b.status === 'cancelled') return false;
-      if (statusFilter !== 'all' && b.status !== statusFilter) return false;
+      const isBookingFilter = ['reserved', 'checked-in', 'checked-out'].includes(statusFilter);
+      if (isBookingFilter && b.status !== statusFilter) return false;
       const ci = startOfDay(new Date(b.checkin));
       const co = startOfDay(new Date(b.checkout));
       return ci < periodEnd && co > weekStart;
@@ -98,11 +99,21 @@ export function BookingBoard() {
   }, [bookings, weekStart, statusFilter, DAYS]);
 
   // Status counts
-  const counts = useMemo(() => ({
-    reserved:    bookings.filter(b => b.status === 'reserved').length,
-    'checked-in':  bookings.filter(b => b.status === 'checked-in').length,
-    'checked-out': bookings.filter(b => b.status === 'checked-out').length,
-  }), [bookings]);
+  const counts = useMemo(() => {
+    const bookingCounts = {
+      reserved:    bookings.filter(b => b.status === 'reserved').length,
+      'checked-in':  bookings.filter(b => b.status === 'checked-in').length,
+      'checked-out': bookings.filter(b => b.status === 'checked-out').length,
+    };
+    
+    const roomCounts = {
+      maintenance: rooms.filter(r => r.status?.toLowerCase().includes('maintenan')).length,
+      clean: rooms.filter(r => r.status === 'clean').length,
+      dirty: rooms.filter(r => r.status === 'dirty').length,
+    };
+
+    return { ...bookingCounts, ...roomCounts };
+  }, [bookings, rooms]);
 
   const handleCellClick = (roomId: string, day: Date) => {
     setSelectedRoomId(roomId);
@@ -240,7 +251,7 @@ export function BookingBoard() {
 
           <div className="flex items-center justify-center">
             <Button variant="secondary" size="sm" className="h-7 px-4 rounded-full text-[10px] font-bold uppercase tracking-widest"
-              onClick={() => setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}>
+              onClick={() => setWeekStart(addDays(startOfDay(new Date()), -1))}>
               Go to Today
             </Button>
           </div>
@@ -253,7 +264,7 @@ export function BookingBoard() {
               const label = f.label;
               const count = key === 'all'
                 ? bookings.filter(b => b.status !== 'cancelled').length
-                : counts[key as keyof typeof counts] ?? 0;
+                : (counts[key as keyof typeof counts] ?? 0);
               return (
                 <button
                   key={key}
@@ -274,6 +285,22 @@ export function BookingBoard() {
                 </button>
               );
             })}
+            <button
+               onClick={() => setStatusFilter('maintenance')}
+               className={cn(
+                 "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all",
+                 statusFilter === 'maintenance'
+                   ? "bg-red-500 text-white border-red-500 shadow-sm"
+                   : "bg-red-50 text-red-600 border-red-100 hover:border-red-400"
+               )}
+            >
+               <span className="w-2 h-2 rounded-full flex-shrink-0 bg-red-500" />
+               Repair
+               <span className={cn(
+                 "inline-flex items-center justify-center rounded-full min-w-[18px] h-[18px] text-[10px] px-1",
+                 statusFilter === 'maintenance' ? "bg-white/20" : "bg-red-100/50"
+               )}>{counts.maintenance}</span>
+            </button>
             {statusFilter !== 'all' && (
               <button onClick={() => setStatusFilter('all')} className="h-5 w-5 rounded-full bg-muted flex items-center justify-center">
                 <X className="h-3 w-3 text-muted-foreground" />
@@ -327,7 +354,9 @@ export function BookingBoard() {
 
             {/* Room rows */}
             <div className="relative">
-              {rooms.map((room) => {
+              {rooms
+                .filter(r => statusFilter === 'maintenance' ? (r.status === 'maintenance' || r.status === 'under-maintenance') : true)
+                .map((room) => {
                 const roomBookings = filteredBookings.filter(b => getBookingRoomId(b) === room._id);
                 return (
                   <div key={room._id} className="flex border-b group relative" style={{ height: ROW_HEIGHT }}>
@@ -335,13 +364,14 @@ export function BookingBoard() {
                     {/* Room label - High Z to stay above scrollable cards */}
                     <div className="sticky left-0 z-40 bg-white border-r flex flex-col justify-center px-2 md:px-3 shadow-[2px_0_10px_rgba(0,0,0,0.05)] flex-shrink-0"
                       style={{ width: ROOM_COL, minWidth: ROOM_COL }}>
-                      <div className="font-bold text-xs md:text-sm flex items-center gap-1">
+                      <div className="font-bold text-xs md:text-sm flex items-center gap-1.5">
                         {room.roomNumber}
-                        <span className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0",
-                          room.status === 'clean'        ? 'bg-green-500' :
+                        <span className={cn("w-2 h-2 rounded-full flex-shrink-0",
+                          (room.status === 'maintenance' || room.status === 'under-maintenance') ? 'bg-red-600 animate-pulse' :
+                          room.status === 'clean'        ? 'bg-emerald-500' :
                           room.status === 'occupied'     ? 'bg-blue-500'  :
-                          room.status === 'dirty'        ? 'bg-yellow-500': 'bg-red-500'
-                        )} />
+                          room.status === 'dirty'        ? 'bg-amber-500': 'bg-slate-300'
+                        )} title={room.status} />
                       </div>
                       <div className="text-[10px] text-muted-foreground truncate">{room.roomType}</div>
                       <div className="text-[10px] text-muted-foreground">₹{room.price}</div>
