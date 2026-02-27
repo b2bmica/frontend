@@ -29,9 +29,10 @@ import { BookingModal } from './booking-modal';
 interface BookingDetailSheetProps {
   booking: any;
   onClose: () => void;
+  onOpenGuest?: (id: string) => void;
 }
 
-export function BookingDetailSheet({ booking, onClose }: BookingDetailSheetProps) {
+export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDetailSheetProps) {
   const { hotel } = useAuth();
   const { cancelBooking, checkIn, checkOut, updateBooking } = useBookings();
   const [isActioning, setIsActioning] = useState(false);
@@ -118,8 +119,9 @@ export function BookingDetailSheet({ booking, onClose }: BookingDetailSheetProps
                 <p className="text-[11px] text-muted-foreground font-bold tracking-tight">{guest?.phone} · {guest?.email || 'No email'}</p>
               </div>
               <button 
-                onClick={() => { /* Open Guest Profile? */ }}
+                onClick={() => { if (guest?._id && onOpenGuest) onOpenGuest(guest._id); }}
                 className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center transition-colors"
+                title="View Guest Profile"
               >
                 <ChevronRight className="h-4 w-4 text-muted-foreground" />
               </button>
@@ -196,22 +198,20 @@ export function BookingDetailSheet({ booking, onClose }: BookingDetailSheetProps
         </div>
 
         {/* Action Panel */}
-        <div className="p-6 bg-card border-t flex flex-col gap-3">
-          <div className="flex gap-2">
+        <div className="p-4 bg-card border-t flex flex-col gap-2 relative z-10 shrink-0">
+          <div className="flex flex-wrap gap-2">
             {(booking.status === 'reserved' || booking.status === 'checked-in') && (
               <Button 
                 variant="outline"
-                className="flex-1 h-11 rounded-xl font-bold border-2"
+                className="flex-1 min-w-[110px] h-10 rounded-xl font-bold border-2 text-xs"
                 onClick={() => setShowEditModal(true)}
               >
                 Edit Stay
               </Button>
             )}
-          </div>
-          <div className="flex gap-2">
             {booking.status === 'reserved' && (
               <Button 
-                className="flex-1 h-11 rounded-xl font-black bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/10"
+                className="flex-[2] min-w-[140px] h-10 rounded-xl font-black bg-blue-600 hover:bg-blue-700 text-xs shadow-lg shadow-blue-500/10"
                 onClick={() => handleAction(checkIn)}
                 disabled={isActioning}
               >
@@ -220,14 +220,14 @@ export function BookingDetailSheet({ booking, onClose }: BookingDetailSheetProps
             )}
             {booking.status === 'checked-in' && (
               <Button 
-                className="flex-1 h-11 rounded-xl font-black bg-orange-600 hover:bg-orange-700 shadow-lg shadow-orange-500/10"
+                className="flex-[2] min-w-[140px] h-10 rounded-xl font-black bg-orange-600 hover:bg-orange-700 text-xs shadow-lg shadow-orange-500/10"
                 onClick={() => handleAction((id) => updateBooking(id, { status: 'checked-out', advancePayment: totalAmount }))}
                 disabled={isActioning}
               >
-                <CheckCircle2 className="mr-2 h-4 w-4" /> Settle & Checkout
+                <CheckCircle2 className="mr-2 h-4 w-4" /> Checkout
               </Button>
             )}
-            <Button variant="outline" className="h-11 w-11 p-0 rounded-xl border-2" title="Generate Invoice">
+            <Button variant="outline" className="h-10 w-10 p-0 rounded-xl border-2 shrink-0" title="Generate Invoice">
               <Download className="h-4 w-4" />
             </Button>
           </div>
@@ -235,11 +235,11 @@ export function BookingDetailSheet({ booking, onClose }: BookingDetailSheetProps
           {booking.status !== 'cancelled' && booking.status !== 'checked-out' && (
             <Button 
               variant="outline" 
-              className="w-full h-11 rounded-xl border-2 border-red-100 text-red-600 hover:bg-red-50 font-bold text-xs"
+              className="w-full h-9 rounded-xl border-transparent text-red-500 hover:bg-red-50 hover:text-red-700 hover:border-red-200 font-bold text-xs transition-colors"
               onClick={() => handleAction(cancelBooking)}
               disabled={isActioning}
             >
-              <Trash2 className="mr-2 h-4 w-4" /> Void Reservation
+              <Trash2 className="mr-2 h-3.5 w-3.5" /> Cancel Reservation
             </Button>
           )}
         </div>

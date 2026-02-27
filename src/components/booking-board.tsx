@@ -15,6 +15,7 @@ import { GuestProfileSheet } from '@/components/guest-profile-sheet';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'All' },
@@ -53,6 +54,8 @@ export function BookingBoard() {
   const [selectedDate, setSelectedDate] = useState<string | undefined>();
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
+  const [pendingUpdate, setPendingUpdate] = useState<{booking: Booking, updates: any} | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const [isMobile, setIsMobile] = useState(false);
   const [daysCount, setDaysCount] = useState(14);
@@ -130,48 +133,53 @@ export function BookingBoard() {
       // If dropped in the same place approximately, don't update
       if (newCheckin === booking.checkin && targetRoom._id === booking.roomId) return;
 
-      try {
-        await updateBooking(booking._id, {
-          roomId: targetRoom._id,
-          checkin: newCheckin,
-          checkout: newCheckout
-        });
-      } catch (err) {
-        console.error("Drag move failed", err);
-      }
+      setPendingUpdate({ booking, updates: { roomId: targetRoom._id, checkin: newCheckin, checkout: newCheckout } });
     }
   };
 
   const handleResizePointerDown = (e: React.PointerEvent, booking: Booking, side: 'left' | 'right') => {
+    if (booking.status === 'checked-out' || booking.status === 'cancelled') return;
+    
     e.stopPropagation();
     e.preventDefault();
-    const startX = e.clientX;
-    const target = e.currentTarget;
-    target.setPointerCapture(e.pointerId);
     
-    const onPointerUp = async (upEvent: any) => {
+    const startX = e.clientX;
+    
+    const onPointerUp = async (upEvent: Event) => {
       const pointerEvt = upEvent as PointerEvent;
-      target.releasePointerCapture(pointerEvt.pointerId);
+      window.removeEventListener('pointerup', onPointerUp);
+      
       const deltaX = pointerEvt.clientX - startX;
       // Calculate how many columns dragged over. Each column is COLUMN_WIDTH
       const deltaDays = Math.round(deltaX / COLUMN_WIDTH);
-      
-      target.removeEventListener('pointerup', onPointerUp);
       
       if (deltaDays !== 0) {
         if (side === 'left') {
           const newCheckin = format(addDays(new Date(booking.checkin), deltaDays), 'yyyy-MM-dd');
           if (newCheckin >= booking.checkout) return; // prevent invalid state
-          await updateBooking(booking._id, { checkin: newCheckin });
+          setPendingUpdate({ booking, updates: { checkin: newCheckin } });
         } else {
           const newCheckout = format(addDays(new Date(booking.checkout), deltaDays), 'yyyy-MM-dd');
           if (newCheckout <= booking.checkin) return; // prevent invalid state
-          await updateBooking(booking._id, { checkout: newCheckout });
+          setPendingUpdate({ booking, updates: { checkout: newCheckout } });
         }
       }
     };
     
-    target.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointerup', onPointerUp);
+  };
+
+  const confirmUpdate = async () => {
+    if (!pendingUpdate) return;
+    setIsUpdating(true);
+    try {
+      await updateBooking(pendingUpdate.booking._id, pendingUpdate.updates);
+    } catch (err) {
+      console.error("Update failed", err);
+    } finally {
+      setIsUpdating(false);
+      setPendingUpdate(null);
+    }
   };
 
   if (loading) {
@@ -377,10 +385,12 @@ export function BookingBoard() {
 
                       const guest = getGuest(booking);
 
+                      const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
+
                       return (
                         <motion.div
                           key={`${booking._id}-${booking.checkin}-${booking.checkout}`}
-                          drag
+                          drag={isEditable}
                           dragSnapToOrigin
                           dragElastic={0}
                           dragMomentum={false}
@@ -389,8 +399,9 @@ export function BookingBoard() {
                           initial={{ opacity: 0, scale: 0.95 }}
                           animate={{ opacity: 1, scale: 1 }}
                           className={cn(
-                            "absolute z-10 rounded-md p-1.5 text-white shadow-md cursor-grab overflow-hidden flex flex-col justify-between transition-all",
-                            getStatusColor(booking.status)
+                            "absolute z-10 rounded-md p-1.5 text-white shadow-md overflow-hidden flex flex-col justify-between transition-all",
+                            getStatusColor(booking.status),
+                            isEditable ? "cursor-grab" : "cursor-pointer"
                           )}
                           style={{
                             left:   ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 1,
@@ -415,14 +426,18 @@ export function BookingBoard() {
                           </span>
                           
                           {/* Drag Resize Handles */}
-                          <div 
-                            className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/40 z-20"
-                            onPointerDown={(e) => handleResizePointerDown(e, booking, 'left')}
-                          />
-                          <div 
-                            className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/40 z-20"
-                            onPointerDown={(e) => handleResizePointerDown(e, booking, 'right')}
-                          />
+                          {isEditable && (
+                            <>
+                              <div 
+                                className="absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/40 z-20"
+                                onPointerDown={(e) => handleResizePointerDown(e, booking, 'left')}
+                              />
+                              <div 
+                                className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/40 z-20"
+                                onPointerDown={(e) => handleResizePointerDown(e, booking, 'right')}
+                              />
+                            </>
+                          )}
                         </motion.div>
                       );
                     })}
@@ -436,8 +451,26 @@ export function BookingBoard() {
 
       <BookingModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}
         selectedRoomId={selectedRoomId} selectedDate={selectedDate} />
-      <BookingDetailSheet booking={selectedBooking} onClose={() => setSelectedBooking(null)} />
-      <GuestProfileSheet guestId={selectedGuestId} onClose={() => setSelectedGuestId(null)} />
+      <BookingDetailSheet booking={selectedBooking} onClose={() => setSelectedBooking(null)} onOpenGuest={(id) => setSelectedGuestId(id)} />
+      <GuestProfileSheet guestId={selectedGuestId} onClose={() => setSelectedGuestId(null)} onBookingClick={(b) => setSelectedBooking(b)} />
+      
+      <Dialog open={!!pendingUpdate} onOpenChange={(open) => !open && !isUpdating && setPendingUpdate(null)}>
+        <DialogContent className="sm:max-w-[400px] border-none shadow-2xl rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-black text-xl tracking-tight">Confirm Modification</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 font-bold text-slate-500">
+            Please confirm you want to proceed with structural date and room assignments updates for this itinerary.
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" className="rounded-xl font-bold" onClick={() => setPendingUpdate(null)} disabled={isUpdating}>Cancel</Button>
+            <Button className="rounded-xl font-bold px-8 shadow-lg shadow-primary/20" onClick={confirmUpdate} disabled={isUpdating}>
+              {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {isUpdating ? 'Updating...' : 'Save Dates'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

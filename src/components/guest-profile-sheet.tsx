@@ -27,9 +27,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface GuestProfileSheetProps {
   guestId: string | null;
   onClose: () => void;
+  onBookingClick?: (booking: any) => void;
 }
 
-export function GuestProfileSheet({ guestId, onClose }: GuestProfileSheetProps) {
+export function GuestProfileSheet({ guestId, onClose, onBookingClick }: GuestProfileSheetProps) {
   const { rooms } = useBookings();
   const [guest, setGuest] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
@@ -151,7 +152,11 @@ export function GuestProfileSheet({ guestId, onClose }: GuestProfileSheetProps) 
                         const config = statusConfig[b.status] || { color: 'text-slate-400', bgColor: 'bg-slate-100' };
                         
                         return (
-                          <div key={b._id} className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-sm hover:shadow-md transition-shadow group">
+                          <div 
+                            key={b._id} 
+                            onClick={() => { if (onBookingClick) onBookingClick(b); }}
+                            className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-sm hover:shadow-md transition-shadow group cursor-pointer"
+                          >
                             <div className="flex items-center justify-between mb-4">
                               <div className="flex items-center gap-3">
                                 <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center font-black text-slate-400 group-hover:text-primary transition-colors">
