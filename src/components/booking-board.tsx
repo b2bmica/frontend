@@ -325,8 +325,8 @@ export function BookingBoard() {
           <div className="inline-block min-w-full relative" ref={boardContentRef}>
 
             {/* Column headers */}
-            <div className="flex sticky top-0 z-20 bg-card border-b">
-              <div className="sticky left-0 z-30 bg-card border-r shadow-sm flex items-center px-2 md:px-3 font-bold text-muted-foreground uppercase text-[10px] tracking-wider"
+            <div className="flex sticky top-0 z-30 bg-card border-b">
+              <div className="sticky left-0 z-50 bg-slate-50 border-r shadow-[2px_0_10px_rgba(0,0,0,0.05)] flex items-center px-2 md:px-3 font-bold text-muted-foreground uppercase text-[10px] tracking-wider"
                 style={{ width: ROOM_COL, height: 40, minWidth: ROOM_COL }}>
                 Rooms
               </div>
@@ -355,8 +355,8 @@ export function BookingBoard() {
                 return (
                   <div key={room._id} className="flex border-b group relative" style={{ height: ROW_HEIGHT }}>
 
-                    {/* Room label */}
-                    <div className="sticky left-0 z-10 bg-card border-r flex flex-col justify-center px-2 md:px-3 shadow-sm flex-shrink-0"
+                    {/* Room label - High Z to stay above scrollable cards */}
+                    <div className="sticky left-0 z-40 bg-white border-r flex flex-col justify-center px-2 md:px-3 shadow-[2px_0_10px_rgba(0,0,0,0.05)] flex-shrink-0"
                       style={{ width: ROOM_COL, minWidth: ROOM_COL }}>
                       <div className="font-bold text-xs md:text-sm flex items-center gap-1">
                         {room.roomNumber}
