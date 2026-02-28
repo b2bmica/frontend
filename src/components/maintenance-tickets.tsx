@@ -54,12 +54,17 @@ export function MaintenanceTickets() {
     fetchTickets();
   }, []);
 
+  const [statusLoading, setStatusLoading] = useState<string | null>(null);
+
   const handleUpdateStatus = async (id: string, status: string) => {
+    setStatusLoading(id);
     try {
       await api.updateMaintenanceStatus(id, status);
-      fetchTickets();
+      await fetchTickets();
     } catch (err) {
       console.error(err);
+    } finally {
+      setStatusLoading(null);
     }
   };
 
@@ -111,7 +116,7 @@ export function MaintenanceTickets() {
             <span className="text-[9px] font-black uppercase tracking-[0.2em] text-red-600">Assets</span>
           </div>
           <h2 className="text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
-             Repair Control
+             Maintenance & Repair
           </h2>
           <p className="text-xs text-slate-500 font-bold max-w-md leading-relaxed">Technical audits and deficiency rectification.</p>
         </div>
@@ -189,15 +194,15 @@ export function MaintenanceTickets() {
                       <div className="flex-1 space-y-2 text-center md:text-left min-w-0">
                         <div className="flex flex-wrap items-center justify-center md:justify-start gap-1.5 mb-1">
                             {ticket.priority === 'urgent' && (
-                                <Badge className="bg-red-600 text-white text-[7px] font-black uppercase tracking-widest h-4 hover:bg-red-600">
-                                  <AlertTriangle className="h-2.5 w-2.5 mr-0.5" /> Urgent
+                                <Badge className="bg-red-600 text-white text-[9px] font-black uppercase tracking-widest h-5 hover:bg-red-600">
+                                  <AlertTriangle className="h-3 w-3 mr-0.5" /> Urgent
                                 </Badge>
                             )}
-                            <Badge variant="outline" className="text-[7px] font-black uppercase tracking-widest h-4 border-slate-200 text-slate-400">
+                            <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest h-5 border-slate-200 text-slate-400">
                                 {ticket.status.replace('-', ' ')}
                             </Badge>
-                            <span className="text-[8px] font-bold text-slate-300 flex items-center gap-0.5 ml-1 uppercase tracking-tighter">
-                                <Clock className="h-2.5 w-2.5" /> {format(new Date(ticket.createdAt), 'MMM dd · HH:mm')}
+                            <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1 ml-1 uppercase tracking-tighter">
+                                <Clock className="h-3 w-3" /> {format(new Date(ticket.createdAt), 'MMM dd · HH:mm')}
                             </span>
                         </div>
                         <h4 className="font-bold text-sm md:text-base text-slate-900 leading-snug break-words">
@@ -205,9 +210,9 @@ export function MaintenanceTickets() {
                         </h4>
                         
                         {ticket.reportedBy?.name && (
-                           <div className="flex items-center justify-center md:justify-start gap-1.5 opacity-60">
-                              <User className="h-2.5 w-2.5 text-slate-400" />
-                              <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">By {ticket.reportedBy.name.split(' ')[0]}</span>
+                           <div className="flex items-center justify-center md:justify-start gap-1.5 opacity-80 mt-1">
+                              <User className="h-3 w-3 text-slate-400" />
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">By {ticket.reportedBy.name}</span>
                            </div>
                         )}
                       </div>
@@ -217,25 +222,29 @@ export function MaintenanceTickets() {
                         {ticket.status === 'pending' && (
                           <Button 
                             size="sm" 
+                            disabled={statusLoading === ticket._id}
                             onClick={() => handleUpdateStatus(ticket._id, 'in-progress')}
-                            className="rounded-lg h-8 text-[8px] font-black uppercase tracking-widest bg-slate-900 text-white hover:bg-slate-800 px-4"
+                            className="rounded-lg h-9 text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white hover:bg-slate-800 px-5 transition-all active:scale-95"
                           >
+                            {statusLoading === ticket._id ? <Loader2 className="h-3 w-3 animate-spin mr-1.5" /> : null}
                             Acknowledge
                           </Button>
                         )}
                         {(ticket.status === 'in-progress' || ticket.status === 'pending') && (
                           <Button 
                             size="sm" 
+                            disabled={statusLoading === ticket._id}
                             onClick={() => handleUpdateStatus(ticket._id, 'resolved')}
-                            className="rounded-lg h-8 text-[8px] font-black uppercase tracking-widest bg-emerald-500 text-white hover:bg-emerald-600 px-4 shadow-lg shadow-emerald-500/10"
+                            className="rounded-lg h-9 text-[10px] font-black uppercase tracking-widest bg-emerald-500 text-white hover:bg-emerald-600 px-5 shadow-lg shadow-emerald-500/10 transition-all active:scale-95"
                           >
+                            {statusLoading === ticket._id ? <Loader2 className="h-3 w-3 animate-spin mr-1.5" /> : null}
                             Rectified
                           </Button>
                         )}
                         {ticket.status === 'resolved' && (
-                          <div className="flex items-center gap-1.5 px-4 py-2 bg-emerald-50 rounded-lg text-emerald-600 border border-emerald-100/30">
-                             <CheckCircle className="h-3.5 w-3.5" />
-                             <span className="text-[8px] font-black uppercase tracking-widest">Closed</span>
+                          <div className="flex items-center gap-2 px-5 py-2.5 bg-emerald-50 rounded-xl text-emerald-600 border border-emerald-100/30">
+                             <CheckCircle className="h-4 w-4" />
+                             <span className="text-[10px] font-black uppercase tracking-widest">Closed</span>
                           </div>
                         )}
                       </div>
@@ -261,7 +270,7 @@ export function MaintenanceTickets() {
            <form onSubmit={handleCreateTicket} className="p-8 space-y-6 bg-white">
               <div className="space-y-5">
                  <div className="space-y-1.5">
-                    <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 px-1">Source Unit</Label>
+                     <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Source Unit</Label>
                     <Select value={newTicket.roomId} onValueChange={val => setNewTicket({...newTicket, roomId: val})}>
                        <SelectTrigger className="h-11 rounded-xl bg-slate-50 border-none font-black text-xs px-4">
                           <SelectValue placeholder="Select Room" />
@@ -275,7 +284,7 @@ export function MaintenanceTickets() {
                  </div>
 
                  <div className="space-y-1.5">
-                    <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 px-1">Issue Overview</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Issue Overview</Label>
                     <Input 
                        required 
                        placeholder="e.g. AC cooling insufficient..."
@@ -286,7 +295,7 @@ export function MaintenanceTickets() {
                  </div>
 
                  <div className="space-y-1.5">
-                    <Label className="text-[9px] font-black uppercase tracking-widest text-slate-400 px-1">Gravity</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">Gravity</Label>
                     <div className="grid grid-cols-3 gap-1.5">
                        {['low', 'medium', 'urgent'].map(p => (
                           <button
@@ -294,7 +303,7 @@ export function MaintenanceTickets() {
                              type="button"
                              onClick={() => setNewTicket({...newTicket, priority: p})}
                              className={cn(
-                                "h-10 rounded-xl text-[9px] font-black uppercase tracking-widest border-2 transition-all",
+                                "h-11 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 transition-all",
                                 newTicket.priority === p 
                                    ? "bg-slate-900 border-slate-900 text-white shadow-lg" 
                                    : "bg-white border-slate-50 text-slate-400 hover:border-slate-100"
@@ -308,7 +317,7 @@ export function MaintenanceTickets() {
               </div>
 
               <DialogFooter>
-                 <Button type="submit" disabled={isSubmitting} className="w-full h-12 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest text-[10px] shadow-xl shadow-red-600/20 transition-all active:scale-[0.98]">
+                 <Button type="submit" disabled={isSubmitting} className="w-full h-12 rounded-xl bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-widest text-xs shadow-xl shadow-red-600/20 transition-all active:scale-[0.98]">
                     {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Log Request <ArrowRight className="ml-2 h-4 w-4" /></>}
                  </Button>
               </DialogFooter>
