@@ -10,6 +10,7 @@ import { Calendar, ChevronRight, Eye, Globe, Loader2, LogIn, LogOut, Mail, MoreH
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { BookingDetailSheet } from './booking-detail-sheet';
 import { BookingModal } from './booking-modal';
+import { GuestProfileSheet } from './guest-profile-sheet';
 import { cn } from '../lib/utils';
 
 export function BookingTable() {
@@ -18,6 +19,7 @@ export function BookingTable() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
+  const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
   const [actioningId, setActioningId] = useState<string | null>(null);
   
   // Pagination
@@ -127,7 +129,12 @@ export function BookingTable() {
                   return (
                     <TableRow key={booking._id} className="hover:bg-muted/20 transition-colors">
                       <TableCell>
-                        <div className="font-medium">{guest?.name || '—'}</div>
+                        <button 
+                          className="font-medium hover:text-primary transition-colors text-left"
+                          onClick={() => guest?._id && setSelectedGuestId(guest._id)}
+                        >
+                          {guest?.name || '—'}
+                        </button>
                         <div className="text-xs text-muted-foreground">{guest?.phone || ''}</div>
                       </TableCell>
                       <TableCell>
@@ -256,9 +263,27 @@ export function BookingTable() {
               )} />
 
               <div className="flex items-start justify-between">
-                <div className="space-y-1">
+                <div className="space-y-1 overflow-hidden pr-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-black text-slate-900 tracking-tight">{guest?.name || 'Unknown Guest'}</span>
+                     <button 
+                        className="text-sm font-black text-slate-900 tracking-tight hover:text-primary transition-colors truncate"
+                        onClick={(e) => {
+                           e.stopPropagation();
+                           if (guest?._id) setSelectedGuestId(guest._id);
+                        }}
+                     >
+                        {guest?.name || 'Unknown Guest'}
+                     </button>
+                     <button 
+                        className="h-6 w-6 rounded-full hover:bg-slate-100 flex items-center justify-center transition-colors flex-shrink-0"
+                        onClick={(e) => {
+                           e.stopPropagation();
+                           if (guest?._id) setSelectedGuestId(guest._id);
+                        }}
+                        title="View Guest Profile"
+                     >
+                        <ChevronRight className="h-3 w-3 text-slate-400" />
+                     </button>
                     <Badge variant="outline" className={cn(
                       "text-[8px] font-black uppercase tracking-widest border-none h-4.5 px-1.5 rounded-md",
                       status === 'reserved' ? 'bg-emerald-50 text-emerald-600' :
@@ -309,12 +334,13 @@ export function BookingTable() {
         )}
       </div>
 
-      <BookingDetailSheet booking={selectedBooking} onClose={() => setSelectedBooking(null)} />
+      <BookingDetailSheet booking={selectedBooking} onClose={() => setSelectedBooking(null)} onOpenGuest={(id) => setSelectedGuestId(id)} />
       <BookingModal 
         isOpen={!!editingBooking} 
         onClose={() => setEditingBooking(null)} 
         initialBooking={editingBooking} 
       />
+      <GuestProfileSheet guestId={selectedGuestId} onClose={() => setSelectedGuestId(null)} onBookingClick={(b) => setSelectedBooking(b)} />
     </div>
   );
 }
