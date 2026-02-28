@@ -688,8 +688,8 @@ export function BookingBoard() {
                                      }}
                                    >
                                       <div className="flex flex-col items-center">
-                                         <span className="text-[10px] md:text-sm font-black italic tracking-tighter leading-none">{group.length} BOOKINGS</span>
-                                         <span className="text-[8px] font-black capitalize opacity-60 tracking-[0.2em] mt-0.5">Overlap Pool</span>
+                                         <span className="text-[14px] md:text-base font-black italic tracking-tighter leading-none">{group.length}</span>
+                                         <span className="text-[8px] font-black capitalize opacity-60 tracking-widest -mt-0.5">Overlap</span>
                                       </div>
                                       {/* Indicator dots */}
                                       <div className="flex gap-1 mt-1.5 flex-wrap justify-center px-1">
