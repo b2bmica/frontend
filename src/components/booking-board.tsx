@@ -491,37 +491,57 @@ export function BookingBoard() {
                       />
                     ))}
 
-                    {/* Booking bars — absolutely positioned within the row */}
-                    {(() => {
-                        const groups: Booking[][] = [];
-                        const sorted = [...roomBookings].sort((a,b) => parseISO(a.checkin).getTime() - parseISO(b.checkin).getTime());
-                        for (const b of sorted) {
-                          let foundGroup = -1;
-                          for (let i = 0; i < groups.length; i++) {
-                            if (groups[i].some(e => {
-                              const aS = parseISO(e.checkin);
-                              const aE = parseISO(e.checkout);
-                              const bS = parseISO(b.checkin);
-                              const bE = parseISO(b.checkout);
-                              return bS < aE && bE > aS;
-                            })) {
-                               foundGroup = i;
-                               break;
+                     {/* Smart Grouping Logic: Merge days with identical booking sets */}
+                     {(() => {
+                        const segments: { start: Date; end: Date; bookings: Booking[] }[] = [];
+                        let currentGroup: { start: Date; bookings: Booking[] } | null = null;
+                        
+                        // Check day-by-day to find intervals with identical booking sets
+                        timeline.forEach((day, idx) => {
+                          const atDay = roomBookings.filter(b => {
+                            const s = parseISO(b.checkin);
+                            const e = parseISO(b.checkout);
+                            return day >= s && day < e;
+                          });
+                          
+                          const ids = atDay.map(b => b._id).sort().join(',');
+                          const currentIds = currentGroup?.bookings.map(b => b._id).sort().join(',');
+
+                          if (ids !== currentIds) {
+                            if (currentGroup) {
+                              segments.push({
+                                start: currentGroup.start,
+                                end: day,
+                                bookings: currentGroup.bookings
+                              });
+                            }
+                            if (atDay.length > 0) {
+                              currentGroup = { start: day, bookings: atDay };
+                            } else {
+                              currentGroup = null;
                             }
                           }
-                          if (foundGroup !== -1) groups[foundGroup].push(b);
-                          else groups.push([b]);
-                        }
+                          
+                          // Handle last day
+                          if (idx === timeline.length - 1 && currentGroup) {
+                            segments.push({
+                              start: currentGroup.start,
+                              end: addDays(day, 1),
+                              bookings: currentGroup.bookings
+                            });
+                          }
+                        });
 
-                        return groups.map((group, groupIdx) => {
+                        return segments.map((seg, segIdx) => {
+                          const group = seg.bookings;
                           if (group.length === 1) {
                             const booking = group[0];
                             const checkinDate  = startOfDay(new Date(booking.checkin));
                             const checkoutDate = startOfDay(new Date(booking.checkout));
                             const weekStartDay = startOfDay(weekStart);
 
-                            const offsetDays   = differenceInDays(checkinDate, weekStartDay);
-                            const duration     = differenceInDays(checkoutDate, checkinDate);
+                            const offsetDays   = differenceInDays(seg.start, weekStartDay);
+                            const duration     = differenceInDays(seg.end, seg.start);
 
                             if (offsetDays + duration <= 0 || offsetDays >= DAYS) return null;
                             const clampedOffset   = Math.max(0, offsetDays);
@@ -530,11 +550,14 @@ export function BookingBoard() {
 
                             const guest = getGuest(booking);
                             const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
-
+                            
+                            // Check if this card represents the START of the actual booking (for dragging)
+                            const isStartSegment = isSameDay(seg.start, checkinDate) || isBefore(seg.start, weekStartDay);
+                            
                             return (
                               <motion.div
-                                key={`${booking._id}-${booking.checkin}-${booking.checkout}`}
-                                drag={isEditable && resizingId !== booking._id}
+                                key={`${booking._id}-${seg.start.toISOString()}`}
+                                drag={isEditable && resizingId !== booking._id && isStartSegment}
                                 dragSnapToOrigin
                                 dragElastic={0}
                                 dragMomentum={false}
@@ -662,6 +685,7 @@ export function BookingBoard() {
 
                                             if (isClashing) return;
                                             
+                                             const nights = differenceInDays(proposedEnd, proposedStart);
                                              if (proposedEnd > proposedStart) {
                                                setPendingUpdate({
                                                   booking,
@@ -695,15 +719,11 @@ export function BookingBoard() {
                               </motion.div>
                             );
                           } else {
-                            // Render Group Card
-                            const checkins  = group.map(b => parseISO(b.checkin).getTime());
-                            const checkouts = group.map(b => parseISO(b.checkout).getTime());
-                            const minCheckin  = startOfDay(new Date(Math.min(...checkins)));
-                            const maxCheckout = startOfDay(new Date(Math.max(...checkouts)));
+                            // Render Group Card for the shared overlap period
                             const weekStartDay = startOfDay(weekStart);
 
-                            const offsetDays   = differenceInDays(minCheckin, weekStartDay);
-                            const duration     = differenceInDays(maxCheckout, minCheckin);
+                            const offsetDays   = differenceInDays(seg.start, weekStartDay);
+                            const duration     = differenceInDays(seg.end, seg.start);
 
                             if (offsetDays + duration <= 0 || offsetDays >= DAYS) return null;
                             const clampedOffset   = Math.max(0, offsetDays);
@@ -711,7 +731,7 @@ export function BookingBoard() {
                             if (clampedDuration <= 0) return null;
 
                             return (
-                               <Popover key={`group-${groupIdx}`}>
+                               <Popover key={`group-${segIdx}`}>
                                  <PopoverTrigger asChild>
                                    <div
                                      className="absolute z-10 rounded-md p-1.5 text-white shadow-xl flex flex-col justify-center items-center transition-all bg-slate-900 cursor-pointer overflow-hidden border border-white/20"
@@ -748,15 +768,15 @@ export function BookingBoard() {
                                                 onClick={() => setSelectedBooking(b)}
                                                 className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 transition-colors group/item"
                                              >
-                                                <div className="flex items-center gap-3">
-                                                   <div className={cn("w-2 h-8 rounded-full", getStatusColor(b.status).split(' ')[0])} />
-                                                   <div className="text-left">
-                                                      <p className="text-[11px] font-black tracking-tight text-slate-900 group-hover/item:text-primary transition-colors">{g?.name || 'Guest'}</p>
-                                                      <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">
-                                                         {format(parseISO(b.checkin), 'MMM dd')} — {format(parseISO(b.checkout), 'MMM dd')}
-                                                      </p>
-                                                   </div>
-                                                </div>
+                                                 <div className="flex items-center gap-3">
+                                                    <div className={cn("w-2 h-8 rounded-full", getStatusColor(b.status).split(' ')[0])} />
+                                                    <div className="text-left">
+                                                       <p className="text-[11px] font-black tracking-tight text-slate-900 group-hover/item:text-primary transition-colors">{g?.name || 'Guest'}</p>
+                                                       <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter">
+                                                          {format(parseISO(b.checkin), 'MMM dd')} — {format(parseISO(b.checkout), 'MMM dd')} • {differenceInDays(parseISO(b.checkout), parseISO(b.checkin))}N
+                                                       </p>
+                                                    </div>
+                                                 </div>
                                                 <div className={cn(
                                                    "px-1.5 py-0.5 rounded-md text-[7px] font-black capitalize tracking-widest",
                                                    b.status === 'cancelled' ? "bg-slate-100 text-slate-400" :
