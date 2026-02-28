@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 
-const STATUS_TABS = ['all', 'dirty', 'clean', 'occupied'] as const;
+const STATUS_TABS = ['all', 'dirty', 'clean', 'occupied', 'repair'] as const;
 
 const STATUS_META: Record<string, { label: string; badge: string; bar: string }> = {
   clean:    { label: 'Clean',    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',  bar: 'bg-emerald-500' },
@@ -23,9 +23,9 @@ const STATUS_META: Record<string, { label: string; badge: string; bar: string }>
 };
 
 const TRANSITIONS: Record<string, { label: string; newStatus: string }[]> = {
-  dirty:    [{ label: 'Mark Clean',    newStatus: 'clean'    }, { label: 'Mark Occupied', newStatus: 'occupied' }, { label: 'Move to Repair', newStatus: 'maintenance' }],
-  occupied: [{ label: 'Mark Dirty',    newStatus: 'dirty'    }, { label: 'Mark Clean',    newStatus: 'clean'    }, { label: 'Move to Repair', newStatus: 'maintenance' }],
-  clean:    [{ label: 'Mark Occupied', newStatus: 'occupied' }, { label: 'Mark Dirty',    newStatus: 'dirty'    }, { label: 'Move to Repair', newStatus: 'maintenance' }],
+  dirty:    [{ label: 'Mark Clean',    newStatus: 'clean'    }, { label: 'Mark Occupied', newStatus: 'occupied' }, { label: 'Move to Repair',   newStatus: 'maintenance' }],
+  occupied: [{ label: 'Mark Dirty',    newStatus: 'dirty'    }, { label: 'Mark Clean',    newStatus: 'clean'    }, { label: 'Move to Repair',   newStatus: 'maintenance' }],
+  clean:    [{ label: 'Mark Occupied', newStatus: 'occupied' }, { label: 'Mark Dirty',    newStatus: 'dirty'    }, { label: 'Move to Repair',   newStatus: 'maintenance' }],
   repair:   [{ label: 'Mark Clean',    newStatus: 'clean'    }, { label: 'Mark Dirty',    newStatus: 'dirty'    }],
 };
 
@@ -36,7 +36,10 @@ export function HousekeepingBoard() {
   const [actioningId, setActioning] = useState<string | null>(null);
 
   const filtered = rooms.filter(r => {
-    if (filter !== 'all' && r.status !== filter) return false;
+    if (filter !== 'all') {
+      const effectiveStatus = (r.status === 'maintenance' || r.status === 'under-maintenance') ? 'repair' : r.status;
+      if (effectiveStatus !== filter) return false;
+    }
     if (search) {
       const q = search.toLowerCase();
       return r.roomNumber.toLowerCase().includes(q) || r.roomType.toLowerCase().includes(q);

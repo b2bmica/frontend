@@ -29,7 +29,7 @@ const sections = [
     title: "Property",
     items: [
       { title: "Housekeeping", id: "housekeeping", icon: Home },
-      { title: "Maintenance", id: "maintenance", icon: Wrench },
+      { title: "Repair Control", id: "maintenance", icon: Wrench },
       { title: "Room List", id: "rooms", icon: Bed },
     ]
   },

@@ -433,8 +433,8 @@ export function BookingBoard() {
                           >
                             {guest?.name || 'Guest'}
                           </button>
-                          <span className="text-[8px] md:text-[10px] bg-black/20 px-1 rounded truncate capitalize w-fit z-10 relative pointer-events-none">
-                            {booking.status.replace('-', ' ')}
+                          <span className="text-[8px] md:text-[10px] bg-black/20 px-1.5 py-0.5 rounded-full truncate font-black uppercase tracking-tighter w-fit z-10 relative pointer-events-none">
+                            {duration} Night{duration > 1 ? 's' : ''}
                           </span>
                           {/* Resize handle (Right edge) - Robust tracking with PointerCapture */}
                           {isEditable && (

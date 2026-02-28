@@ -27,11 +27,11 @@ const AMENITIES_OPTIONS = [
 ];
 
 const statusColors: Record<string, string> = {
-  clean: 'bg-green-500',
-  dirty: 'bg-yellow-500',
+  clean: 'bg-emerald-500',
+  dirty: 'bg-amber-400',
   occupied: 'bg-blue-500',
-  maintenance: 'bg-red-500',
-  'under-maintenance': 'bg-red-500',
+  maintenance: 'bg-red-600',
+  'under-maintenance': 'bg-red-600',
 };
 
 const defaultForm = {
@@ -223,9 +223,9 @@ export function RoomInventory() {
                   <Badge variant="secondary" className={cn(
                     "text-[9px] font-bold uppercase tracking-wider h-6 border-none px-3", 
                     statusColors[room.status] || 'bg-slate-100', 
-                    'text-white'
+                    'text-white shadow-sm shadow-black/10'
                   )}>
-                    {room.status === 'under-maintenance' ? 'Repair' : room.status}
+                    {(room.status === 'maintenance' || room.status === 'under-maintenance') ? 'Repair' : room.status}
                   </Badge>
                 </div>
                 

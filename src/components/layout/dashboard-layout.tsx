@@ -3,7 +3,6 @@ import { Bell, LogOut, Settings, Wrench, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AppSidebar } from "@/components/app-sidebar"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
-import { ModeToggle } from "@/components/mode-toggle"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -44,7 +43,7 @@ export default function DashboardLayout({
                  activeTab === 'overview' ? 'Stats Overview' :
                  activeTab === 'rooms' ? 'Room List' :
                  activeTab === 'housekeeping' ? 'Housekeeping' :
-                 activeTab === 'maintenance' ? 'Maintenance' :
+                 activeTab === 'maintenance' ? 'Repair Control' :
                  activeTab === 'guests' ? 'Guest History' :
                  activeTab === 'folio' ? 'Payments & Folio' :
                  activeTab === 'reports' ? 'Performance Report' :
@@ -69,7 +68,6 @@ export default function DashboardLayout({
             <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary">
               <Bell className="h-4 w-4" />
             </Button>
-            <ModeToggle />
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
