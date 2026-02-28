@@ -4,7 +4,7 @@ import {
   differenceInDays, startOfDay, isBefore, parseISO
 } from 'date-fns';
 import { motion } from 'framer-motion';
-import { Loader2, Search, UserPlus, IndianRupee, Info, Printer, ChevronLeft, ChevronRight, ChevronDown, Plus, Bed, X, ShieldCheck } from 'lucide-react';
+import { Loader2, Search, UserPlus, IndianRupee, Info, Printer, ChevronLeft, ChevronRight, ChevronDown, Plus, Bed, X, ShieldCheck, ArrowRight, Calendar } from 'lucide-react';
 import { useBookings, type Booking } from '../context/booking-context';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -62,6 +62,19 @@ export function BookingBoard() {
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
   const [resizingId, setResizingId] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [pendingUpdate, setPendingUpdate] = useState<{
+    booking: Booking;
+    updates: { roomId: string; checkin: string; checkout: string };
+    type: 'move' | 'resize';
+    details: {
+      oldRoom?: string;
+      newRoom?: string;
+      oldCheckin: string;
+      newCheckin: string;
+      oldCheckout: string;
+      newCheckout: string;
+    }
+  } | null>(null);
 
   const [isMobile, setIsMobile] = useState(false);
   const [daysCount, setDaysCount] = useState(14);
@@ -188,13 +201,21 @@ export function BookingBoard() {
       if (isClashing) return;
       if (newCheckin === currentCheckin && targetRoom._id === getBookingRoomId(booking)) return;
 
-      const confirmText = targetRoom._id !== getBookingRoomId(booking) 
-        ? `Move booking to room ${targetRoom.roomNumber} on ${newCheckin}?`
-        : `Change stay dates to ${newCheckin} - ${newCheckout}?`;
-
-      if (window.confirm(confirmText)) {
-        updateBooking(booking._id, { roomId: targetRoom._id, checkin: newCheckin, checkout: newCheckout });
-      }
+      const oldRoom = rooms.find(r => r._id === getBookingRoomId(booking));
+      
+      setPendingUpdate({
+        booking,
+        updates: { roomId: targetRoom._id, checkin: newCheckin, checkout: newCheckout },
+        type: targetRoom._id !== getBookingRoomId(booking) ? 'move' : 'resize',
+        details: {
+          oldRoom: oldRoom?.roomNumber,
+          newRoom: targetRoom.roomNumber,
+          oldCheckin: booking.checkin,
+          newCheckin,
+          oldCheckout: booking.checkout,
+          newCheckout
+        }
+      });
     }
   };
 
@@ -641,13 +662,21 @@ export function BookingBoard() {
 
                                             if (isClashing) return;
                                             
-                                            if (proposedEnd > proposedStart && window.confirm("Adjust checkout?")) {
-                                              updateBooking(booking._id, { 
-                                                roomId: getBookingRoomId(booking), 
-                                                checkin: booking.checkin, 
-                                                checkout: newCheckout 
-                                              });
-                                            }
+                                             if (proposedEnd > proposedStart) {
+                                               setPendingUpdate({
+                                                  booking,
+                                                  updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout },
+                                                  type: 'resize',
+                                                  details: {
+                                                    oldRoom: room.roomNumber,
+                                                    newRoom: room.roomNumber,
+                                                    oldCheckin: booking.checkin,
+                                                    newCheckin: booking.checkin,
+                                                    oldCheckout: booking.checkout,
+                                                    newCheckout
+                                                  }
+                                               });
+                                             }
                                           }
                                         };
 
@@ -765,6 +794,80 @@ export function BookingBoard() {
           setSelectedGuestId(null);
         }} 
       />
+
+      {/* Modern Confirmation Dialog */}
+      <Dialog open={!!pendingUpdate} onOpenChange={(open) => !open && setPendingUpdate(null)}>
+        <DialogContent className="sm:max-w-[420px] rounded-[32px] p-0 border-none shadow-3xl overflow-hidden">
+          <div className="bg-slate-900 p-8 text-white relative overflow-hidden">
+            <div className="absolute -right-4 -top-4 opacity-10">
+              {pendingUpdate?.type === 'move' ? <Bed className="h-32 w-32" /> : <Calendar className="h-32 w-32" />}
+            </div>
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-black italic tracking-tight uppercase">Confirm Changes</DialogTitle>
+              <p className="text-white/50 text-[10px] font-black uppercase tracking-[0.2em] mt-1">Registry Synchronization</p>
+            </DialogHeader>
+          </div>
+
+          <div className="p-8 space-y-6">
+            <div className="space-y-4">
+              {/* Room Change */}
+              {pendingUpdate?.type === 'move' && pendingUpdate.details.oldRoom !== pendingUpdate.details.newRoom && (
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                  <div className="space-y-0.5">
+                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">From Unit</p>
+                    <p className="font-black text-slate-900">Rm {pendingUpdate.details.oldRoom}</p>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-slate-300" />
+                  <div className="space-y-0.5 text-right">
+                    <p className="text-[9px] font-black uppercase text-primary tracking-widest">To Unit</p>
+                    <p className="font-black text-primary">Rm {pendingUpdate.details.newRoom}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Date Change */}
+              <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                <div className="space-y-0.5 text-center flex-1">
+                   <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Current Period</p>
+                   <p className="text-[11px] font-bold text-slate-600">
+                     {pendingUpdate && format(parseISO(pendingUpdate.details.oldCheckin), 'MMM dd')} - {pendingUpdate && format(parseISO(pendingUpdate.details.oldCheckout), 'MMM dd')}
+                   </p>
+                </div>
+                <div className="px-3">
+                   <ArrowRight className="h-4 w-4 text-slate-300" />
+                </div>
+                <div className="space-y-0.5 text-center flex-1">
+                   <p className="text-[9px] font-black uppercase text-primary tracking-widest">Proposed Period</p>
+                   <p className="text-[11px] font-black text-primary">
+                     {pendingUpdate && format(parseISO(pendingUpdate.details.newCheckin), 'MMM dd')} - {pendingUpdate && format(parseISO(pendingUpdate.details.newCheckout), 'MMM dd')}
+                   </p>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="flex flex-row gap-3 sm:justify-center">
+              <Button 
+                variant="outline" 
+                onClick={() => setPendingUpdate(null)}
+                className="flex-1 h-12 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 hover:bg-slate-50 transition-all active:scale-95"
+              >
+                Discard
+              </Button>
+              <Button 
+                onClick={() => {
+                  if (pendingUpdate) {
+                    updateBooking(pendingUpdate.booking._id, pendingUpdate.updates);
+                    setPendingUpdate(null);
+                  }
+                }}
+                className="flex-1 h-12 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-900/20 transition-all active:scale-95"
+              >
+                Confirm Changes
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
