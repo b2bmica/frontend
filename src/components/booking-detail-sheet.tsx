@@ -215,22 +215,21 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
           {/* Guest Information */}
           <div className="space-y-3">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground px-1">Traveler Details</h3>
-            <div className="p-4 rounded-2xl bg-muted/30 border border-primary/5 group transition-all hover:bg-muted/50 flex items-center gap-4">
+            <button 
+              onClick={() => { if (guest?._id && onOpenGuest) onOpenGuest(guest._id); }}
+              className="w-full p-4 rounded-2xl bg-muted/30 border border-primary/5 group transition-all hover:bg-white hover:shadow-md hover:border-primary/20 flex items-center gap-4 text-left"
+            >
               <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
                 <User className="h-5 w-5" />
               </div>
               <div className="flex-1">
-                <p className="font-black text-base tracking-tight">{guest?.name || 'Guest'}</p>
+                <p className="font-black text-base tracking-tight group-hover:text-primary group-hover:underline underline-offset-4 transition-all">{guest?.name || 'Guest'}</p>
                 <p className="text-[11px] text-muted-foreground font-bold tracking-tight">{guest?.phone} · {guest?.email || 'No email'}</p>
               </div>
-              <button 
-                onClick={() => { if (guest?._id && onOpenGuest) onOpenGuest(guest._id); }}
-                className="h-8 w-8 rounded-full hover:bg-muted flex items-center justify-center transition-colors"
-                title="View Guest Profile"
-              >
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              </button>
-            </div>
+              <div className="h-8 w-8 rounded-full group-hover:bg-muted flex items-center justify-center transition-colors">
+                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
+              </div>
+            </button>
           </div>
 
           <Separator className="opacity-50" />

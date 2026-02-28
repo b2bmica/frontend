@@ -757,7 +757,14 @@ export function BookingBoard() {
       <BookingModal isOpen={isModalOpen || !!editingBooking} onClose={() => { setIsModalOpen(false); setEditingBooking(null); }}
         selectedRoomId={selectedRoomId} selectedDate={selectedDate} initialBooking={editingBooking} />
       <BookingDetailSheet booking={selectedBooking} onClose={() => setSelectedBooking(null)} onOpenGuest={(id) => setSelectedGuestId(id)} />
-      <GuestProfileSheet guestId={selectedGuestId} onClose={() => setSelectedGuestId(null)} onBookingClick={(b) => setSelectedBooking(b)} />
+      <GuestProfileSheet 
+        guestId={selectedGuestId} 
+        onClose={() => setSelectedGuestId(null)} 
+        onBookingClick={(b) => {
+          setSelectedBooking(b);
+          setSelectedGuestId(null);
+        }} 
+      />
     </>
   );
 }

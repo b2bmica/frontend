@@ -139,7 +139,7 @@ export function BookingTable() {
                     <TableRow key={booking._id} className="hover:bg-muted/20 transition-colors">
                       <TableCell>
                         <button 
-                          className="font-medium hover:text-primary transition-colors text-left"
+                          className="font-black hover:text-primary hover:underline underline-offset-4 transition-all text-left"
                           onClick={() => guest?._id && setSelectedGuestId(guest._id)}
                         >
                           {guest?.name || '—'}
@@ -270,12 +270,12 @@ export function BookingTable() {
           return (
             <div 
               key={booking._id} 
-              className="bg-white rounded-[24px] border border-slate-100 p-5 shadow-sm active:scale-[0.98] transition-all group flex flex-col gap-4 relative overflow-hidden" 
+              className="bg-white rounded-[24px] border border-slate-100 p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-200 group flex flex-col gap-4 relative overflow-hidden cursor-pointer" 
               onClick={() => setSelectedBooking(booking)}
             >
               {/* Vertical accent bar based on status */}
               <div className={cn(
-                "absolute left-0 top-0 bottom-0 w-1",
+                "absolute left-0 top-0 bottom-0 w-1.5",
                 status === 'reserved' ? 'bg-emerald-500' :
                 status === 'checked-in' ? 'bg-blue-500' :
                 status === 'checked-out' ? 'bg-orange-500' :
@@ -284,9 +284,9 @@ export function BookingTable() {
 
               <div className="flex items-start justify-between">
                 <div className="space-y-1 overflow-hidden pr-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                      <button 
-                        className="text-sm font-black text-slate-900 tracking-tight hover:text-primary transition-colors truncate"
+                        className="text-sm font-black text-slate-900 tracking-tight hover:text-primary hover:underline underline-offset-4 transition-all truncate text-left"
                         onClick={(e) => {
                            e.stopPropagation();
                            if (guest?._id) setSelectedGuestId(guest._id);
@@ -295,17 +295,17 @@ export function BookingTable() {
                         {guest?.name || 'Unknown Guest'}
                      </button>
                      <button 
-                        className="h-6 w-6 rounded-full hover:bg-slate-100 flex items-center justify-center transition-colors flex-shrink-0"
+                        className="h-7 w-7 rounded-full hover:bg-slate-100 flex items-center justify-center transition-colors flex-shrink-0"
                         onClick={(e) => {
                            e.stopPropagation();
                            if (guest?._id) setSelectedGuestId(guest._id);
                         }}
                         title="View Guest Profile"
                      >
-                        <ChevronRight className="h-3 w-3 text-slate-400" />
+                        <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary transition-colors" />
                      </button>
                     <Badge variant="outline" className={cn(
-                      "text-[8px] font-black uppercase tracking-widest border-none h-4.5 px-1.5 rounded-md",
+                      "text-[8px] font-black uppercase tracking-widest border-none h-5 px-2 rounded-md",
                       status === 'reserved' ? 'bg-emerald-50 text-emerald-600' :
                       status === 'checked-in' ? 'bg-blue-50 text-blue-600' :
                       status === 'checked-out' ? 'bg-orange-50 text-orange-600' :
@@ -360,7 +360,14 @@ export function BookingTable() {
         onClose={() => setEditingBooking(null)} 
         initialBooking={editingBooking} 
       />
-      <GuestProfileSheet guestId={selectedGuestId} onClose={() => setSelectedGuestId(null)} onBookingClick={(b) => setSelectedBooking(b)} />
+      <GuestProfileSheet 
+        guestId={selectedGuestId} 
+        onClose={() => setSelectedGuestId(null)} 
+        onBookingClick={(b) => {
+          setSelectedBooking(b);
+          setSelectedGuestId(null);
+        }} 
+      />
     </div>
   );
 }
