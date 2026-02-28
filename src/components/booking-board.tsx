@@ -56,6 +56,7 @@ export function BookingBoard() {
   const [selectedDate, setSelectedDate] = useState<string | undefined>();
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
+  const [search, setSearch] = useState('');
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
   const [pendingUpdate, setPendingUpdate] = useState<{booking: Booking, updates: any} | null>(null);
   const [resizingId, setResizingId] = useState<string | null>(null);
@@ -94,9 +95,19 @@ export function BookingBoard() {
       if (isBookingFilter && b.status !== statusFilter) return false;
       const ci = startOfDay(new Date(b.checkin));
       const co = startOfDay(new Date(b.checkout));
-      return ci < periodEnd && co > weekStart;
+      const guestName = getGuest(b)?.name || '';
+      const room = rooms.find(r => r._id === getBookingRoomId(b));
+      const roomNum = room?.roomNumber || '';
+      const bId = b._id || '';
+
+      const matchSearch = !search || 
+        guestName.toLowerCase().includes(search.toLowerCase()) ||
+        roomNum.toLowerCase().includes(search.toLowerCase()) ||
+        bId.toLowerCase().includes(search.toLowerCase());
+
+      return matchSearch && ci < periodEnd && co > weekStart;
     });
-  }, [bookings, weekStart, statusFilter, DAYS]);
+  }, [bookings, rooms, weekStart, statusFilter, search, DAYS]);
 
   // Status counts
   const counts = useMemo(() => {
@@ -249,11 +260,29 @@ export function BookingBoard() {
             </div>
           </div>
 
-          <div className="flex items-center justify-center">
-            <Button variant="secondary" size="sm" className="h-7 px-4 rounded-full text-[10px] font-bold uppercase tracking-widest"
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Button variant="secondary" size="sm" className="h-7 px-4 rounded-full text-[10px] font-bold uppercase tracking-widest flex-shrink-0"
               onClick={() => setWeekStart(addDays(startOfDay(new Date()), -2))}>
               Go to Today
             </Button>
+            
+            <div className="relative w-full max-w-[200px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/50" />
+              <Input 
+                className="h-7 pl-8 py-0 rounded-full border-slate-200 bg-white/50 focus:bg-white text-[10px] font-bold placeholder:font-bold shadow-none transition-all"
+                placeholder="Find Guest, Room or ID..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+              {search && (
+                <button 
+                  onClick={() => setSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 rounded-full hover:bg-slate-100 flex items-center justify-center"
+                >
+                  <X className="h-2 w-2 text-slate-400" />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Row 2: status filter chips + counts */}
