@@ -95,8 +95,8 @@ export function BookingTable() {
           <SelectContent className="rounded-xl border-none shadow-2xl">
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="reserved">Reserved</SelectItem>
-            <SelectItem value="checked-in">In House</SelectItem>
-            <SelectItem value="checked-out">Departure</SelectItem>
+            <SelectItem value="checked-in">Checked In</SelectItem>
+            <SelectItem value="checked-out">Checked Out</SelectItem>
             <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
         </Select>
