@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { ChevronRight, Eye, Globe, Loader2, LogIn, LogOut, Mail, MoreHorizontal, Pencil, Phone, Search, User, UserPlus, XCircle } from 'lucide-react';
+import { Calendar, ChevronRight, Eye, Globe, Loader2, LogIn, LogOut, Mail, MoreHorizontal, Pencil, Phone, Search, User, UserPlus, XCircle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { BookingDetailSheet } from './booking-detail-sheet';
 import { BookingModal } from './booking-modal';
@@ -230,58 +230,81 @@ export function BookingTable() {
         </div>
       )}
 
-      {/* Mobile Card View */}
-      <div className="lg:hidden grid grid-cols-1 gap-4">
-        {filtered.map(booking => {
+      {/* Mobile Feed View */}
+      <div className="lg:hidden space-y-3">
+        {paginatedData.map(booking => {
           const guest = typeof booking.guestId === 'object' ? booking.guestId : null;
           const room = typeof booking.roomId === 'object' ? booking.roomId : rooms.find(r => r._id === booking.roomId);
           const nights = Math.max(1, Math.ceil((new Date(booking.checkout).getTime() - new Date(booking.checkin).getTime()) / (1000 * 60 * 60 * 24)));
-          const amount = room?.price ? nights * room.price : 0;
+          const roomRate = booking.roomPrice || room?.price || 0;
+          const amount = roomRate * nights;
           const status = booking.status;
 
           return (
             <div 
               key={booking._id} 
-              className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-sm hover:shadow-md transition-shadow group cursor-pointer" 
+              className="bg-white rounded-[24px] border border-slate-100 p-5 shadow-sm active:scale-[0.98] transition-all group flex flex-col gap-4 relative overflow-hidden" 
               onClick={() => setSelectedBooking(booking)}
             >
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center font-black text-slate-400 group-hover:text-primary transition-colors text-xs">
-                    #{room?.roomNumber || '???'}
+              {/* Vertical accent bar based on status */}
+              <div className={cn(
+                "absolute left-0 top-0 bottom-0 w-1",
+                status === 'reserved' ? 'bg-emerald-500' :
+                status === 'checked-in' ? 'bg-blue-500' :
+                status === 'checked-out' ? 'bg-orange-500' :
+                'bg-red-500'
+              )} />
+
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-black text-slate-900 tracking-tight">{guest?.name || 'Unknown Guest'}</span>
+                    <Badge variant="outline" className={cn(
+                      "text-[8px] font-black uppercase tracking-widest border-none h-4.5 px-1.5 rounded-md",
+                      status === 'reserved' ? 'bg-emerald-50 text-emerald-600' :
+                      status === 'checked-in' ? 'bg-blue-50 text-blue-600' :
+                      status === 'checked-out' ? 'bg-orange-50 text-orange-600' :
+                      'bg-red-50 text-red-600'
+                    )}>
+                      {status.replace('-', ' ')}
+                    </Badge>
                   </div>
-                  <div>
-                    <p className="text-xs font-black text-slate-900">{guest?.name || '—'}</p>
-                    <p className="text-[9px] font-black uppercase text-muted-foreground/60 tracking-tighter">
-                      {format(new Date(booking.checkin), 'dd MMM')} - {format(new Date(booking.checkout), 'dd MMM')} {format(new Date(booking.checkout), 'yyyy')} • {nights}N
-                    </p>
+                  <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground/70 uppercase tracking-tighter">
+                    <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {format(new Date(booking.checkin), 'dd MMM')}</span>
+                    <ChevronRight className="h-2 w-2 opacity-30" />
+                    <span>{format(new Date(booking.checkout), 'dd MMM')}</span>
+                    <span className="ml-1 opacity-40 px-1 py-0.5 bg-slate-50 rounded italic">{nights}N</span>
                   </div>
                 </div>
-                <Badge variant="outline" className={cn(
-                  "text-[8px] font-black uppercase tracking-tighter border-none h-5 px-2",
-                  status === 'reserved' ? 'bg-emerald-500/10 text-emerald-600' :
-                  status === 'checked-in' ? 'bg-blue-500/10 text-blue-600' :
-                  status === 'checked-out' ? 'bg-orange-500/10 text-orange-600' :
-                  'bg-red-500/10 text-red-600'
-                )}>
-                  {status.replace('-', ' ')}
-                </Badge>
+                <div className="text-right">
+                   <div className="text-xs font-black text-slate-800">RM {room?.roomNumber || '??'}</div>
+                   <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{room?.roomType?.split(' ')[0] || 'Asset'}</div>
+                </div>
               </div>
               
-              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                  <Globe className="h-3 w-3" /> {booking.bookingSource || 'direct'}
+              <div className="flex items-center justify-between pt-4 border-t border-slate-50">
+                <div className="flex flex-col gap-0.5">
+                   <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                     {booking.bookingSource === 'ota' ? <Globe className="h-2.5 w-2.5" /> : <UserPlus className="h-2.5 w-2.5" />} 
+                     {booking.bookingSource || 'direct'}
+                   </div>
                 </div>
-                <div className="text-sm font-black text-primary tracking-tighter">
-                  ₹{amount.toLocaleString()}
+                <div className="flex flex-col items-end">
+                   <span className="text-[9px] font-bold text-slate-300 uppercase leading-none mb-0.5">Total Revenue</span>
+                   <span className="text-base font-black text-slate-900 tracking-tighter">
+                      ₹{amount.toLocaleString()}
+                   </span>
                 </div>
               </div>
             </div>
           );
         })}
         {filtered.length === 0 && (
-          <div className="py-12 text-center bg-slate-50 rounded-2xl border border-dashed text-xs font-bold text-slate-400 uppercase tracking-widest">
-            No bookings matching criteria
+          <div className="py-20 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200/60">
+             <div className="h-12 w-12 rounded-2xl bg-white flex items-center justify-center mx-auto mb-4 shadow-sm">
+                <Search className="h-5 w-5 text-slate-200" />
+             </div>
+             <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">No Records Matching Search</p>
           </div>
         )}
       </div>
