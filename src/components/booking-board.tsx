@@ -73,6 +73,7 @@ export function BookingBoard() {
       newCheckin: string;
       oldCheckout: string;
       newCheckout: string;
+      changeText: string;
     }
   } | null>(null);
 
@@ -202,6 +203,8 @@ export function BookingBoard() {
       if (newCheckin === currentCheckin && targetRoom._id === getBookingRoomId(booking)) return;
 
       const oldRoom = rooms.find(r => r._id === getBookingRoomId(booking));
+      const dayDiff = differenceInDays(newCheckinDate, parseISO(booking.checkin));
+      const changeText = dayDiff === 0 ? "Changed Room" : (dayDiff > 0 ? `Moved ${dayDiff}d later` : `Moved ${Math.abs(dayDiff)}d earlier`);
       
       setPendingUpdate({
         booking,
@@ -213,7 +216,8 @@ export function BookingBoard() {
           oldCheckin: booking.checkin,
           newCheckin,
           oldCheckout: booking.checkout,
-          newCheckout
+          newCheckout,
+          changeText
         }
       });
     }
@@ -557,7 +561,7 @@ export function BookingBoard() {
                             return (
                               <motion.div
                                 key={`${booking._id}-${seg.start.toISOString()}`}
-                                drag={isEditable && resizingId !== booking._id && isStartSegment}
+                                drag={isEditable && resizingId !== booking._id}
                                 dragSnapToOrigin
                                 dragElastic={0}
                                 dragMomentum={false}
@@ -685,7 +689,9 @@ export function BookingBoard() {
 
                                             if (isClashing) return;
                                             
-                                             const nights = differenceInDays(proposedEnd, proposedStart);
+                                             const dayDiff = differenceInDays(parseISO(newCheckout), parseISO(booking.checkout));
+                                             const changeText = dayDiff > 0 ? `Increased stay by ${dayDiff}d` : `Decreased stay by ${Math.abs(dayDiff)}d`;
+
                                              if (proposedEnd > proposedStart) {
                                                setPendingUpdate({
                                                   booking,
@@ -697,7 +703,8 @@ export function BookingBoard() {
                                                     oldCheckin: booking.checkin,
                                                     newCheckin: booking.checkin,
                                                     oldCheckout: booking.checkout,
-                                                    newCheckout
+                                                    newCheckout,
+                                                    changeText
                                                   }
                                                });
                                              }
@@ -815,74 +822,88 @@ export function BookingBoard() {
         }} 
       />
 
-      {/* Modern Confirmation Dialog */}
-      <Dialog open={!!pendingUpdate} onOpenChange={(open) => !open && setPendingUpdate(null)}>
-        <DialogContent className="sm:max-w-[420px] rounded-[32px] p-0 border-none shadow-3xl overflow-hidden">
-          <div className="bg-slate-900 p-8 text-white relative overflow-hidden">
-            <div className="absolute -right-4 -top-4 opacity-10">
-              {pendingUpdate?.type === 'move' ? <Bed className="h-32 w-32" /> : <Calendar className="h-32 w-32" />}
+      {/* Refined Confirmation Dialog */}
+      <Dialog open={!!pendingUpdate} onOpenChange={(open) => !open && !isUpdating && setPendingUpdate(null)}>
+        <DialogContent className="sm:max-w-[400px] rounded-[24px] p-0 border-none shadow-2xl overflow-hidden bg-white">
+          <div className="p-6 border-b bg-slate-50/50">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-3">
+              <ShieldCheck className="h-5 w-5" />
             </div>
             <DialogHeader>
-              <DialogTitle className="text-2xl font-black italic tracking-tight uppercase">Confirm Changes</DialogTitle>
-              <p className="text-white/50 text-[10px] font-black uppercase tracking-[0.2em] mt-1">Registry Synchronization</p>
+              <DialogTitle className="text-xl font-black tracking-tight text-slate-900">Confirm Changes?</DialogTitle>
+              <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mt-1">Manual Registry Override</p>
             </DialogHeader>
           </div>
 
-          <div className="p-8 space-y-6">
-            <div className="space-y-4">
+          <div className="p-6 space-y-5">
+            <div className="space-y-3">
+              {/* Change Highlight */}
+              <div className="px-4 py-2.5 rounded-xl bg-primary/5 border border-primary/10 flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-primary/60 tracking-widest">Type of Change</span>
+                <span className="text-xs font-black text-primary uppercase italic">{pendingUpdate?.details.changeText}</span>
+              </div>
+
               {/* Room Change */}
               {pendingUpdate?.type === 'move' && pendingUpdate.details.oldRoom !== pendingUpdate.details.newRoom && (
-                <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 border border-slate-100">
                   <div className="space-y-0.5">
-                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">From Unit</p>
-                    <p className="font-black text-slate-900">Rm {pendingUpdate.details.oldRoom}</p>
+                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">From</p>
+                    <p className="font-black text-slate-900 text-sm">Rm {pendingUpdate.details.oldRoom}</p>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-slate-300" />
+                  <div className="h-8 w-8 rounded-full bg-white border border-slate-100 flex items-center justify-center">
+                    <ArrowRight className="h-3.5 w-3.5 text-slate-300" />
+                  </div>
                   <div className="space-y-0.5 text-right">
-                    <p className="text-[9px] font-black uppercase text-primary tracking-widest">To Unit</p>
-                    <p className="font-black text-primary">Rm {pendingUpdate.details.newRoom}</p>
+                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">To</p>
+                    <p className="font-black text-slate-900 text-sm">Rm {pendingUpdate.details.newRoom}</p>
                   </div>
                 </div>
               )}
 
-              {/* Date Change */}
-              <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                <div className="space-y-0.5 text-center flex-1">
-                   <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Current Period</p>
-                   <p className="text-[11px] font-bold text-slate-600">
-                     {pendingUpdate && format(parseISO(pendingUpdate.details.oldCheckin), 'MMM dd')} - {pendingUpdate && format(parseISO(pendingUpdate.details.oldCheckout), 'MMM dd')}
-                   </p>
-                </div>
-                <div className="px-3">
-                   <ArrowRight className="h-4 w-4 text-slate-300" />
-                </div>
-                <div className="space-y-0.5 text-center flex-1">
-                   <p className="text-[9px] font-black uppercase text-primary tracking-widest">Proposed Period</p>
-                   <p className="text-[11px] font-black text-primary">
-                     {pendingUpdate && format(parseISO(pendingUpdate.details.newCheckin), 'MMM dd')} - {pendingUpdate && format(parseISO(pendingUpdate.details.newCheckout), 'MMM dd')}
-                   </p>
-                </div>
+              {/* Date Change Visualizer */}
+              <div className="grid grid-cols-2 gap-3">
+                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex flex-col items-center">
+                    <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-1">Current Dates</p>
+                    <p className="text-[11px] font-bold text-slate-600">
+                      {pendingUpdate && format(parseISO(pendingUpdate.details.oldCheckin), 'MMM dd')} - {pendingUpdate && format(parseISO(pendingUpdate.details.oldCheckout), 'MMM dd')}
+                    </p>
+                 </div>
+                 <div className="p-3 rounded-xl bg-primary/5 border border-primary/10 flex flex-col items-center">
+                    <p className="text-[8px] font-black uppercase text-primary/60 tracking-widest mb-1">New Dates</p>
+                    <p className="text-[11px] font-black text-primary">
+                      {pendingUpdate && format(parseISO(pendingUpdate.details.newCheckin), 'MMM dd')} - {pendingUpdate && format(parseISO(pendingUpdate.details.newCheckout), 'MMM dd')}
+                    </p>
+                 </div>
               </div>
             </div>
 
-            <DialogFooter className="flex flex-row gap-3 sm:justify-center">
+            <DialogFooter className="flex flex-row gap-2 sm:justify-stretch">
               <Button 
                 variant="outline" 
+                disabled={isUpdating}
                 onClick={() => setPendingUpdate(null)}
-                className="flex-1 h-12 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 hover:bg-slate-50 transition-all active:scale-95"
+                className="flex-1 h-11 rounded-xl text-[10px] font-black uppercase tracking-widest border-slate-200 hover:bg-slate-50 transition-all active:scale-95"
               >
-                Discard
+                Cancel
               </Button>
               <Button 
-                onClick={() => {
+                disabled={isUpdating}
+                onClick={async () => {
                   if (pendingUpdate) {
-                    updateBooking(pendingUpdate.booking._id, pendingUpdate.updates);
-                    setPendingUpdate(null);
+                    setIsUpdating(true);
+                    try {
+                      await updateBooking(pendingUpdate.booking._id, pendingUpdate.updates);
+                      setPendingUpdate(null);
+                    } catch (err) {
+                      console.error(err);
+                    } finally {
+                      setIsUpdating(false);
+                    }
                   }
                 }}
-                className="flex-1 h-12 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-900/20 transition-all active:scale-95"
+                className="flex-1 h-11 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-slate-900/10 transition-all active:scale-95"
               >
-                Confirm Changes
+                {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Apply Sync'}
               </Button>
             </DialogFooter>
           </div>
