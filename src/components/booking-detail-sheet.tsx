@@ -63,9 +63,9 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
   const subtotal = baseSubtotal + extraPersonCharge;
 
   // Tax Logic
-  const taxConfig = hotel?.settings?.taxConfig || { enabled: false, cgst: 0, sgst: 0 };
+  const taxConfig = hotel?.settings?.taxConfig;
   let taxAmount = 0;
-  if (taxConfig.enabled && subtotal > 0) {
+  if (taxConfig?.enabled && taxConfig.cgst !== undefined && taxConfig.sgst !== undefined && subtotal > 0) {
     taxAmount = (subtotal * (taxConfig.cgst || 0) / 100) + (subtotal * (taxConfig.sgst || 0) / 100);
   }
 
@@ -185,7 +185,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                 <span>Subtotal</span>
                 <span>₹{subtotal.toLocaleString()}</span>
               </div>
-              {taxConfig.enabled && (
+              {taxConfig?.enabled && taxConfig.cgst !== undefined && taxConfig.sgst !== undefined && (
                 <div className="flex justify-between text-xs font-bold text-slate-500 uppercase">
                   <span>GST ({taxConfig.cgst + taxConfig.sgst}%)</span>
                   <span>₹{taxAmount.toLocaleString()}</span>
@@ -250,7 +250,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                     <span className="text-foreground">+ ₹{extraPersonCharge.toLocaleString()}</span>
                   </div>
                 )}
-                {taxConfig?.enabled && (
+                {taxConfig?.enabled && taxConfig.cgst !== undefined && taxConfig.sgst !== undefined && (
                   <div className="flex justify-between text-[11px] font-bold text-orange-600 uppercase tracking-wider">
                     <span>GST (CGST {taxConfig.cgst}% + SGST {taxConfig.sgst}%)</span>
                     <span>+ ₹{taxAmount.toLocaleString()}</span>

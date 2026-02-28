@@ -501,7 +501,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
 
       {/* Payment Modal */}
       <Dialog open={isSettleModalOpen} onOpenChange={setIsSettleModalOpen}>
-        <DialogContent className="sm:max-w-[360px] rounded-3xl p-0 border-none shadow-2xl overflow-hidden">
+        <DialogContent className="fixed left-0 top-0 translate-x-0 translate-y-0 h-full w-full max-w-none sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:max-w-[360px] sm:h-auto rounded-none sm:rounded-3xl p-0 border-none shadow-2xl overflow-hidden flex flex-col">
           <div className="bg-slate-900 p-6 text-white">
              <DialogHeader>
                 <DialogTitle className="text-lg font-bold uppercase tracking-wider">Record Payment</DialogTitle>

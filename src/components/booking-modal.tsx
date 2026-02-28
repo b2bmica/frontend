@@ -76,9 +76,9 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const subtotal = baseSubtotal + extraPersonCharge;
   
   // Tax logic
-  const taxConfig = hotel?.settings?.taxConfig || { enabled: false, cgst: 0, sgst: 0 };
+  const taxConfig = hotel?.settings?.taxConfig;
   let taxAmount = 0;
-  if (taxConfig.enabled && subtotal > 0) {
+  if (taxConfig?.enabled && taxConfig.cgst !== undefined && taxConfig.sgst !== undefined && subtotal > 0) {
     const cgst = (subtotal * (taxConfig.cgst || 0)) / 100;
     const sgst = (subtotal * (taxConfig.sgst || 0)) / 100;
     taxAmount = cgst + sgst;
@@ -226,9 +226,9 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
         onOpenAutoFocus={(e) => e.preventDefault()}
-        className="sm:max-w-[550px] max-h-[90dvh] overflow-y-auto p-0 border-none shadow-2xl [&>button]:z-50 gap-0"
+        className="fixed left-0 top-0 translate-x-0 translate-y-0 h-full w-full max-w-none sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:max-w-[550px] sm:h-auto sm:max-h-[85vh] overflow-y-auto p-0 border-none shadow-2xl [&>button]:z-50 gap-0 rounded-none sm:rounded-3xl flex flex-col"
       >
-        <div className="bg-muted/30 border-b p-5 relative">
+        <div className="bg-muted/30 border-b p-5 relative flex-none">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold tracking-tight flex items-center gap-2">
               <span className="p-1 px-2 rounded-lg bg-slate-900 text-white text-[10px] font-bold">{initialBooking ? 'EDIT' : 'NEW'}</span>
@@ -240,7 +240,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           </DialogHeader>
         </div>
 
-        <div className="p-5">
+        <div className="p-5 flex-1">
           {step === 'guest' && !showNewGuest && (
             <div className="space-y-4 py-0">
               <div className="relative group">
@@ -446,7 +446,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                       <span className="text-foreground">+ ₹{extraPersonCharge.toLocaleString()}</span>
                     </div>
                   )}
-                  {taxConfig.enabled && (
+                  {taxConfig?.enabled && taxConfig.cgst !== undefined && taxConfig.sgst !== undefined && (
                     <div className="flex justify-between text-xs font-bold text-orange-600">
                       <span>GST (CGST {taxConfig.cgst}% + SGST {taxConfig.sgst}%)</span>
                       <span>+ ₹{taxAmount.toLocaleString()}</span>
