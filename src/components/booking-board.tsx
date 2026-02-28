@@ -49,7 +49,7 @@ export function BookingBoard() {
   const isDraggingRef = useRef(false);
 
   // Week-based navigation
-  const [weekStart, setWeekStart] = useState(() => addDays(startOfDay(new Date()), -1));
+  const [weekStart, setWeekStart] = useState(() => addDays(startOfDay(new Date()), -3));
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>();
@@ -67,9 +67,9 @@ export function BookingBoard() {
     const check = () => {
       const width = window.innerWidth;
       setIsMobile(width < 768);
-      if (width < 768) setDaysCount(7);
-      else if (width < 1200) setDaysCount(14);
-      else setDaysCount(21);
+      if (width < 768) setDaysCount(12);
+      else if (width < 1200) setDaysCount(18);
+      else setDaysCount(28);
     };
     check();
     window.addEventListener('resize', check);
@@ -251,7 +251,7 @@ export function BookingBoard() {
 
           <div className="flex items-center justify-center">
             <Button variant="secondary" size="sm" className="h-7 px-4 rounded-full text-[10px] font-bold uppercase tracking-widest"
-              onClick={() => setWeekStart(addDays(startOfDay(new Date()), -1))}>
+              onClick={() => setWeekStart(addDays(startOfDay(new Date()), -3))}>
               Go to Today
             </Button>
           </div>
