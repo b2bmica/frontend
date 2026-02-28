@@ -108,7 +108,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
             <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 border-primary/20 text-primary">
               Ref: #{booking._id?.slice(-6).toUpperCase()}
             </Badge>
-            <div className={cn("px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter flex items-center gap-1.5", config.color, config.bgColor)}>
+            <div className={cn("px-2.5 py-0.5 rounded-full text-[10px] font-black capitalize tracking-tighter flex items-center gap-1.5", config.color, config.bgColor)}>
               <config.icon className="h-3 w-3" /> {config.label}
             </div>
           </div>

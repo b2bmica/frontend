@@ -545,7 +545,7 @@ export function BookingBoard() {
                                 >
                                   {guest?.name || 'Guest'}
                                 </button>
-                                <span className="text-[8px] md:text-[10px] bg-black/20 px-1 py-0.5 rounded-full truncate font-black uppercase tracking-tighter w-fit z-10 relative pointer-events-none">
+                                <span className="text-[8px] md:text-[10px] bg-black/20 px-1 py-0.5 rounded-full truncate font-black capitalize tracking-tighter w-fit z-10 relative pointer-events-none">
                                   {booking.status.replace('-', ' ')}
                                 </span>
                                 {/* Resize handle (Right edge) - Robust tracking with PointerCapture */}
@@ -689,7 +689,7 @@ export function BookingBoard() {
                                    >
                                       <div className="flex flex-col items-center">
                                          <span className="text-[10px] md:text-sm font-black italic tracking-tighter leading-none">{group.length} BOOKINGS</span>
-                                         <span className="text-[8px] font-black uppercase opacity-60 tracking-[0.2em] mt-0.5">Overlap Pool</span>
+                                         <span className="text-[8px] font-black capitalize opacity-60 tracking-[0.2em] mt-0.5">Overlap Pool</span>
                                       </div>
                                       {/* Indicator dots */}
                                       <div className="flex gap-1 mt-1.5 flex-wrap justify-center px-1">
@@ -723,7 +723,7 @@ export function BookingBoard() {
                                                    </div>
                                                 </div>
                                                 <div className={cn(
-                                                   "px-1.5 py-0.5 rounded-md text-[7px] font-black uppercase tracking-widest",
+                                                   "px-1.5 py-0.5 rounded-md text-[7px] font-black capitalize tracking-widest",
                                                    b.status === 'cancelled' ? "bg-slate-100 text-slate-400" :
                                                    b.status === 'checked-out' ? "bg-orange-50 text-orange-600" :
                                                    b.status === 'checked-in' ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600"
