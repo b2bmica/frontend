@@ -49,6 +49,7 @@ export function BookingBoard() {
   const boardContentRef = useRef<HTMLDivElement>(null);
   const isResizingRef = useRef(false);
   const isDraggingRef = useRef(false);
+  const dragGrabOffsetDaysRef = useRef(0);
 
   // Week-based navigation
   const [weekStart, setWeekStart] = useState(() => addDays(startOfDay(new Date()), -2));
@@ -173,11 +174,11 @@ export function BookingBoard() {
     const y = info.point.y - rect.top;
 
     // Determine target day and room
-    // Correct for the header height and room col width
     const HOZ_OFFSET = ROOM_COL;
     const VER_OFFSET = 40; // sticky header height
 
-    const dayIndex = Math.floor((x - HOZ_OFFSET) / COLUMN_WIDTH);
+    const dayAtMouse = (x - HOZ_OFFSET) / COLUMN_WIDTH;
+    const dayIndex = Math.round(dayAtMouse - dragGrabOffsetDaysRef.current);
     const roomIndex = Math.floor((y - VER_OFFSET) / ROW_HEIGHT);
 
     if (dayIndex >= 0 && dayIndex < DAYS && roomIndex >= 0 && roomIndex < rooms.length) {
@@ -565,7 +566,16 @@ export function BookingBoard() {
                                 dragSnapToOrigin
                                 dragElastic={0}
                                 dragMomentum={false}
-                                onDragStart={() => { isDraggingRef.current = true; }}
+                                onDragStart={(e, info) => { 
+                                  isDraggingRef.current = true; 
+                                  if (boardContentRef.current) {
+                                    const rect = boardContentRef.current.getBoundingClientRect();
+                                    const x = info.point.x - rect.left;
+                                    const dayAtMouse = (x - ROOM_COL) / COLUMN_WIDTH;
+                                    const bookingStartDay = differenceInDays(checkinDate, weekStartDay);
+                                    dragGrabOffsetDaysRef.current = dayAtMouse - bookingStartDay;
+                                  }
+                                }}
                                 onDragEnd={(e, info) => handleDragEnd(e, info, booking)}
                                 whileDrag={{ scale: 1.02, zIndex: 40, opacity: 0.8, cursor: 'grabbing' }}
                                 initial={{ opacity: 0, scale: 1 }}
