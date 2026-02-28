@@ -188,7 +188,13 @@ export function BookingBoard() {
       if (isClashing) return;
       if (newCheckin === currentCheckin && targetRoom._id === getBookingRoomId(booking)) return;
 
-      updateBooking(booking._id, { roomId: targetRoom._id, checkin: newCheckin, checkout: newCheckout });
+      const confirmText = targetRoom._id !== getBookingRoomId(booking) 
+        ? `Move booking to room ${targetRoom.roomNumber} on ${newCheckin}?`
+        : `Change stay dates to ${newCheckin} - ${newCheckout}?`;
+
+      if (window.confirm(confirmText)) {
+        updateBooking(booking._id, { roomId: targetRoom._id, checkin: newCheckin, checkout: newCheckout });
+      }
     }
   };
 
@@ -635,7 +641,7 @@ export function BookingBoard() {
 
                                             if (isClashing) return;
                                             
-                                            if (proposedEnd > proposedStart) {
+                                            if (proposedEnd > proposedStart && window.confirm("Adjust checkout?")) {
                                               updateBooking(booking._id, { 
                                                 roomId: getBookingRoomId(booking), 
                                                 checkin: booking.checkin, 
