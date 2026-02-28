@@ -58,7 +58,6 @@ export function BookingBoard() {
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [search, setSearch] = useState('');
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
-  const [pendingUpdate, setPendingUpdate] = useState<{booking: Booking, updates: any} | null>(null);
   const [resizingId, setResizingId] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -164,35 +163,24 @@ export function BookingBoard() {
       // If dropped in the same place exactly, don't update
       if (newCheckin === currentCheckin && targetRoom._id === getBookingRoomId(booking)) return;
 
-      setPendingUpdate({ booking, updates: { roomId: targetRoom._id, checkin: newCheckin, checkout: newCheckout } });
+      updateBooking(booking._id, { roomId: targetRoom._id, checkin: newCheckin, checkout: newCheckout });
     }
   };
 
   const handleQuickExtend = (e: React.MouseEvent, booking: Booking) => {
     e.stopPropagation();
     const newCheckout = format(addDays(new Date(booking.checkout), 1), 'yyyy-MM-dd');
-    setPendingUpdate({ booking, updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout } });
+    updateBooking(booking._id, { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout });
   };
 
   const handleQuickReduce = (e: React.MouseEvent, booking: Booking) => {
     e.stopPropagation();
     const newCheckout = format(addDays(new Date(booking.checkout), -1), 'yyyy-MM-dd');
     if (newCheckout <= booking.checkin) return;
-    setPendingUpdate({ booking, updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout } });
+    updateBooking(booking._id, { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout });
   };
 
-  const confirmUpdate = async () => {
-    if (!pendingUpdate) return;
-    setIsUpdating(true);
-    try {
-      await updateBooking(pendingUpdate.booking._id, pendingUpdate.updates);
-    } catch (err) {
-      console.error("Update failed", err);
-    } finally {
-      setIsUpdating(false);
-      setPendingUpdate(null);
-    }
-  };
+
 
   if (loading) {
     return (
@@ -404,9 +392,8 @@ export function BookingBoard() {
 
                     {/* Booking bars — absolutely positioned within the row */}
                     {roomBookings.map(booking => {
-                      const isPending = pendingUpdate?.booking?._id === booking._id;
-                      const checkinDate  = startOfDay(new Date(isPending ? pendingUpdate.updates.checkin : booking.checkin));
-                      const checkoutDate = startOfDay(new Date(isPending ? pendingUpdate.updates.checkout : booking.checkout));
+                      const checkinDate  = startOfDay(new Date(booking.checkin));
+                      const checkoutDate = startOfDay(new Date(booking.checkout));
                       const weekStartDay = startOfDay(weekStart);
 
                       const offsetDays   = differenceInDays(checkinDate, weekStartDay);
@@ -553,13 +540,10 @@ export function BookingBoard() {
                                       if (isClashing) return;
                                       
                                       if (proposedEnd > proposedStart) {
-                                        setPendingUpdate({ 
-                                          booking, 
-                                          updates: { 
-                                            roomId: getBookingRoomId(booking), 
-                                            checkin: booking.checkin, 
-                                            checkout: newCheckout 
-                                          } 
+                                        updateBooking(booking._id, { 
+                                          roomId: getBookingRoomId(booking), 
+                                          checkin: booking.checkin, 
+                                          checkout: newCheckout 
                                         });
                                       }
                                     }
@@ -593,72 +577,8 @@ export function BookingBoard() {
       <BookingDetailSheet booking={selectedBooking} onClose={() => setSelectedBooking(null)} onOpenGuest={(id) => setSelectedGuestId(id)} />
       <GuestProfileSheet guestId={selectedGuestId} onClose={() => setSelectedGuestId(null)} onBookingClick={(b) => setSelectedBooking(b)} />
       
-      <Dialog open={!!pendingUpdate} onOpenChange={(open) => !open && !isUpdating && setPendingUpdate(null)}>
-        <DialogContent className="sm:max-w-[400px] border-none shadow-2xl rounded-2xl z-[500]">
-          <DialogHeader>
-            <DialogTitle className="font-black text-xl tracking-tight">Confirm Modification</DialogTitle>
-          </DialogHeader>
-          <div className="py-2 text-sm font-medium text-slate-500 space-y-4">
-            <p>Please confirm you want to proceed with structural date and room assignments updates for this itinerary.</p>
-            {pendingUpdate && (
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-4 shadow-inner relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-1 opacity-5">
-                  <Bed className="h-12 w-12" />
-                </div>
-                
-                <div className="flex justify-between items-start text-slate-400">
-                  <span className="font-black uppercase tracking-widest text-[9px] mt-1">Current State</span>
-                  <div className="text-right">
-                    <span className="text-sm font-bold text-slate-600">
-                      {format(new Date(pendingUpdate.booking.checkin), 'MMM dd')} — {format(new Date(pendingUpdate.booking.checkout), 'MMM dd')}
-                    </span>
-                    <div className="text-[10px] font-black uppercase text-slate-400 mt-0.5 tracking-tight">
-                      Room {rooms.find(r => r._id === getBookingRoomId(pendingUpdate.booking))?.roomNumber || 'Unknown'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="h-px bg-slate-200/50 w-full" />
-
-                <div className="flex justify-between items-start text-primary">
-                  <span className="font-black uppercase tracking-widest text-[9px] mt-1">Proposed Update</span>
-                  <div className="text-right flex flex-col items-end">
-                    <span className="text-sm font-black text-primary bg-primary/10 px-2.5 py-1 rounded-lg w-fit shadow-xs">
-                      {format(new Date(pendingUpdate.updates.checkin), 'MMM dd')} — {format(new Date(pendingUpdate.updates.checkout), 'MMM dd')}
-                    </span>
-                    {pendingUpdate.updates.roomId && pendingUpdate.updates.roomId !== getBookingRoomId(pendingUpdate.booking) ? (
-                      <div className="text-[10px] font-black uppercase mt-2 inline-flex items-center gap-1.5 bg-amber-100 text-amber-700 px-2 py-1 rounded-lg tracking-tight w-fit shadow-xs border border-amber-200">
-                        <Plus className="h-3 w-3" /> Relocate to Room {rooms.find(r => r._id === pendingUpdate.updates.roomId)?.roomNumber || 'Unknown'}
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-end gap-1.5 mt-2">
-                        <div className="text-[10px] font-black uppercase text-slate-400 tracking-tight">
-                          Same Room Assignment
-                        </div>
-                        {(() => {
-                          const oldDays = differenceInDays(new Date(pendingUpdate.booking.checkout), new Date(pendingUpdate.booking.checkin));
-                          const newDays = differenceInDays(new Date(pendingUpdate.updates.checkout), new Date(pendingUpdate.updates.checkin));
-                          const diff = newDays - oldDays;
-                          if (diff > 0) return <Badge key="ext" className="bg-emerald-500 hover:bg-emerald-500 text-[9px] font-black uppercase h-5">+{diff} Day{diff > 1 ? 's' : ''} Extended</Badge>;
-                          if (diff < 0) return <Badge key="red" variant="destructive" className="text-[9px] font-black uppercase h-5">{diff} Day{Math.abs(diff) > 1 ? 's' : ''} Reduced</Badge>;
-                          return null;
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter className="gap-2 sm:gap-0 pt-2">
-            <Button variant="outline" className="rounded-xl font-bold" onClick={() => setPendingUpdate(null)} disabled={isUpdating}>Cancel</Button>
-            <Button className="rounded-xl font-bold px-8 shadow-lg shadow-primary/20" onClick={confirmUpdate} disabled={isUpdating}>
-              {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              {isUpdating ? 'Updating...' : 'Save Dates'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BookingDetailSheet booking={selectedBooking} onClose={() => setSelectedBooking(null)} onOpenGuest={(id) => setSelectedGuestId(id)} />
+      <GuestProfileSheet guestId={selectedGuestId} onClose={() => setSelectedGuestId(null)} onBookingClick={(b) => setSelectedBooking(b)} />
     </>
   );
 }
