@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { Calendar, ChevronRight, Eye, Globe, Loader2, LogIn, LogOut, Mail, MoreHorizontal, Pencil, Phone, Search, User, UserPlus, XCircle } from 'lucide-react';
+import { ArrowRight, Calendar, ChevronRight, Eye, Globe, Loader2, LogIn, LogOut, Mail, MoreHorizontal, Pencil, Phone, Plus, Search, User, UserPlus, XCircle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { BookingDetailSheet } from './booking-detail-sheet';
 import { BookingModal } from './booking-modal';
@@ -24,6 +24,7 @@ export function BookingTable() {
   const [sortField, setSortField] = useState<'createdAt' | 'checkin' | 'checkout'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [dateFilterMode, setDateFilterMode] = useState<'checkin' | 'createdAt'>('checkin');
+  const [dateSelectionType, setDateSelectionType] = useState<'single' | 'range'>('single');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   
@@ -34,7 +35,7 @@ export function BookingTable() {
   // Reset page on search or filter change
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter, dateFrom, dateTo, sortField, sortOrder, dateFilterMode]);
+  }, [search, statusFilter, dateFrom, dateTo, sortField, sortOrder, dateFilterMode, dateSelectionType]);
 
   const filteredAndSorted = useMemo(() => {
     const list = bookings.filter(b => {
@@ -54,8 +55,12 @@ export function BookingTable() {
           matchDate = false;
         } else {
           const d = dStr.split('T')[0]; // Extract YYYY-MM-DD
-          if (dateFrom && d < dateFrom) matchDate = false;
-          if (dateTo && d > dateTo) matchDate = false;
+          if (dateSelectionType === 'single') {
+             matchDate = d === dateFrom;
+          } else {
+             if (dateFrom && d < dateFrom) matchDate = false;
+             if (dateTo && d > dateTo) matchDate = false;
+          }
         }
       }
       return matchSearch && matchStatus && matchDate;
@@ -71,7 +76,7 @@ export function BookingTable() {
       if (aTime > bTime) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [bookings, search, statusFilter, dateFrom, dateTo, sortField, sortOrder, dateFilterMode]);
+  }, [bookings, search, statusFilter, dateFrom, dateTo, sortField, sortOrder, dateFilterMode, dateSelectionType]);
 
   const filtered = filteredAndSorted;
 
@@ -171,47 +176,100 @@ export function BookingTable() {
                  )}
               </div>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="p-4 w-72 rounded-3xl shadow-2xl border-none">
-               <div className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-1.5">
-                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Filter Date Mode</span>
-                     <div className="flex bg-slate-50 p-1 rounded-xl">
-                        <button 
-                           onClick={() => setDateFilterMode('checkin')}
-                           className={cn(
-                              "flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all",
-                              dateFilterMode === 'checkin' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600"
-                           )}
-                        >Check-in</button>
-                        <button 
-                           onClick={() => setDateFilterMode('createdAt')}
-                           className={cn(
-                              "flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all",
-                              dateFilterMode === 'createdAt' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600"
-                           )}
-                        >Created</button>
+            <DropdownMenuContent className="p-5 w-80 rounded-[32px] shadow-2xl border-none ring-1 ring-slate-200/50">
+               <div className="flex flex-col gap-5">
+                  <header className="flex items-center justify-between border-b border-slate-50 pb-3">
+                     <span className="text-xs font-black uppercase tracking-widest text-slate-800">Advanced Filter</span>
+                     <Badge variant="secondary" className="text-[9px] font-black tracking-widest uppercase bg-slate-100/50">
+                        {dateFilterMode === 'checkin' ? 'Check-in' : 'Registration'}
+                     </Badge>
+                  </header>
+
+                  <div className="space-y-4">
+                     {/* Toggle 1: What to filter */}
+                     <div className="flex flex-col gap-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Filter Base</label>
+                        <div className="grid grid-cols-2 gap-1 bg-slate-50/80 p-1.5 rounded-2xl border border-slate-100/50">
+                           <button 
+                              onClick={() => setDateFilterMode('checkin')}
+                              className={cn(
+                                 "flex items-center justify-center gap-2 py-2 text-[10px] font-black rounded-xl transition-all duration-300",
+                                 dateFilterMode === 'checkin' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100/50"
+                              )}
+                           >
+                              <Calendar className="h-3 w-3" />
+                              Check-in
+                           </button>
+                           <button 
+                              onClick={() => setDateFilterMode('createdAt')}
+                              className={cn(
+                                 "flex items-center justify-center gap-2 py-2 text-[10px] font-black rounded-xl transition-all duration-300",
+                                 dateFilterMode === 'createdAt' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100/50"
+                              )}
+                           >
+                              <Plus className="h-3 w-3" />
+                              Created
+                           </button>
+                        </div>
                      </div>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    <div className="flex flex-col gap-1">
-                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Between Dates</span>
-                       <div className="flex items-center gap-2">
-                          <Input 
-                            type="date" 
-                            className="h-9 text-xs rounded-xl border-slate-100 bg-slate-50"
-                            value={dateFrom}
-                            onChange={e => setDateFrom(e.target.value)}
-                          />
-                          <span className="text-[10px] font-bold text-slate-300">To</span>
-                          <Input 
-                            type="date" 
-                            className="h-9 text-xs rounded-xl border-slate-100 bg-slate-50"
-                            value={dateTo}
-                            onChange={e => setDateTo(e.target.value)}
-                          />
-                       </div>
-                    </div>
+
+                     {/* Toggle 2: Range vs Single */}
+                     <div className="flex flex-col gap-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Selection Mode</label>
+                        <div className="grid grid-cols-2 gap-1 bg-slate-50/80 p-1.5 rounded-2xl border border-slate-100/50">
+                           <button 
+                              onClick={() => setDateSelectionType('single')}
+                              className={cn(
+                                 "flex items-center justify-center gap-2 py-2 text-[10px] font-black rounded-xl transition-all duration-300",
+                                 dateSelectionType === 'single' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100/50"
+                              )}
+                           >
+                              Single Date
+                           </button>
+                           <button 
+                              onClick={() => setDateSelectionType('range')}
+                              className={cn(
+                                 "flex items-center justify-center gap-2 py-2 text-[10px] font-black rounded-xl transition-all duration-300",
+                                 dateSelectionType === 'range' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100/50"
+                              )}
+                           >
+                              Date Range
+                           </button>
+                        </div>
+                     </div>
+                     
+                     <div className="animate-in fade-in slide-in-from-top-1 duration-300">
+                        {dateSelectionType === 'single' ? (
+                           <div className="flex flex-col gap-2">
+                              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Pick Date</label>
+                              <Input 
+                                 type="date" 
+                                 className="h-11 text-xs rounded-2xl border-slate-100 bg-slate-50/50 focus:bg-white focus:ring-primary shadow-none transition-all"
+                                 value={dateFrom}
+                                 onChange={e => setDateFrom(e.target.value)}
+                              />
+                           </div>
+                        ) : (
+                           <div className="flex flex-col gap-2">
+                              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Range Duration</label>
+                              <div className="grid grid-cols-[1fr,auto,1fr] items-center gap-2">
+                                 <Input 
+                                   type="date" 
+                                   className="h-11 text-xs rounded-2xl border-slate-100 bg-slate-50/50 focus:bg-white transition-all shadow-none"
+                                   value={dateFrom}
+                                   onChange={e => setDateFrom(e.target.value)}
+                                 />
+                                 <ArrowRight className="h-3 w-3 text-slate-200" />
+                                 <Input 
+                                   type="date" 
+                                   className="h-11 text-xs rounded-2xl border-slate-100 bg-slate-50/50 focus:bg-white transition-all shadow-none"
+                                   value={dateTo}
+                                   onChange={e => setDateTo(e.target.value)}
+                                 />
+                              </div>
+                           </div>
+                        )}
+                     </div>
                   </div>
 
                   {(dateFrom || dateTo) && (
@@ -219,8 +277,10 @@ export function BookingTable() {
                         variant="ghost" 
                         size="sm" 
                         onClick={() => { setDateFrom(''); setDateTo(''); }}
-                        className="h-8 text-[10px] font-black uppercase tracking-widest text-destructive hover:bg-destructive/5"
-                     >Reset Date Filter</Button>
+                        className="h-10 text-[10px] font-black uppercase tracking-widest text-destructive hover:bg-destructive/5 hover:text-destructive rounded-2xl"
+                     >
+                        Reset All Filters
+                     </Button>
                   )}
                </div>
             </DropdownMenuContent>
