@@ -21,12 +21,12 @@ import {
   Info,
   Loader2,
   X,
-  FileText
+  Pencil
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/auth-context';
 import { useBookings } from '../context/booking-context';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { BookingModal } from './booking-modal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from './ui/dialog';
 
@@ -38,7 +38,7 @@ interface BookingDetailSheetProps {
 
 export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDetailSheetProps) {
   const { hotel } = useAuth();
-  const { cancelBooking, checkIn, checkOut, updateBooking } = useBookings();
+  const { cancelBooking, checkIn, checkOut, updateBooking, rooms, updateRoomStatus } = useBookings();
   const [isActioning, setIsActioning] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPaymentSelection, setShowPaymentSelection] = useState(false);
@@ -48,30 +48,31 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
   const [isSettled, setIsSettled] = useState(false);
   const [showDirtyRoomPrompt, setShowDirtyRoomPrompt] = useState(false);
 
+  const bookingRoom = booking ? (typeof booking.roomId === 'object' ? booking.roomId : null) : null;
+  // Use live room from context for fresh status (dirty/clean/etc)
+  const liveRoom = bookingRoom ? rooms.find(r => r._id === bookingRoom._id) : null;
+  const room = liveRoom || bookingRoom; // prefer live, fallback to embedded
+  const guest = booking ? (typeof booking.guestId === 'object' ? booking.guestId : null) : null;
+
+  // Tax Logic — useMemo so it recomputes when hotel data loads asynchronously
+  const { taxAmount, taxConfig, totalAmount, balance, subtotal, nights, roomPrice, baseSubtotal, extraAdults, extraPersonCharge } = useMemo(() => {
+    if (!booking) return { taxAmount: 0, taxConfig: undefined, totalAmount: 0, balance: 0, subtotal: 0, nights: 1, roomPrice: 0, baseSubtotal: 0, extraAdults: 0, extraPersonCharge: 0 };
+    const n = Math.max(1, differenceInDays(new Date(booking.checkout), new Date(booking.checkin)));
+    const rp = booking.roomPrice || room?.price || 0;
+    const bs = rp * n;
+    const ea = Math.max(0, (booking.adults || 0) - (booking.baseOccupancy || 2));
+    const ep = ea * (booking.extraPersonPrice || 0) * n;
+    const sub = bs + ep;
+    const tc = hotel?.settings?.taxConfig;
+    let tax = 0;
+    if (tc?.enabled && tc.cgst !== undefined && tc.sgst !== undefined && sub > 0) {
+      tax = (sub * (tc.cgst || 0) / 100) + (sub * (tc.sgst || 0) / 100);
+    }
+    const total = sub + tax;
+    return { taxAmount: tax, taxConfig: tc, totalAmount: total, balance: total - (booking.advancePayment || 0), subtotal: sub, nights: n, roomPrice: rp, baseSubtotal: bs, extraAdults: ea, extraPersonCharge: ep };
+  }, [booking, hotel, room]);
+
   if (!booking) return null;
-
-  const room = typeof booking.roomId === 'object' ? booking.roomId : null;
-  const guest = typeof booking.guestId === 'object' ? booking.guestId : null;
-  const nights = Math.max(1, differenceInDays(new Date(booking.checkout), new Date(booking.checkin)));
-  
-  const roomPrice = booking.roomPrice || room?.price || 0;
-  const baseSubtotal = roomPrice * nights;
-  
-  // Extra person calculation
-  const extraAdults = Math.max(0, (booking.adults || 0) - (booking.baseOccupancy || 2));
-  const extraPersonCharge = extraAdults * (booking.extraPersonPrice || 0) * nights;
-  
-  const subtotal = baseSubtotal + extraPersonCharge;
-
-  // Tax Logic
-  const taxConfig = hotel?.settings?.taxConfig;
-  let taxAmount = 0;
-  if (taxConfig?.enabled && taxConfig.cgst !== undefined && taxConfig.sgst !== undefined && subtotal > 0) {
-    taxAmount = (subtotal * (taxConfig.cgst || 0) / 100) + (subtotal * (taxConfig.sgst || 0) / 100);
-  }
-
-  const totalAmount = subtotal + taxAmount;
-  const balance = totalAmount - (booking.advancePayment || 0);
 
   const statusConfig: Record<string, { color: string; bgColor: string; icon: any; label: string }> = {
     'reserved':    { color: 'text-emerald-600', bgColor: 'bg-emerald-500/10', icon: Clock, label: 'Reserved' },
@@ -100,7 +101,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
     setIsSettled(false);
   };
 
-  const { updateRoomStatus } = useBookings();
+  // updateRoomStatus already destructured from useBookings above
 
   const handleInitialCheckIn = () => {
     if (room?.status === 'dirty') {
@@ -401,7 +402,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                 onClick={() => setShowEditModal(true)}
                 title="Edit Booking"
               >
-                <FileText className="h-4 w-4" />
+                <Pencil className="h-4 w-4" />
               </Button>
             )}
             

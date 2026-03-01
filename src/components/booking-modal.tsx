@@ -56,7 +56,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   // Booking form
   const [bookingForm, setBookingForm] = useState({
     roomId: '', checkin: '', checkout: '', adults: 2, children: 0,
-    advancePayment: 0, bookingSource: 'direct', paymentMethod: 'cash',
+    advancePayment: 0, bookingSource: 'direct', paymentMethod: '',
     baseOccupancy: 2, extraPersonPrice: 0, roomPrice: 0
   });
 
@@ -135,7 +135,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           children: initialBooking.children || 0,
           advancePayment: initialBooking.advancePayment || 0,
           bookingSource: initialBooking.bookingSource || 'direct',
-          paymentMethod: 'cash',
+          paymentMethod: '',
           baseOccupancy: initialBooking.baseOccupancy || 2,
           extraPersonPrice: initialBooking.extraPersonPrice || 0,
           roomPrice: initialBooking.roomPrice || 0
@@ -159,7 +159,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           checkout: initialCheckout,
           adults: 2, children: 0,
           advancePayment: 0,
-          paymentMethod: 'cash',
+          paymentMethod: '',
           bookingSource: 'direct',
           baseOccupancy: 2,
           extraPersonPrice: 0,
@@ -309,15 +309,14 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         className="fixed left-0 top-0 translate-x-0 translate-y-0 h-full w-full max-w-none sm:left-[50%] sm:top-[50%] sm:translate-x-[-50%] sm:translate-y-[-50%] sm:max-w-[550px] sm:h-auto sm:max-h-[85vh] overflow-y-auto p-0 border-none shadow-2xl [&>button]:z-50 gap-0 rounded-none sm:rounded-3xl flex flex-col"
       >
         <div className="bg-muted/30 border-b p-5 relative flex-none">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold tracking-tight flex items-center gap-2">
-              <span className="p-1 px-2 rounded-lg bg-slate-900 text-white text-[10px] font-bold">{initialBooking ? 'EDIT' : 'NEW'}</span>
-              {step === 'guest' ? 'Select Traveler' : initialBooking ? 'Modify Stay' : 'Finalize Reservation'}
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground font-medium text-[11px]">
-              {step === 'guest' ? 'Every great stay starts with a profile.' : `Securing room for ${selectedGuest?.name}`}
-            </DialogDescription>
-          </DialogHeader>
+          <DialogHeader className="pt-2 px-0">
+          <DialogTitle className="text-3xl font-black tracking-tight text-slate-900 leading-none">
+            {initialBooking ? 'Modify' : 'New'} Reservation
+          </DialogTitle>
+          <DialogDescription className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
+            {step === 'guest' ? 'Identify guest from local records' : `Designing stay for ${selectedGuest?.name}`}
+          </DialogDescription>
+        </DialogHeader>
         </div>
 
         <div className="p-5 flex-1">
