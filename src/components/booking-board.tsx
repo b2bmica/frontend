@@ -204,8 +204,8 @@ export function BookingBoard() {
       if (newCheckin === currentCheckin && targetRoom._id === getBookingRoomId(booking)) return;
 
       const oldRoom = rooms.find(r => r._id === getBookingRoomId(booking));
-      const dayDiff = differenceInDays(newCheckinDate, parseISO(booking.checkin));
-      const changeText = dayDiff === 0 ? "Changed Room" : (dayDiff > 0 ? `Moved ${dayDiff}d later` : `Moved ${Math.abs(dayDiff)}d earlier`);
+      const dayDiff = Math.round(differenceInDays(newCheckinDate, startOfDay(parseISO(booking.checkin))));
+      const changeText = dayDiff === 0 ? "Changed Room" : (dayDiff > 0 ? `Moved ${dayDiff} night${dayDiff > 1 ? 's' : ''} later` : `Moved ${Math.abs(dayDiff)} night${Math.abs(dayDiff) > 1 ? 's' : ''} earlier`);
       
       setPendingUpdate({
         booking,
@@ -539,19 +539,20 @@ export function BookingBoard() {
 
                         return segments.map((seg, segIdx) => {
                           const group = seg.bookings;
-                          if (group.length === 1) {
-                            const booking = group[0];
-                            const checkinDate  = startOfDay(new Date(booking.checkin));
-                            const checkoutDate = startOfDay(new Date(booking.checkout));
-                            const weekStartDay = startOfDay(weekStart);
+                           if (group.length === 1) {
+                             const booking = group[0];
+                             // Use parseISO consistently to avoid timezone pitfalls
+                             const checkinDate  = startOfDay(parseISO(booking.checkin));
+                             const checkoutDate = startOfDay(parseISO(booking.checkout));
+                             const weekStartDay = startOfDay(weekStart);
 
-                            const offsetDays   = differenceInDays(seg.start, weekStartDay);
-                            const duration     = differenceInDays(seg.end, seg.start);
+                             const offsetDays   = differenceInDays(seg.start, weekStartDay);
+                             const duration     = Math.max(1, differenceInDays(seg.end, seg.start));
 
-                            if (offsetDays + duration <= 0 || offsetDays >= DAYS) return null;
-                            const clampedOffset   = Math.max(0, offsetDays);
-                            const clampedDuration = Math.min(offsetDays + duration, DAYS) - clampedOffset;
-                            if (clampedDuration <= 0) return null;
+                             if (offsetDays + duration <= 0 || offsetDays >= DAYS) return null;
+                             const clampedOffset   = Math.max(0, offsetDays);
+                             const clampedDuration = Math.max(1, Math.min(offsetDays + duration, DAYS) - clampedOffset);
+                             if (clampedDuration <= 0) return null;
 
                             const guest = getGuest(booking);
                             const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
@@ -697,10 +698,11 @@ export function BookingBoard() {
                                               return proposedStart < bEnd && proposedEnd > bStart;
                                             });
 
-                                            if (isClashing) return;
-                                            
-                                             const dayDiff = differenceInDays(parseISO(newCheckout), parseISO(booking.checkout));
-                                             const changeText = dayDiff > 0 ? `Increased stay by ${dayDiff}d` : `Decreased stay by ${Math.abs(dayDiff)}d`;
+                                             if (isClashing) return;
+                                             
+                                             const changeText = rawDaysDelta > 0 
+                                               ? `Increased stay by ${rawDaysDelta} night${Math.abs(rawDaysDelta) > 1 ? 's' : ''}` 
+                                               : `Decreased stay by ${Math.abs(rawDaysDelta)} night${Math.abs(rawDaysDelta) > 1 ? 's' : ''}`;
 
                                              if (proposedEnd > proposedStart) {
                                                setPendingUpdate({
@@ -718,8 +720,8 @@ export function BookingBoard() {
                                                   }
                                                });
                                              }
-                                          }
-                                        };
+                                           }
+                                         };
 
                                       window.addEventListener('pointermove', onPointerMove);
                                       window.addEventListener('pointerup', onPointerUp);
