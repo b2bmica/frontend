@@ -12,10 +12,10 @@ import { Badge } from './ui/badge';
 import { BookingModal } from '@/components/booking-modal';
 import { BookingDetailSheet } from '@/components/booking-detail-sheet';
 import { GuestProfileSheet } from '@/components/guest-profile-sheet';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'All' },
@@ -505,143 +505,153 @@ export function BookingBoard() {
                     ))}
 
                       {(() => {
-                        // Multi-Lane Stacking Logic
-                        // 1. Sort bookings by checkin
-                        const roomMatchBookings = [...roomBookings].sort((a, b) => 
-                          parseISO(a.checkin).getTime() - parseISO(b.checkin).getTime()
-                        );
-                        
-                        // 2. Assign lanes (0, 1, 2...) such that no bookings in the same lane overlap
-                        const lanes: Booking[][] = [];
-                        roomMatchBookings.forEach(b => {
+                        // Priority-based Single-Lane Collapse Logic
+                        const statusPriority: Record<string, number> = {
+                          'checked-in': 4,
+                          'reserved': 3,
+                          'checked-out': 2,
+                          'cancelled': 1,
+                        };
+
+                        const roomSortedBookings = [...roomBookings].sort((a, b) => {
+                          const pA = statusPriority[a.status] || 0;
+                          const pB = statusPriority[b.status] || 0;
+                          if (pA !== pB) return pB - pA; // Higher priority first
+                          return parseISO(a.checkin).getTime() - parseISO(b.checkin).getTime();
+                        });
+
+                        const visibleCards: { primary: Booking, others: Booking[] }[] = [];
+                        roomSortedBookings.forEach(b => {
                           const bStart = parseISO(b.checkin);
                           const bEnd = parseISO(b.checkout);
                           
-                          let assigned = false;
-                          for (let i = 0; i < lanes.length; i++) {
-                            const lastInLane = lanes[i][lanes[i].length - 1];
-                            const lastEnd = parseISO(lastInLane.checkout);
-                            if (bStart >= lastEnd) {
-                              lanes[i].push(b);
-                              assigned = true;
-                              break;
-                            }
-                          }
-                          if (!assigned) {
-                            lanes.push([b]);
-                          }
+                          const overlapCard = visibleCards.find(card => {
+                            const cS = parseISO(card.primary.checkin);
+                            const cE = parseISO(card.primary.checkout);
+                            return bStart < cE && bEnd > cS;
+                          });
+
+                          if (overlapCard) overlapCard.others.push(b);
+                          else visibleCards.push({ primary: b, others: [] });
                         });
 
-                        const totalLanes = Math.max(1, lanes.length);
                         const heightTotal = ROW_HEIGHT - 6;
-                        const laneHeight = heightTotal / totalLanes;
 
-                        return lanes.map((laneBookings, laneIdx) => {
-                          return laneBookings.map(booking => {
-                            const checkinDate  = startOfDay(parseISO(booking.checkin));
-                            const checkoutDate = startOfDay(parseISO(booking.checkout));
-                            const weekStartDay = startOfDay(weekStart);
-                            const periodEnd    = addDays(weekStart, DAYS);
+                        return visibleCards.map(({ primary: booking, others }) => {
+                          const checkinDate  = startOfDay(parseISO(booking.checkin));
+                          const checkoutDate = startOfDay(parseISO(booking.checkout));
+                          const weekStartDay = startOfDay(weekStart);
+                          const periodEnd    = addDays(weekStart, DAYS);
 
-                            // Only render if some part of the booking is visible in this week
-                            if (checkoutDate <= weekStart || checkinDate >= periodEnd) return null;
+                          if (checkoutDate <= weekStart || checkinDate >= periodEnd) return null;
 
-                            const offsetDays   = differenceInDays(checkinDate, weekStartDay);
-                            const duration     = differenceInDays(checkoutDate, checkinDate);
+                          const offsetDays   = differenceInDays(checkinDate, weekStartDay);
+                          const duration     = differenceInDays(checkoutDate, checkinDate);
+                          const clampedOffset   = Math.max(0, offsetDays);
+                          const clampedDuration = Math.min(offsetDays + duration, DAYS) - clampedOffset;
+                          if (clampedDuration <= 0) return null;
 
-                            const clampedOffset   = Math.max(0, offsetDays);
-                            const clampedDuration = Math.min(offsetDays + duration, DAYS) - clampedOffset;
-                            if (clampedDuration <= 0) return null;
+                          const guest = getGuest(booking);
+                          const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
+                          
+                          return (
+                            <motion.div
+                              key={`${booking._id}-visible`}
+                              drag={isEditable && resizingId !== booking._id}
+                              dragSnapToOrigin
+                              dragElastic={0}
+                              dragMomentum={false}
+                              onDragStart={(e, info) => { 
+                                isDraggingRef.current = true; 
+                                if (boardContentRef.current) {
+                                  const rect = boardContentRef.current.getBoundingClientRect();
+                                  const x = info.point.x - rect.left;
+                                  const dayAtMouse = (x - ROOM_COL) / COLUMN_WIDTH;
+                                  const bookingStartDay = differenceInDays(checkinDate, weekStartDay);
+                                  dragGrabOffsetDaysRef.current = dayAtMouse - bookingStartDay;
+                                }
+                              }}
+                              onDragEnd={(e, info) => handleDragEnd(e, info, booking)}
+                              whileDrag={{ scale: 1.02, zIndex: 100, opacity: 0.9, cursor: 'grabbing' }}
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              className={cn(
+                                "absolute z-10 rounded-md p-1.5 text-white shadow-lg overflow-hidden flex flex-col justify-between transition-all group/booking",
+                                getStatusColor(booking.status),
+                                isEditable ? "cursor-grab" : "cursor-pointer",
+                                isDraggingRef.current && "opacity-50"
+                              )}
+                              style={{
+                                left:   ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 1,
+                                top:    3,
+                                width:  (clampedDuration * COLUMN_WIDTH) - 2,
+                                height: heightTotal,
+                                transition: (resizingId === booking._id || isDraggingRef.current) ? 'none' : 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                              }}
+                              onClick={(e) => { 
+                                if (isDraggingRef.current || isResizingRef.current) return;
+                                e.stopPropagation(); 
+                                setSelectedBooking(booking); 
+                              }}
+                            >
+                               <div className="flex flex-col h-full justify-between">
+                                  <div className="flex justify-between items-start">
+                                    <button
+                                      className="font-bold truncate text-left hover:underline leading-tight z-10 relative w-fit outline-none text-[10px] md:text-sm"
+                                      onClick={(e) => {
+                                        if (isDraggingRef.current || isResizingRef.current) return;
+                                        e.stopPropagation();
+                                        if (guest?._id) setSelectedGuestId(guest._id);
+                                        else setSelectedBooking(booking);
+                                      }}
+                                    >
+                                      {guest?.name || 'Guest'}
+                                    </button>
 
-                             const myStart = parseISO(booking.checkin);
-                             const myEnd = parseISO(booking.checkout);
-                             // Find max concurrency at any point in this specific booking's duration
-                             let maxConcurrentAtAnyPoint = 1;
-                             const startDate = parseISO(booking.checkin);
-                             const endDate   = parseISO(booking.checkout);
-                             
-                             // Check each day of this booking
-                             const myDays = eachDayOfInterval({ start: startDate, end: addDays(endDate, -1) });
-                             myDays.forEach(day => {
-                               const countAtDay = roomMatchBookings.filter(b => {
-                                 const s = parseISO(b.checkin);
-                                 const e = parseISO(b.checkout);
-                                 return day >= s && day < e;
-                               }).length;
-                               if (countAtDay > maxConcurrentAtAnyPoint) maxConcurrentAtAnyPoint = countAtDay;
-                             });
-
-                             const displayHeight = heightTotal / maxConcurrentAtAnyPoint;
-                             const isSolitary = maxConcurrentAtAnyPoint === 1;
-
-                             const guest = getGuest(booking);
-                             const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
-                            
-                            return (
-                              <motion.div
-                                key={`${booking._id}-lane`}
-                                drag={isEditable && resizingId !== booking._id}
-                                dragSnapToOrigin
-                                dragElastic={0}
-                                dragMomentum={false}
-                                onDragStart={(e, info) => { 
-                                  isDraggingRef.current = true; 
-                                  if (boardContentRef.current) {
-                                    const rect = boardContentRef.current.getBoundingClientRect();
-                                    const x = info.point.x - rect.left;
-                                    const dayAtMouse = (x - ROOM_COL) / COLUMN_WIDTH;
-                                    const bookingStartDay = differenceInDays(startDate, weekStartDay);
-                                    dragGrabOffsetDaysRef.current = dayAtMouse - bookingStartDay;
-                                  }
-                                }}
-                                onDragEnd={(e, info) => handleDragEnd(e, info, booking)}
-                                whileDrag={{ scale: 1.02, zIndex: 100, opacity: 0.9, cursor: 'grabbing' }}
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                className={cn(
-                                  "absolute z-10 rounded-md p-1.5 text-white shadow-md overflow-hidden flex flex-col justify-between transition-all group/booking",
-                                  getStatusColor(booking.status),
-                                  isEditable ? "cursor-grab" : "cursor-pointer",
-                                  isDraggingRef.current && "opacity-50"
-                                )}
-                                 style={{
-                                   left:   ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 1,
-                                   top:    3 + (laneIdx * (heightTotal / Math.max(laneIdx + 1, maxConcurrentAtAnyPoint))),
-                                   width:  (clampedDuration * COLUMN_WIDTH) - 2,
-                                   height: Math.max(14, (heightTotal / Math.max(laneIdx + 1, maxConcurrentAtAnyPoint)) - 2),
-                                   transition: (resizingId === booking._id || isDraggingRef.current) ? 'none' : 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                                 }}
-                                onClick={(e) => { 
-                                  if (isDraggingRef.current || isResizingRef.current) return;
-                                  e.stopPropagation(); 
-                                  setSelectedBooking(booking); 
-                                }}
-                              >
-                                 <div className="flex flex-col h-full justify-between">
-                                     <button
-                                       className={cn(
-                                         "font-bold truncate text-left hover:underline leading-tight z-10 relative w-fit outline-none",
-                                         isSolitary ? "text-[10px] md:text-xs" : "text-[8px] md:text-[9px]"
-                                       )}
-                                       onClick={(e) => {
-                                         if (isDraggingRef.current || isResizingRef.current) return;
-                                         e.stopPropagation();
-                                         if (guest?._id) setSelectedGuestId(guest._id);
-                                         else setSelectedBooking(booking);
-                                       }}
-                                     >
-                                       {guest?.name || 'Guest'}
-                                     </button>
-                                     
-                                     {totalLanes === 1 && (
-                                       <span className="text-[8px] md:text-[10px] bg-black/20 px-1 py-0.5 rounded-full truncate font-semibold capitalize tracking-tighter w-fit z-10 relative pointer-events-none">
-                                         {booking.status.replace('-', ' ')}
-                                       </span>
-                                     )}
-                                 </div>
+                                    {others.length > 0 && (
+                                       <Popover>
+                                          <PopoverTrigger asChild>
+                                             <button 
+                                               className="bg-white/20 hover:bg-white/40 text-[9px] px-1.5 py-0.5 rounded-full font-black animate-pulse z-20"
+                                               onClick={e => e.stopPropagation()}
+                                             >
+                                                +{others.length} more
+                                             </button>
+                                          </PopoverTrigger>
+                                          <PopoverContent className="w-64 p-2 rounded-2xl shadow-3xl border-none">
+                                             <div className="p-2 border-b mb-1">
+                                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Co-existing Entries</p>
+                                             </div>
+                                             <div className="space-y-1">
+                                                {others.map(o => (
+                                                   <button
+                                                      key={o._id}
+                                                      className="w-full p-2 hover:bg-slate-50 rounded-lg text-left transition-colors flex items-center justify-between group/o"
+                                                      onClick={(e) => { e.stopPropagation(); setSelectedBooking(o); }}
+                                                   >
+                                                      <div className="flex flex-col">
+                                                         <span className="text-[11px] font-black text-slate-900 group-hover/o:text-primary">{getGuest(o)?.name || 'Guest'}</span>
+                                                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{o.status} • {format(parseISO(o.checkout), 'MMM dd')}</span>
+                                                      </div>
+                                                      <div className={cn("w-1.5 h-1.5 rounded-full", getStatusColor(o.status).includes('emerald') ? 'bg-emerald-500' : 'bg-slate-400')} />
+                                                   </button>
+                                                ))}
+                                             </div>
+                                          </PopoverContent>
+                                       </Popover>
+                                    )}
+                                  </div>
+                                  
+                                   <div className="flex items-center gap-1.5">
+                                      <span className="text-[8px] md:text-[10px] bg-black/20 px-1.5 py-0.5 rounded-full truncate font-semibold capitalize tracking-tighter w-fit z-10 relative pointer-events-none">
+                                        {booking.status.replace('-', ' ')}
+                                      </span>
+                                      <span className="text-[8px] opacity-70 font-bold tracking-tighter">{format(parseISO(booking.checkin), 'MMM dd')} - {format(parseISO(booking.checkout), 'MMM dd')}</span>
+                                   </div>
+                               </div>
 
                                  {/* Resize handle (Right edge) */}
-                                 {isEditable && totalLanes === 1 && (
+                                 {isEditable && (
                                    <div 
                                      className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/30 z-50 flex items-center justify-center opacity-0 group-hover/booking:opacity-100 transition-opacity touch-none"
                                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
@@ -729,8 +739,7 @@ export function BookingBoard() {
                               </motion.div>
                             );
                           });
-                        });
-                      })()}
+                        })()}
                   </div>
                 );
               })}
