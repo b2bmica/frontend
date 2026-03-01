@@ -4,7 +4,7 @@ import {
   differenceInDays, startOfDay, isBefore, parseISO
 } from 'date-fns';
 import { motion } from 'framer-motion';
-import { Loader2, Search, UserPlus, IndianRupee, Info, Printer, ChevronLeft, ChevronRight, ChevronDown, Plus, Bed, X, ShieldCheck, ArrowRight, Calendar } from 'lucide-react';
+import { Loader2, Search, UserPlus, IndianRupee, Info, Printer, ChevronLeft, ChevronRight, ChevronDown, Plus, Minus, Bed, X, ShieldCheck, ArrowRight, Calendar } from 'lucide-react';
 import { useBookings, type Booking } from '../context/booking-context';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -597,7 +597,7 @@ export function BookingBoard() {
                                <div className="flex flex-col h-full justify-between">
                                   <div className="flex justify-between items-start">
                                     <button
-                                      className="font-bold truncate text-left hover:underline leading-tight z-10 relative w-fit outline-none text-[10px] md:text-sm"
+                                      className="font-bold truncate text-left hover:underline leading-tight z-10 relative w-fit outline-none text-[10px] md:text-xs"
                                       onClick={(e) => {
                                         if (isDraggingRef.current || isResizingRef.current) return;
                                         e.stopPropagation();
@@ -615,7 +615,7 @@ export function BookingBoard() {
                                                className="bg-white/20 hover:bg-white/40 text-[9px] px-1.5 py-0.5 rounded-full font-black animate-pulse z-20"
                                                onClick={e => e.stopPropagation()}
                                              >
-                                                +{others.length} more
+                                                +{others.length}
                                              </button>
                                           </PopoverTrigger>
                                           <PopoverContent className="w-64 p-2 rounded-2xl shadow-3xl border-none">
@@ -642,50 +642,67 @@ export function BookingBoard() {
                                     )}
                                   </div>
                                   
-                                   <div className="flex items-center gap-1.5">
-                                      <span className="text-[8px] md:text-[10px] bg-black/20 px-1.5 py-0.5 rounded-full truncate font-semibold capitalize tracking-tighter w-fit z-10 relative pointer-events-none">
+                                   <div className="flex items-center gap-1.5 overflow-hidden">
+                                      <span className="text-[8px] md:text-[10px] bg-black/20 px-1 py-0.5 rounded-full truncate font-semibold capitalize tracking-tighter w-fit z-10 relative pointer-events-none">
                                         {booking.status.replace('-', ' ')}
                                       </span>
-                                      <span className="text-[8px] opacity-70 font-bold tracking-tighter">{format(parseISO(booking.checkin), 'MMM dd')} - {format(parseISO(booking.checkout), 'MMM dd')}</span>
+                                      
+                                      {/* Quick Actions for Primary Card */}
+                                      {isEditable && (
+                                        <div className="flex items-center gap-1 ml-auto opacity-0 group-hover/booking:opacity-100 transition-opacity whitespace-nowrap">
+                                          <button 
+                                            className="h-4 w-4 rounded-md bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors"
+                                            onClick={(e) => handleQuickReduce(e, booking)}
+                                          >
+                                            <Minus className="h-2 w-2" />
+                                          </button>
+                                          <button 
+                                            className="h-4 w-4 rounded-md bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors"
+                                            onClick={(e) => handleQuickExtend(e, booking)}
+                                          >
+                                            <Plus className="h-2 w-2" />
+                                          </button>
+                                        </div>
+                                      )}
                                    </div>
                                </div>
 
                                  {/* Resize handle (Right edge) */}
                                  {isEditable && (
                                    <div 
-                                     className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/30 z-50 flex items-center justify-center opacity-0 group-hover/booking:opacity-100 transition-opacity touch-none"
+                                     className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize hover:bg-white/20 z-[60] flex items-center justify-center opacity-0 group-hover/booking:opacity-100 transition-opacity touch-none group-active/booking:opacity-100"
                                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
                                      onPointerDown={(e) => {
                                        e.stopPropagation();
                                        e.preventDefault();
                                        const handleEl = e.currentTarget as HTMLElement;
-                                       try {
-                                         handleEl.setPointerCapture(e.pointerId);
-                                       } catch (err) {}
+                                       const cardElement = handleEl.parentElement as HTMLElement;
+                                       if (!cardElement) return;
+
+                                       try { handleEl.setPointerCapture(e.pointerId); } catch (err) {}
                                        
                                        const startX = e.clientX;
-                                       const cardElement = handleEl.parentElement as HTMLElement;
-                                       const originalWidth = cardElement.getBoundingClientRect().width;
+                                       const originalWidth = cardElement.offsetWidth;
                                        let hasMovedSignificant = false;
 
                                        const onPointerMove = (moveEvent: PointerEvent) => {
                                           const deltaX = moveEvent.clientX - startX;
-                                          if (!hasMovedSignificant && Math.abs(deltaX) > 8) { // Increased threshold to 8px
+                                          if (!hasMovedSignificant && Math.abs(deltaX) > 5) {
                                             hasMovedSignificant = true;
                                             isResizingRef.current = true;
                                             setResizingId(booking._id);
                                           }
-                                          if (hasMovedSignificant && cardElement) {
+
+                                          if (hasMovedSignificant) {
                                             const snappedDeltaX = Math.round(deltaX / COLUMN_WIDTH) * COLUMN_WIDTH;
-                                            const minWidth = COLUMN_WIDTH;
-                                            const newWidth = Math.max(minWidth, originalWidth + snappedDeltaX);
-                                            cardElement.style.width = newWidth + "px";
-                                            if (cardElement.style.transition !== 'none') cardElement.style.transition = 'none';
+                                            const newWidth = Math.max(COLUMN_WIDTH, originalWidth + snappedDeltaX);
+                                            cardElement.style.width = `${newWidth}px`;
+                                            cardElement.style.transition = 'none';
+                                            cardElement.style.zIndex = '100';
                                           }
                                        };
 
                                        const onPointerUp = (upEvent: PointerEvent) => {
-                                         cleanup();
                                          const deltaX = upEvent.clientX - startX;
                                          const rawDaysDelta = Math.round(deltaX / COLUMN_WIDTH);
                                          
@@ -712,6 +729,7 @@ export function BookingBoard() {
                                               }
                                            });
                                          }
+                                         cleanup();
                                        };
 
                                        const cleanup = () => {
@@ -719,13 +737,16 @@ export function BookingBoard() {
                                          window.removeEventListener('pointermove', onPointerMove);
                                          window.removeEventListener('pointerup', onPointerUp);
                                          window.removeEventListener('pointercancel', cleanup);
+                                         
                                          if (cardElement) {
                                            cardElement.style.width = ""; 
                                            cardElement.style.zIndex = "";
-                                           cardElement.style.transition = "";
+                                           setTimeout(() => {
+                                              if (cardElement) cardElement.style.transition = "";
+                                           }, 50);
                                          }
                                          setResizingId(null);
-                                         setTimeout(() => { isResizingRef.current = false; }, 50);
+                                         setTimeout(() => { isResizingRef.current = false; }, 100);
                                        };
 
                                        window.addEventListener('pointermove', onPointerMove);
@@ -733,7 +754,7 @@ export function BookingBoard() {
                                        window.addEventListener('pointercancel', cleanup);
                                      }}
                                    >
-                                     <div className="h-6 w-1 bg-white/40 rounded-full" />
+                                     <div className="h-6 w-1 bg-white/50 rounded-full shadow-sm" />
                                    </div>
                                  )}
                               </motion.div>
