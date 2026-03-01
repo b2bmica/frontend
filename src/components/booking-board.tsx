@@ -830,9 +830,6 @@ export function BookingBoard() {
                    <DialogTitle className="text-xl font-black italic tracking-tighter text-slate-900 leading-none">Confirm Change</DialogTitle>
                 </DialogHeader>
              </div>
-              <div className="flex flex-col items-end">
-                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1 opacity-50">Manual Registry Override</p>
-              </div>
           </div>
 
           <div className="p-6 space-y-6">
@@ -864,13 +861,46 @@ export function BookingBoard() {
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100/50 text-center animate-in fade-in slide-in-from-bottom-2 duration-400">
-               <p className="text-xs font-medium text-slate-600 leading-relaxed">
-                 {pendingUpdate?.details.changeText.includes('Push') 
-                   ? `Moving booking to ${pendingUpdate.details.newRoom} and shifting by ${pendingUpdate.details.changeText.split('night')[0].split('+')[1] || pendingUpdate.details.changeText.split('night')[0].split('-')[1] || '0'} nights.`
-                   : pendingUpdate?.details.changeText}
-               </p>
-            </div>
+            {pendingUpdate?.details.changeText && (() => {
+               const text = pendingUpdate.details.changeText;
+               const isExtend  = text.toLowerCase().startsWith('extend');
+               const isReduce  = text.toLowerCase().startsWith('reduce');
+               const isMove    = !isExtend && !isReduce;
+               const icon      = isExtend ? '↔ +' : isReduce ? '↔ −' : '✦';
+               const nightsNum = text.match(/[+-]?\d+/);
+               const nights    = nightsNum ? Math.abs(Number(nightsNum[0])) : null;
+               return (
+                 <div className={cn(
+                   "flex items-center justify-center gap-2 py-3 px-4 rounded-2xl text-center",
+                   isExtend ? "bg-emerald-50 border border-emerald-100" :
+                   isReduce ? "bg-amber-50 border border-amber-100" :
+                   "bg-primary/5 border border-primary/10"
+                 )}>
+                   <span className={cn(
+                     "text-lg font-black leading-none",
+                     isExtend ? "text-emerald-500" : isReduce ? "text-amber-500" : "text-primary"
+                   )}>{icon}</span>
+                   <div className="flex flex-col items-start">
+                     <span className={cn(
+                       "text-[11px] font-black uppercase tracking-widest",
+                       isExtend ? "text-emerald-600" : isReduce ? "text-amber-600" : "text-primary"
+                     )}>
+                       {isExtend ? 'Extend Stay' : isReduce ? 'Shorten Stay' : 'Move Booking'}
+                     </span>
+                     {nights && (
+                       <span className="text-[10px] font-bold text-slate-400">
+                         {isExtend ? `+${nights}` : isReduce ? `−${nights}` : ''} night{nights !== 1 ? 's' : ''}
+                       </span>
+                     )}
+                     {isMove && (
+                       <span className="text-[10px] font-bold text-slate-400">
+                         {text}
+                       </span>
+                     )}
+                   </div>
+                 </div>
+               );
+            })()}
 
             <DialogFooter className="flex flex-row gap-3 pt-2">
               <Button 
