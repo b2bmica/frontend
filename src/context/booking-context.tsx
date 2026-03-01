@@ -33,6 +33,7 @@ export interface Booking {
   status: 'reserved' | 'checked-in' | 'checked-out' | 'cancelled';
   createdAt?: string;
   updatedAt?: string;
+  createdBy?: { name: string; email: string };
 }
 
 export interface Guest {

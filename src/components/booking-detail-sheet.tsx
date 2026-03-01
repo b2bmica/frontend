@@ -148,18 +148,19 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
               <p className="text-muted-foreground font-medium text-xs flex items-center gap-2">
                 Stay Duration: {nights} Night{nights > 1 ? 's' : ''} • {format(new Date(booking.checkin), 'MMM dd')} - {format(new Date(booking.checkout), 'MMM dd')}
               </p>
-              {booking.createdAt && (
-                <div className="text-[10px] font-bold text-slate-300 uppercase tracking-widest flex items-center gap-x-3 gap-y-1 flex-wrap">
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="h-2.5 w-2.5" /> Booked: {format(new Date(booking.createdAt), 'dd MMM, HH:mm')}
-                  </div>
+                <div className="text-[10px] font-bold text-slate-300 uppercase tracking-widest flex items-center gap-x-4 gap-y-1 flex-wrap mt-2 pt-2 border-t border-slate-100">
+                  {booking.createdAt && (
+                    <div className="flex items-center gap-1.5 opacity-80">
+                      <Clock className="h-2.5 w-2.5" /> Booked: {format(new Date(booking.createdAt), 'dd MMM, HH:mm')}
+                    </div>
+                  )}
                   {booking.createdBy && (
-                    <div className="flex items-center gap-1.5 text-primary/60">
-                      <User className="h-2.5 w-2.5" /> By: {typeof booking.createdBy === 'object' ? booking.createdBy.name : 'System'}
+                    <div className="flex items-center gap-1.5 text-slate-500 font-extrabold">
+                      <ShieldCheck className="h-3 w-3 text-primary/60" /> 
+                      Staff: <span className="text-slate-900">{typeof booking.createdBy === 'object' ? booking.createdBy.name : 'System'}</span>
                     </div>
                   )}
                 </div>
-              )}
             </div>
           </div>
         </div>

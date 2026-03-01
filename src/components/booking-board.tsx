@@ -28,7 +28,8 @@ const STATUS_FILTERS = [
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'checked-in':  return 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20';
-    case 'reserved':    return 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20';
+    case 'reserved':
+    case 'confirmed':   return 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20';
     case 'checked-out': return 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/20';
     case 'cancelled':   return 'bg-slate-400 hover:bg-slate-500 shadow-slate-400/20';
     default:            return 'bg-gray-400';
@@ -63,9 +64,10 @@ export function BookingBoard() {
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
   const [resizingId, setResizingId] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [useNewPrice, setUseNewPrice] = useState(true);
   const [pendingUpdate, setPendingUpdate] = useState<{
     booking: Booking;
-    updates: { roomId: string; checkin: string; checkout: string };
+    updates: { roomId: string; checkin: string; checkout: string; roomPrice?: number };
     type: 'move' | 'resize';
     details: {
       oldRoom?: string;
@@ -76,25 +78,34 @@ export function BookingBoard() {
       newCheckout: string;
       changeText: string;
       nightsDelta?: number;
+      oldPrice: number;
+      newPrice: number;
     }
   } | null>(null);
 
   const [isMobile, setIsMobile] = useState(false);
   const daysCount = 7;
+  const [boardWidth, setBoardWidth] = useState(0);
+
   useEffect(() => {
-    const check = () => {
-      const width = window.innerWidth;
-      setIsMobile(width < 768);
+    if (!boardRef.current) return;
+    const updateWidth = () => {
+      if (boardRef.current) {
+        // Use clientWidth to exclude scrollbar width if any
+        setBoardWidth(boardRef.current.clientWidth);
+        setIsMobile(window.innerWidth < 768);
+      }
     };
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(boardRef.current);
+    return () => observer.disconnect();
   }, []);
 
   const DAYS = daysCount;
-  const COLUMN_WIDTH = isMobile ? 95 : 140;
-  const ROW_HEIGHT  = isMobile ? 62 : 72;
   const ROOM_COL    = isMobile ? 100 : 152;
+  const COLUMN_WIDTH = isMobile ? 95 : (boardWidth > 0 ? (boardWidth - ROOM_COL) / DAYS : 140);
+  const ROW_HEIGHT  = isMobile ? 62 : 72;
 
   const timeline = useMemo(() =>
     eachDayOfInterval({ start: weekStart, end: addDays(weekStart, DAYS - 1) }),
@@ -229,6 +240,8 @@ export function BookingBoard() {
       const nightText = dayDiff === 0 ? "" : (dayDiff > 0 ? ` +${dayDiff} night${dayDiff > 1 ? 's' : ''}` : ` -${Math.abs(dayDiff)} night${Math.abs(dayDiff) > 1 ? 's' : ''}`);
       const changeText = targetRoom._id !== getBookingRoomId(booking) ? `Push to Rm ${targetRoom.roomNumber}${nightText}` : (nightText ? `Shift ${nightText.trim()}` : "Save changes");
       
+      setUseNewPrice(targetRoom.price !== booking.roomPrice);
+
       setPendingUpdate({
         booking,
         updates: { roomId: targetRoom._id, checkin: newCheckin, checkout: newCheckout },
@@ -241,7 +254,9 @@ export function BookingBoard() {
           oldCheckout: booking.checkout,
           newCheckout,
           changeText,
-          nightsDelta: dayDiff
+          nightsDelta: dayDiff,
+          oldPrice: booking.roomPrice || 0,
+          newPrice: targetRoom.price || 0
         }
       });
     }
@@ -455,7 +470,7 @@ export function BookingBoard() {
 
         {/* ── Board ── */}
         <div className="flex-1 overflow-auto" ref={boardRef}>
-          <div className="inline-block min-w-full relative" ref={boardContentRef}>
+          <div className={cn("relative", isMobile ? "inline-block min-w-full" : "w-full")} ref={boardContentRef}>
 
             {/* Column headers */}
             <div className="flex sticky top-0 z-30 bg-card border-b">
@@ -518,7 +533,7 @@ export function BookingBoard() {
                           className={cn(
                             "border-r transition-colors flex-shrink-0",
                             isSameDay(day, new Date()) && "bg-primary/5",
-                            isDayBooked ? "bg-slate-200/60 cursor-not-allowed" : "cursor-pointer hover:bg-primary/5"
+                            isDayBooked ? "bg-slate-100/40 cursor-not-allowed" : "cursor-pointer hover:bg-primary/5"
                           )}
                           style={{ width: COLUMN_WIDTH, minWidth: COLUMN_WIDTH, position: 'relative', zIndex: 5 }}
                           title={isDayBooked ? "This room is already occupied on this date" : "Click to add booking"}
@@ -809,25 +824,25 @@ export function BookingBoard() {
                                   return startOfDay(parseISO(booking.checkin)) < bE && newCheckoutDate > bS;
                                 });
 
-                                if (!isClashingRes) {
-                                  setPendingUpdate({
-                                    booking,
-                                    updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout },
-                                    type: 'resize',
-                                    details: {
-                                      oldRoom:     room.roomNumber,
-                                      newRoom:     room.roomNumber,
-                                      oldCheckin:  booking.checkin,
-                                      newCheckin:  booking.checkin,
-                                      oldCheckout: booking.checkout,
-                                      newCheckout,
-                                      changeText: daysDelta > 0
-                                        ? `Extend +${daysDelta} night${daysDelta > 1 ? 's' : ''}`
-                                        : `Reduce ${Math.abs(daysDelta)} night${Math.abs(daysDelta) > 1 ? 's' : ''}`,
-                                      nightsDelta: daysDelta
-                                    },
-                                  });
-                                }
+                                 if (!isClashingRes) {
+                                   setUseNewPrice(false); // Resizing usually keeps the same room price
+                                   setPendingUpdate({
+                                     booking,
+                                     updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout },
+                                     type: 'resize',
+                                     details: {
+                                       oldRoom: room.roomNumber,
+                                       oldCheckin: booking.checkin,
+                                       newCheckin: booking.checkin,
+                                       oldCheckout: booking.checkout,
+                                       newCheckout: newCheckout,
+                                       changeText: daysDelta > 0 ? `Extend stay` : `Shorten stay`,
+                                       nightsDelta: daysDelta,
+                                       oldPrice: booking.roomPrice || 0,
+                                       newPrice: booking.roomPrice || 0
+                                     }
+                                   });
+                                 }
                               }
                               cleanup();
                             };
@@ -868,7 +883,7 @@ export function BookingBoard() {
                                 width:  cardWidth,
                                 height: heightTotal,
                                 zIndex: 10,
-                                opacity: (booking.status === 'cancelled' || booking.status === 'checked-out') ? 0.45 : 1,
+                                opacity: (booking.status === 'cancelled' || booking.status === 'checked-out') ? 0.75 : 1,
                                 cursor: isEditable ? 'grab' : 'pointer',
                                 touchAction: isEditable ? 'none' : 'auto',
                                 transition: resizingId === booking._id ? 'none' : 'left 0.15s ease, width 0.15s ease',
@@ -1015,6 +1030,39 @@ export function BookingBoard() {
               </div>
             </div>
 
+            {pendingUpdate && pendingUpdate.details.oldPrice !== pendingUpdate.details.newPrice && (
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col gap-2">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Room Price Change</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-slate-400 line-through decoration-slate-300">₹{pendingUpdate.details.oldPrice}</span>
+                    <ArrowRight className="h-2.5 w-2.5 text-slate-300" />
+                    <span className="text-[11px] font-black text-emerald-600">₹{pendingUpdate.details.newPrice}</span>
+                  </div>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setUseNewPrice(!useNewPrice)}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-2 rounded-xl border transition-all",
+                    useNewPrice 
+                      ? "bg-emerald-600 border-emerald-500 text-white shadow-md shadow-emerald-500/10" 
+                      : "bg-white border-slate-200 text-slate-600"
+                  )}
+                >
+                  <div className={cn(
+                    "w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-all",
+                    useNewPrice ? "bg-white border-transparent" : "bg-slate-100 border-slate-300"
+                  )}>
+                    {useNewPrice && <div className="w-1.5 h-1.5 rounded-full bg-emerald-600" />}
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-tight">
+                    {useNewPrice ? "Apply New Room Price" : "Keep Original Price"}
+                  </span>
+                </button>
+              </div>
+            )}
+
             {pendingUpdate?.details.changeText && (() => {
                const text = pendingUpdate.details.changeText;
                const nights = pendingUpdate.details.nightsDelta;
@@ -1060,10 +1108,14 @@ export function BookingBoard() {
                 onClick={async () => {
                   if (pendingUpdate) {
                     setIsUpdating(true);
-                    try {
-                      await updateBooking(pendingUpdate.booking._id, pendingUpdate.updates);
-                      setPendingUpdate(null);
-                    } catch (err) {
+                     try {
+                        const finalUpdates = { ...pendingUpdate.updates };
+                        if (useNewPrice && pendingUpdate.details.newPrice !== pendingUpdate.details.oldPrice) {
+                          finalUpdates.roomPrice = pendingUpdate.details.newPrice;
+                        }
+                        await updateBooking(pendingUpdate.booking._id, finalUpdates);
+                        setPendingUpdate(null);
+                      } catch (err) {
                       console.error(err);
                     } finally {
                       setIsUpdating(false);
