@@ -639,89 +639,93 @@ export function BookingBoard() {
                                       
                                       let hasMovedSignificant = false;
 
-                                      const onPointerMove = (moveEvent: PointerEvent) => {
-                                        const deltaX = moveEvent.clientX - startX;
-                                        
-                                        if (!hasMovedSignificant && Math.abs(deltaX) > 4) { // Reduced threshold for 'significant' move
-                                          hasMovedSignificant = true;
-                                          isResizingRef.current = true;
-                                        }
+                                       const onPointerMove = (moveEvent: PointerEvent) => {
+                                         const deltaX = moveEvent.clientX - startX;
+                                         
+                                         if (!hasMovedSignificant && Math.abs(deltaX) > 5) { 
+                                           hasMovedSignificant = true;
+                                           isResizingRef.current = true;
+                                         }
 
-                                        if (hasMovedSignificant && cardElement) {
-                                          const snappedDeltaX = Math.round(deltaX / COLUMN_WIDTH) * COLUMN_WIDTH;
-                                          const minWidth = COLUMN_WIDTH - 2;
-                                          const newWidth = Math.max(minWidth, originalWidth + snappedDeltaX);
-                                          cardElement.style.width = newWidth + "px";
-                                        }
-                                      };
-                                        const onPointerUp = (upEvent: PointerEvent) => {
-                                          try {
-                                            handleEl.releasePointerCapture(upEvent.pointerId);
-                                          } catch (err) {}
-                                          window.removeEventListener('pointermove', onPointerMove);
-                                          window.removeEventListener('pointerup', onPointerUp);
+                                         if (hasMovedSignificant && cardElement) {
+                                           const snappedDeltaX = Math.round(deltaX / COLUMN_WIDTH) * COLUMN_WIDTH;
+                                           const minWidth = COLUMN_WIDTH;
+                                           const newWidth = Math.max(minWidth, originalWidth + snappedDeltaX);
+                                           cardElement.style.width = newWidth + "px";
+                                         }
+                                       };
 
-                                          const deltaX = upEvent.clientX - startX;
-                                          const rawDaysDelta = Math.round(deltaX / COLUMN_WIDTH);
-                                          
-                                          // Reset visuals immediately and absolutely
-                                          if (cardElement) {
-                                            cardElement.style.width = ""; 
-                                            cardElement.style.zIndex = "";
-                                            cardElement.style.transition = "";
-                                          }
+                                       const onPointerUp = (upEvent: PointerEvent) => {
+                                         cleanup();
 
-                                          // Always reset resizing state promptly
-                                          setResizingId(null);
-                                          setTimeout(() => {
-                                            isResizingRef.current = false;
-                                          }, 50);
+                                         const deltaX = upEvent.clientX - startX;
+                                         const rawDaysDelta = Math.round(deltaX / COLUMN_WIDTH);
+                                         
+                                         if (hasMovedSignificant && rawDaysDelta !== 0) {
+                                           const originalCheckin = startOfDay(parseISO(booking.checkin));
+                                           const originalCheckout = startOfDay(parseISO(booking.checkout));
+                                           const originalNights = differenceInDays(originalCheckout, originalCheckin);
+                                           const newNights = Math.max(1, originalNights + rawDaysDelta);
+                                           const newCheckout = format(addDays(originalCheckin, newNights), 'yyyy-MM-dd');
+                                           
+                                           const proposedEnd = startOfDay(parseISO(newCheckout));
+                                           const proposedStart = originalCheckin;
+                                           
+                                           const isClashing = bookings.some(b => {
+                                             if (b._id === booking._id || b.status === 'cancelled' || b.status === 'checked-out') return false;
+                                             if (getBookingRoomId(b) !== getBookingRoomId(booking)) return false;
+                                             const bStart = parseISO(b.checkin);
+                                             const bEnd = parseISO(b.checkout);
+                                             return proposedStart < bEnd && proposedEnd > bStart;
+                                           });
 
-                                          if (hasMovedSignificant && rawDaysDelta !== 0) {
-                                            const originalCheckin = startOfDay(parseISO(booking.checkin));
-                                            const originalCheckout = startOfDay(parseISO(booking.checkout));
-                                            const originalNights = differenceInDays(originalCheckout, originalCheckin);
-                                            const newNights = Math.max(1, originalNights + rawDaysDelta);
-                                            const newCheckout = format(addDays(originalCheckin, newNights), 'yyyy-MM-dd');
-                                            
-                                            const proposedEnd = startOfDay(parseISO(newCheckout));
-                                            const proposedStart = originalCheckin;
-                                            
-                                            const isClashing = bookings.some(b => {
-                                              if (b._id === booking._id || b.status === 'cancelled' || b.status === 'checked-out') return false;
-                                              if (getBookingRoomId(b) !== getBookingRoomId(booking)) return false;
-                                              const bStart = parseISO(b.checkin);
-                                              const bEnd = parseISO(b.checkout);
-                                              return proposedStart < bEnd && proposedEnd > bStart;
-                                            });
+                                           if (isClashing) return;
+                                           
+                                           const changeText = rawDaysDelta > 0 
+                                             ? `Increased stay by ${rawDaysDelta} night${Math.abs(rawDaysDelta) > 1 ? 's' : ''}` 
+                                             : `Decreased stay by ${Math.abs(rawDaysDelta)} night${Math.abs(rawDaysDelta) > 1 ? 's' : ''}`;
 
-                                             if (isClashing) return;
-                                             
-                                             const changeText = rawDaysDelta > 0 
-                                               ? `Increased stay by ${rawDaysDelta} night${Math.abs(rawDaysDelta) > 1 ? 's' : ''}` 
-                                               : `Decreased stay by ${Math.abs(rawDaysDelta)} night${Math.abs(rawDaysDelta) > 1 ? 's' : ''}`;
-
-                                             if (proposedEnd > proposedStart) {
-                                               setPendingUpdate({
-                                                  booking,
-                                                  updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout },
-                                                  type: 'resize',
-                                                  details: {
-                                                    oldRoom: room.roomNumber,
-                                                    newRoom: room.roomNumber,
-                                                    oldCheckin: booking.checkin,
-                                                    newCheckin: booking.checkin,
-                                                    oldCheckout: booking.checkout,
-                                                    newCheckout,
-                                                    changeText
-                                                  }
-                                               });
-                                             }
+                                           if (proposedEnd > proposedStart) {
+                                             setPendingUpdate({
+                                                booking,
+                                                updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout },
+                                                type: 'resize',
+                                                details: {
+                                                  oldRoom: room.roomNumber,
+                                                  newRoom: room.roomNumber,
+                                                  oldCheckin: booking.checkin,
+                                                  newCheckin: booking.checkin,
+                                                  oldCheckout: booking.checkout,
+                                                  newCheckout,
+                                                  changeText
+                                                }
+                                             });
                                            }
-                                         };
+                                         }
+                                       };
 
-                                      window.addEventListener('pointermove', onPointerMove);
-                                      window.addEventListener('pointerup', onPointerUp);
+                                       const cleanup = () => {
+                                         try {
+                                           handleEl.releasePointerCapture(e.pointerId);
+                                         } catch (err) {}
+                                         window.removeEventListener('pointermove', onPointerMove);
+                                         window.removeEventListener('pointerup', onPointerUp);
+                                         window.removeEventListener('pointercancel', cleanup);
+
+                                         if (cardElement) {
+                                           cardElement.style.width = ""; 
+                                           cardElement.style.zIndex = "";
+                                           cardElement.style.transition = "";
+                                         }
+                                         setResizingId(null);
+                                         setTimeout(() => {
+                                           isResizingRef.current = false;
+                                         }, 50);
+                                       };
+
+                                       window.addEventListener('pointermove', onPointerMove);
+                                       window.addEventListener('pointerup', onPointerUp);
+                                       window.addEventListener('pointercancel', cleanup);
                                     }}
                                     onDoubleClick={(e) => {
                                       e.stopPropagation();
@@ -848,8 +852,8 @@ export function BookingBoard() {
             <div className="space-y-4">
               {/* Changes List */}
               <div className="px-4 py-3 rounded-xl bg-primary/5 border border-primary/10 flex flex-col gap-1">
-                <span className="text-[10px] font-black uppercase text-primary/60 tracking-widest">Update Summary</span>
                 <span className="text-sm font-black text-primary italic leading-none">{pendingUpdate?.details.changeText}</span>
+                <span className="text-[10px] font-black uppercase text-primary/40 tracking-[0.2em]">Registry Override Summary</span>
               </div>
               {/* Room Change */}
               {pendingUpdate?.type === 'move' && pendingUpdate.details.oldRoom !== pendingUpdate.details.newRoom && (
