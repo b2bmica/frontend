@@ -23,8 +23,9 @@ export function BookingTable() {
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [sortField, setSortField] = useState<'createdAt' | 'checkin' | 'checkout'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [dateFilter, setDateFilter] = useState('');
   const [dateFilterMode, setDateFilterMode] = useState<'checkin' | 'createdAt'>('checkin');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -33,7 +34,7 @@ export function BookingTable() {
   // Reset page on search or filter change
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter, dateFilter, sortField, sortOrder]);
+  }, [search, statusFilter, dateFrom, dateTo, sortField, sortOrder, dateFilterMode]);
 
   const filteredAndSorted = useMemo(() => {
     const list = bookings.filter(b => {
@@ -47,9 +48,15 @@ export function BookingTable() {
       const matchStatus = statusFilter === 'all' || b.status === statusFilter;
       
       let matchDate = true;
-      if (dateFilter) {
-        const d = dateFilterMode === 'checkin' ? b.checkin : b.createdAt;
-        matchDate = d?.startsWith(dateFilter) ?? false;
+      if (dateFrom || dateTo) {
+        const dStr = dateFilterMode === 'checkin' ? b.checkin : b.createdAt;
+        if (!dStr) {
+          matchDate = false;
+        } else {
+          const d = dStr.split('T')[0]; // Extract YYYY-MM-DD
+          if (dateFrom && d < dateFrom) matchDate = false;
+          if (dateTo && d > dateTo) matchDate = false;
+        }
       }
       return matchSearch && matchStatus && matchDate;
     });
@@ -64,7 +71,7 @@ export function BookingTable() {
       if (aTime > bTime) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [bookings, search, statusFilter, dateFilter, sortField, sortOrder, dateFilterMode]);
+  }, [bookings, search, statusFilter, dateFrom, dateTo, sortField, sortOrder, dateFilterMode]);
 
   const filtered = filteredAndSorted;
 
@@ -150,13 +157,13 @@ export function BookingTable() {
               <div className="relative h-10 w-[42px] sm:w-[50px] flex-shrink-0 cursor-pointer">
                  <div className={cn(
                    "h-full w-full rounded-xl bg-slate-50 flex items-center justify-center transition-colors hover:bg-slate-100",
-                   dateFilter ? "bg-primary/10 text-primary border border-primary/20" : "text-slate-400"
+                   (dateFrom || dateTo) ? "bg-primary/10 text-primary border border-primary/20" : "text-slate-400"
                  )}>
                     <Calendar className="h-4 w-4" />
                  </div>
-                 {dateFilter && (
+                 {(dateFrom || dateTo) && (
                    <button 
-                     onClick={(e) => { e.stopPropagation(); setDateFilter(''); }}
+                     onClick={(e) => { e.stopPropagation(); setDateFrom(''); setDateTo(''); }}
                      className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:scale-110 active:scale-90 transition-all z-20"
                    >
                      <XCircle className="h-2.5 w-2.5 fill-current" />
@@ -164,9 +171,9 @@ export function BookingTable() {
                  )}
               </div>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="p-4 w-64 rounded-3xl shadow-2xl border-none">
-               <div className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-1">
+            <DropdownMenuContent className="p-4 w-72 rounded-3xl shadow-2xl border-none">
+               <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-1.5">
                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Filter Date Mode</span>
                      <div className="flex bg-slate-50 p-1 rounded-xl">
                         <button 
@@ -185,20 +192,33 @@ export function BookingTable() {
                         >Created</button>
                      </div>
                   </div>
-                  <div className="flex flex-col gap-1">
-                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Select Date</span>
-                     <Input 
-                       type="date" 
-                       className="h-10 text-xs rounded-xl border-slate-100 bg-slate-50"
-                       value={dateFilter}
-                       onChange={e => setDateFilter(e.target.value)}
-                     />
+                  
+                  <div className="space-y-3">
+                    <div className="flex flex-col gap-1">
+                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Between Dates</span>
+                       <div className="flex items-center gap-2">
+                          <Input 
+                            type="date" 
+                            className="h-9 text-xs rounded-xl border-slate-100 bg-slate-50"
+                            value={dateFrom}
+                            onChange={e => setDateFrom(e.target.value)}
+                          />
+                          <span className="text-[10px] font-bold text-slate-300">To</span>
+                          <Input 
+                            type="date" 
+                            className="h-9 text-xs rounded-xl border-slate-100 bg-slate-50"
+                            value={dateTo}
+                            onChange={e => setDateTo(e.target.value)}
+                          />
+                       </div>
+                    </div>
                   </div>
-                  {dateFilter && (
+
+                  {(dateFrom || dateTo) && (
                      <Button 
                         variant="ghost" 
                         size="sm" 
-                        onClick={() => setDateFilter('')}
+                        onClick={() => { setDateFrom(''); setDateTo(''); }}
                         className="h-8 text-[10px] font-black uppercase tracking-widest text-destructive hover:bg-destructive/5"
                      >Reset Date Filter</Button>
                   )}

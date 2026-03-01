@@ -158,6 +158,22 @@ export function BookingBoard() {
   }, [bookings, rooms]);
 
   const handleCellClick = (roomId: string, day: Date) => {
+    if (resizingId) return;
+    
+    // Find if a booking exists here (ghost click prevention)
+    const bookingAtCell = bookings.find(b => {
+      if (b.status === 'cancelled' || b.status === 'checked-out') return false;
+      if (getBookingRoomId(b) !== roomId) return false;
+      const start = startOfDay(parseISO(b.checkin));
+      const end = startOfDay(parseISO(b.checkout));
+      return day >= start && day < end;
+    });
+
+    if (bookingAtCell) {
+       setSelectedBooking(bookingAtCell);
+       return;
+    }
+
     setSelectedRoomId(roomId);
     setSelectedDate(format(day, 'yyyy-MM-dd'));
     setIsModalOpen(true);
@@ -874,39 +890,37 @@ export function BookingBoard() {
                                     </button>
 
                                     {others.length > 0 && (
-                                       <Popover>
-                                          <PopoverTrigger asChild>
-                                             <button
-                                               className="bg-white/40 hover:bg-white/60 text-[8px] md:text-[9px] px-1.5 md:px-2 py-0 md:py-0.5 rounded-full font-black z-[100] flex-shrink-0 transition-all hover:scale-110 active:scale-90 shadow-sm pointer-events-auto border border-white/20 ring-1 ring-white/10"
-                                               onClick={(e) => {
-                                                  e.preventDefault();
-                                                  e.stopPropagation();
-                                               }}
-                                             >
-                                                +{others.length}
-                                              </button>
-                                          </PopoverTrigger>
-                                          <PopoverContent className="w-64 p-2 rounded-2xl shadow-xl border z-[200]">
-                                             <div className="p-2 border-b mb-1">
-                                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Other Bookings</p>
-                                             </div>
-                                             <div className="space-y-1">
-                                                {others.map(o => (
-                                                   <button
-                                                      key={o._id}
-                                                      className="w-full p-2 hover:bg-slate-50 rounded-lg text-left transition-colors flex items-center justify-between group/o"
-                                                      onClick={(e) => { e.stopPropagation(); setSelectedBooking(o); }}
-                                                   >
-                                                      <div className="flex flex-col">
-                                                         <span className="text-[11px] font-black text-slate-900 group-hover/o:text-primary">{getGuest(o)?.name || 'Guest'}</span>
-                                                          <span className="text-[9px] font-bold text-slate-400 capitalize tracking-tighter">{o.status} • {format(parseISO(o.checkout), 'MMM dd')}</span>
-                                                      </div>
-                                                      <div className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", getStatusColor(o.status).includes('emerald') ? 'bg-emerald-500' : getStatusColor(o.status).includes('blue') ? 'bg-blue-500' : getStatusColor(o.status).includes('orange') ? 'bg-orange-500' : 'bg-slate-400')} />
-                                                   </button>
-                                                ))}
-                                             </div>
-                                          </PopoverContent>
-                                       </Popover>
+                                       <div onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
+                                         <Popover>
+                                            <PopoverTrigger asChild>
+                                               <button
+                                                 className="bg-white/40 hover:bg-white/60 text-[8px] md:text-[9px] px-1.5 md:px-2 py-0 md:py-0.5 rounded-full font-black z-[100] flex-shrink-0 transition-all hover:scale-110 active:scale-90 shadow-sm pointer-events-auto border border-white/20 ring-1 ring-white/10"
+                                               >
+                                                  +{others.length}
+                                                </button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-64 p-2 rounded-2xl shadow-xl border z-[300]">
+                                               <div className="p-2 border-b mb-1">
+                                                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Other Bookings</p>
+                                               </div>
+                                               <div className="space-y-1">
+                                                  {others.map(o => (
+                                                     <button
+                                                        key={o._id}
+                                                        className="w-full p-2 hover:bg-slate-50 rounded-lg text-left transition-colors flex items-center justify-between group/o"
+                                                        onClick={(e) => { e.stopPropagation(); setSelectedBooking(o); }}
+                                                     >
+                                                        <div className="flex flex-col">
+                                                           <span className="text-[11px] font-bold text-slate-900 group-hover/o:text-primary">{getGuest(o)?.name || 'Guest'}</span>
+                                                            <span className="text-[9px] font-bold text-slate-400 capitalize tracking-tighter">{o.status} • {format(parseISO(o.checkout), 'MMM dd')}</span>
+                                                        </div>
+                                                        <div className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", getStatusColor(o.status).includes('emerald') ? 'bg-emerald-500' : getStatusColor(o.status).includes('blue') ? 'bg-blue-500' : getStatusColor(o.status).includes('orange') ? 'bg-orange-500' : 'bg-slate-400')} />
+                                                     </button>
+                                                  ))}
+                                               </div>
+                                            </PopoverContent>
+                                         </Popover>
+                                       </div>
                                     )}
                                   </div>
 

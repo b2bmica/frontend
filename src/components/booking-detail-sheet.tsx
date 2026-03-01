@@ -112,13 +112,22 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
               <config.icon className="h-3 w-3" /> {config.label}
             </div>
           </div>
-          <div className="space-y-1">
-            <h2 className="text-xl font-black tracking-tight flex items-center gap-2">
-               Room {room?.roomNumber || '[Deleted]'} <span className="text-muted-foreground font-normal">/</span> {room?.roomType || 'Asset Removed'}
-            </h2>
-            <p className="text-muted-foreground font-medium text-xs flex items-center gap-2">
-              Stay Duration: {nights} Night{nights > 1 ? 's' : ''} • {format(new Date(booking.checkin), 'MMM dd')} - {format(new Date(booking.checkout), 'MMM dd')}
-            </p>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-black tracking-tight flex items-center gap-2">
+                 Room {room?.roomNumber || '[Deleted]'} <span className="text-muted-foreground font-normal">/</span> {room?.roomType || 'Asset Removed'}
+              </h2>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <p className="text-muted-foreground font-medium text-xs flex items-center gap-2">
+                Stay Duration: {nights} Night{nights > 1 ? 's' : ''} • {format(new Date(booking.checkin), 'MMM dd')} - {format(new Date(booking.checkout), 'MMM dd')}
+              </p>
+              {booking.createdAt && (
+                <div className="text-[10px] font-bold text-slate-300 uppercase tracking-widest flex items-center gap-1.5">
+                  <Clock className="h-2.5 w-2.5" /> Booked On: {format(new Date(booking.createdAt), 'dd MMM, yyyy HH:mm')}
+                </div>
+              )}
+            </div>
           </div>
         </div>
         
@@ -223,7 +232,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                 <User className="h-5 w-5" />
               </div>
               <div className="flex-1">
-                <p className="font-black text-base tracking-tight group-hover:text-primary group-hover:underline underline-offset-4 transition-all">{guest?.name || 'Guest'}</p>
+                <p className="font-bold text-base tracking-tight group-hover:text-primary group-hover:underline underline-offset-4 transition-all">{guest?.name || 'Guest'}</p>
                 <p className="text-[11px] text-muted-foreground font-bold tracking-tight">{guest?.phone} · {guest?.email || 'No email'}</p>
               </div>
               <div className="h-8 w-8 rounded-full group-hover:bg-muted flex items-center justify-center transition-colors">
