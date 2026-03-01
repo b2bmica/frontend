@@ -499,7 +499,7 @@ export function BookingBoard() {
                           "border-r cursor-pointer hover:bg-primary/5 transition-colors flex-shrink-0",
                           isSameDay(day, new Date()) && "bg-primary/5"
                         )}
-                        style={{ width: COLUMN_WIDTH, minWidth: COLUMN_WIDTH }}
+                        style={{ width: COLUMN_WIDTH, minWidth: COLUMN_WIDTH, position: 'relative', zIndex: 1 }}
                         onClick={() => handleCellClick(room._id, day)}
                       />
                     ))}
@@ -563,7 +563,6 @@ export function BookingBoard() {
                             if (!isEditable) return;
                             if (isResizingRef.current) return;
                             if (e.button !== 0) return;
-                            // Skip if pointer started inside the resize handle
                             const target = e.target as HTMLElement;
                             if (target.closest('[data-resize-handle]')) return;
 
@@ -597,8 +596,9 @@ export function BookingBoard() {
                             };
 
                             const onUp = (ue: PointerEvent) => {
+                              const wasDragging = dragging;
                               cleanup();
-                              if (dragging) {
+                              if (wasDragging) {
                                 handleDragEnd(ue, { point: { x: ue.clientX, y: ue.clientY } }, booking);
                               }
                             };
@@ -608,11 +608,14 @@ export function BookingBoard() {
                               window.removeEventListener('pointermove', onMove);
                               window.removeEventListener('pointerup',   onUp);
                               window.removeEventListener('pointercancel', cleanup);
-                              cardEl.style.transform  = '';
-                              cardEl.style.opacity    = '';
-                              cardEl.style.zIndex     = '';
-                              cardEl.style.cursor     = '';
-                              cardEl.style.transition = '';
+                              // Only clear if drag was actually started
+                              if (dragging) {
+                                cardEl.style.transform  = '';
+                                cardEl.style.opacity    = '';
+                                cardEl.style.zIndex     = '';
+                                cardEl.style.cursor     = '';
+                                cardEl.style.transition = '';
+                              }
                               setTimeout(() => { isDraggingRef.current = false; }, 100);
                             };
 
@@ -687,10 +690,14 @@ export function BookingBoard() {
                               window.removeEventListener('pointermove', onMove);
                               window.removeEventListener('pointerup',   onUp);
                               window.removeEventListener('pointercancel', cleanup);
-                              // Always restore to React-controlled size
-                              cardEl.style.width      = '';
-                              cardEl.style.zIndex     = '';
-                              cardEl.style.transition = '';
+                              if (moved) {
+                                // KEY FIX: restore to original width explicitly so React's
+                                // virtual-DOM diff doesn't skip re-applying the style.
+                                // (Setting '' can leave card collapsed if React skips the update)
+                                cardEl.style.width = `${originalWidth}px`;
+                                cardEl.style.zIndex     = '';
+                                cardEl.style.transition = '';
+                              }
                               setResizingId(null);
                               setTimeout(() => { isResizingRef.current = false; }, 100);
                             };
@@ -707,16 +714,16 @@ export function BookingBoard() {
                               className={cn(
                                 "absolute z-10 rounded-md p-1.5 text-white shadow-md overflow-hidden flex flex-col justify-between group/booking select-none",
                                 getStatusColor(booking.status),
-                                isEditable ? "cursor-grab" : "cursor-pointer",
                               )}
                               style={{
                                 left:   cardLeft,
                                 top:    3,
                                 width:  cardWidth,
                                 height: heightTotal,
+                                cursor: isEditable ? 'grab' : 'pointer',
                                 transition: resizingId === booking._id ? 'none' : 'left 0.15s ease, width 0.15s ease',
                               }}
-                              onPointerDown={handleCardDragStart}
+                              onPointerDown={isEditable ? handleCardDragStart : undefined}
                               onClick={(e) => {
                                 if (isDraggingRef.current || isResizingRef.current) return;
                                 e.stopPropagation();
