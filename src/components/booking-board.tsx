@@ -289,7 +289,7 @@ export function BookingBoard() {
                   <button className="flex flex-col items-center hover:bg-slate-100/50 p-1 px-4 rounded-xl transition-colors min-w-[140px]">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Viewing Period</span>
                     <span className="text-xs font-black uppercase tracking-tight text-slate-900 flex items-center gap-1">
-                      {periodLabel} <ChevronDown className="h-3 w-3 opacity-40" />
+                      {periodLabel} <ChevronDown className="h-3 w-3 opacity-40 ml-0.5" />
                     </span>
                   </button>
                 </PopoverTrigger>
@@ -836,7 +836,10 @@ export function BookingBoard() {
                                <div className="flex flex-col h-full justify-between pointer-events-auto" data-card-content="">
                                   <div className="flex justify-between items-start pointer-events-auto gap-1">
                                     <button
-                                      className="font-bold truncate text-left hover:underline leading-tight z-10 relative w-fit outline-none text-[10px] md:text-xs"
+                                      className={cn(
+                                        "font-black truncate text-left hover:underline leading-tight z-10 relative w-fit outline-none text-[10px] md:text-sm lg:text-[14px] tracking-tight",
+                                        isMobile && clampedDuration <= 1 ? "whitespace-normal break-all line-clamp-2" : "truncate"
+                                      )}
                                       onClick={(e) => {
                                         if (isDraggingRef.current || isResizingRef.current) return;
                                         e.stopPropagation();
@@ -851,11 +854,7 @@ export function BookingBoard() {
                                        <Popover>
                                           <PopoverTrigger asChild>
                                              <button
-                                               className="bg-white/30 hover:bg-white/50 text-[10px] px-2 py-0.5 rounded-full font-black z-30 flex-shrink-0 transition-all hover:scale-110 active:scale-95 shadow-sm pointer-events-auto"
-                                               onClick={e => {
-                                                  e.preventDefault();
-                                                  e.stopPropagation();
-                                               }}
+                                               className="bg-white/40 hover:bg-white/60 text-[8px] md:text-[9px] px-1.5 md:px-2 py-0 md:py-0.5 rounded-full font-black z-[100] flex-shrink-0 transition-all hover:scale-110 active:scale-90 shadow-sm pointer-events-auto border border-white/20 ring-1 ring-white/10"
                                              >
                                                 +{others.length}
                                              </button>
@@ -884,9 +883,12 @@ export function BookingBoard() {
                                     )}
                                   </div>
 
-                                  <span className="text-[8px] md:text-[10px] bg-black/20 px-1 py-0.5 rounded-full truncate font-semibold capitalize tracking-tighter w-fit pointer-events-none">
-                                    {booking.status.replace('-', ' ')}
-                                  </span>
+                                  {/* Status Indicator - Hide on mobile for very short durations */}
+                                  {(!isMobile || clampedDuration > 1) && (
+                                    <span className="text-[7px] md:text-[9px] bg-black/20 px-1.5 py-0 rounded-full truncate font-bold uppercase tracking-tighter w-fit pointer-events-none opacity-90 border border-white/10 mt-auto shadow-sm">
+                                      {booking.status.replace('-', ' ')}
+                                    </span>
+                                  )}
                                </div>
 
                               {/* Resize handle */}
@@ -933,7 +935,7 @@ export function BookingBoard() {
                  <ShieldCheck className="h-5 w-5" />
                </div>
                 <DialogHeader className="p-0">
-                   <DialogTitle className="text-xl font-black italic tracking-tighter text-slate-900 leading-none">Confirm Change</DialogTitle>
+                   <DialogTitle className="text-xl font-black tracking-tighter text-slate-900 leading-none">Confirm Change</DialogTitle>
                 </DialogHeader>
              </div>
           </div>
@@ -945,7 +947,7 @@ export function BookingBoard() {
                  <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Original</p>
                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 shadow-inner group/card transition-all opacity-60">
                     <p className="font-black text-slate-900 text-sm mb-1 leading-none">{pendingUpdate ? `Rm ${pendingUpdate.details.oldRoom}` : 'Room'}</p>
-                    <p className="text-[10px] font-bold text-slate-400 italic">
+                    <p className="text-[10px] font-bold text-slate-400">
                       {pendingUpdate && format(parseISO(pendingUpdate.details.oldCheckin), 'MMM dd')} - {pendingUpdate && format(parseISO(pendingUpdate.details.oldCheckout), 'MMM dd')}
                     </p>
                  </div>
@@ -960,7 +962,7 @@ export function BookingBoard() {
                  <p className="text-[9px] font-black uppercase text-primary/60 tracking-widest">Proposed</p>
                  <div className="p-4 rounded-2xl bg-primary/5 border border-primary/20 shadow-lg shadow-primary/5 ring-1 ring-primary/5 scale-105">
                     <p className="font-black text-primary text-sm mb-1 leading-none">{pendingUpdate ? `Rm ${pendingUpdate.details.newRoom}` : 'Room'}</p>
-                    <p className="text-[10px] font-black text-primary italic">
+                    <p className="text-[10px] font-black text-primary">
                       {pendingUpdate && format(parseISO(pendingUpdate.details.newCheckin), 'MMM dd')} - {pendingUpdate && format(parseISO(pendingUpdate.details.newCheckout), 'MMM dd')}
                     </p>
                  </div>
