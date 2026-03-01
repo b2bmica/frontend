@@ -183,8 +183,13 @@ export function BookingBoard() {
 
     const activeRooms = rooms.filter(r => statusFilter === 'maintenance' ? (r.status === 'maintenance' || r.status === 'under-maintenance') : true);
     
-    if (dayIndex >= 0 && dayIndex < DAYS && roomIndex >= 0 && roomIndex < activeRooms.length) {
-      const targetDay = addDays(weekStart, dayIndex);
+    // Loosen bounds slightly or ensure precise containment
+    const isValidDay = dayIndex >= -1 && dayIndex < DAYS + 1;
+    const isValidRoom = roomIndex >= 0 && roomIndex < activeRooms.length;
+
+    if (isValidDay && isValidRoom) {
+      const clampedDayIndex = Math.max(0, Math.min(DAYS - 1, dayIndex));
+      const targetDay = addDays(weekStart, clampedDayIndex);
       const targetRoom = activeRooms[roomIndex];
       const duration = differenceInDays(new Date(booking.checkout), new Date(booking.checkin));
       const newCheckin = format(targetDay, 'yyyy-MM-dd');
@@ -548,8 +553,19 @@ export function BookingBoard() {
                             const clampedDuration = Math.min(offsetDays + duration, DAYS) - clampedOffset;
                             if (clampedDuration <= 0) return null;
 
-                            const guest = getGuest(booking);
-                            const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
+                             const myStart = parseISO(booking.checkin);
+                             const myEnd = parseISO(booking.checkout);
+                             const localConcurrentLanes = lanes.filter(lane => 
+                               lane.some(other => {
+                                 const oStart = parseISO(other.checkin);
+                                 const oEnd = parseISO(other.checkout);
+                                 return myStart < oEnd && myEnd > oStart;
+                               })
+                             ).length;
+                             const displayHeight = heightTotal / localConcurrentLanes;
+
+                             const guest = getGuest(booking);
+                             const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
                             
                             return (
                               <motion.div
@@ -578,13 +594,13 @@ export function BookingBoard() {
                                   isEditable ? "cursor-grab" : "cursor-pointer",
                                   isDraggingRef.current && "opacity-50"
                                 )}
-                                style={{
-                                  left:   ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 1,
-                                  top:    3 + (laneIdx * laneHeight),
-                                  width:  (clampedDuration * COLUMN_WIDTH) - 2,
-                                  height: Math.max(14, laneHeight - 2),
-                                  transition: (resizingId === booking._id || isDraggingRef.current) ? 'none' : 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                                }}
+                                 style={{
+                                   left:   ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 1,
+                                   top:    3 + (laneIdx * displayHeight),
+                                   width:  (clampedDuration * COLUMN_WIDTH) - 2,
+                                   height: Math.max(14, displayHeight - 2),
+                                   transition: (resizingId === booking._id || isDraggingRef.current) ? 'none' : 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                 }}
                                 onClick={(e) => { 
                                   if (isDraggingRef.current || isResizingRef.current) return;
                                   e.stopPropagation(); 
@@ -592,26 +608,26 @@ export function BookingBoard() {
                                 }}
                               >
                                  <div className="flex flex-col h-full justify-between">
-                                    <button
-                                      className={cn(
-                                        "font-bold truncate text-left hover:underline leading-tight z-10 relative w-fit outline-none",
-                                        totalLanes === 1 ? "text-[10px] md:text-xs" : "text-[8px] md:text-[9px]"
-                                      )}
-                                      onClick={(e) => {
-                                        if (isDraggingRef.current || isResizingRef.current) return;
-                                        e.stopPropagation();
-                                        if (guest?._id) setSelectedGuestId(guest._id);
-                                        else setSelectedBooking(booking);
-                                      }}
-                                    >
-                                      {guest?.name || 'Guest'}
-                                    </button>
-                                    
-                                    {totalLanes === 1 && (
-                                      <span className="text-[8px] md:text-[10px] bg-black/20 px-1 py-0.5 rounded-full truncate font-black capitalize tracking-tighter w-fit z-10 relative pointer-events-none">
-                                        {booking.status.replace('-', ' ')}
-                                      </span>
-                                    )}
+                                     <button
+                                       className={cn(
+                                         "font-bold truncate text-left hover:underline leading-tight z-10 relative w-fit outline-none",
+                                         localConcurrentLanes === 1 ? "text-[10px] md:text-xs" : "text-[8px] md:text-[9px]"
+                                       )}
+                                       onClick={(e) => {
+                                         if (isDraggingRef.current || isResizingRef.current) return;
+                                         e.stopPropagation();
+                                         if (guest?._id) setSelectedGuestId(guest._id);
+                                         else setSelectedBooking(booking);
+                                       }}
+                                     >
+                                       {guest?.name || 'Guest'}
+                                     </button>
+                                     
+                                     {totalLanes === 1 && (
+                                       <span className="text-[8px] md:text-[10px] bg-black/20 px-1 py-0.5 rounded-full truncate font-semibold capitalize tracking-tighter w-fit z-10 relative pointer-events-none">
+                                         {booking.status.replace('-', ' ')}
+                                       </span>
+                                     )}
                                  </div>
 
                                  {/* Resize handle (Right edge) */}
@@ -735,12 +751,9 @@ export function BookingBoard() {
                    <DialogTitle className="text-xl font-black italic tracking-tighter text-slate-900 leading-none">Confirm Change</DialogTitle>
                 </DialogHeader>
              </div>
-             <div className="flex flex-col items-end">
-                <div className="px-3 py-1 rounded-lg bg-primary/10 border border-primary/20 shadow-sm animate-in fade-in zoom-in duration-300">
-                   <span className="text-[10px] font-black italic tracking-tighter text-primary leading-none uppercase">{pendingUpdate?.details.changeText}</span>
-                </div>
-                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1 opacity-50">Force Sync Active</p>
-             </div>
+              <div className="flex flex-col items-end">
+                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1 opacity-50">Manual Registry Override</p>
+              </div>
           </div>
 
           <div className="p-6 space-y-6">
@@ -770,6 +783,14 @@ export function BookingBoard() {
                     </p>
                  </div>
               </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100/50 text-center animate-in fade-in slide-in-from-bottom-2 duration-400">
+               <p className="text-xs font-medium text-slate-600 leading-relaxed">
+                 {pendingUpdate?.details.changeText.includes('Push') 
+                   ? `Moving booking to ${pendingUpdate.details.newRoom} and shifting by ${pendingUpdate.details.changeText.split('night')[0].split('+')[1] || pendingUpdate.details.changeText.split('night')[0].split('-')[1] || '0'} nights.`
+                   : pendingUpdate?.details.changeText}
+               </p>
             </div>
 
             <DialogFooter className="flex flex-row gap-3 pt-2">
