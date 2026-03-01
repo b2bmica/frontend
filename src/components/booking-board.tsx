@@ -4,7 +4,7 @@ import {
   differenceInDays, startOfDay, isBefore, parseISO
 } from 'date-fns';
 import { motion } from 'framer-motion';
-import { Loader2, Search, UserPlus, IndianRupee, Info, Printer, ChevronLeft, ChevronRight, ChevronDown, Plus, Bed, X, ShieldCheck, ArrowRight, Calendar } from 'lucide-react';
+import { Loader2, Search, UserPlus, IndianRupee, Info, Printer, ChevronLeft, ChevronRight, ChevronDown, Plus, Minus, Bed, X, ShieldCheck, ArrowRight, ArrowRightLeft, Calendar } from 'lucide-react';
 import { useBookings, type Booking } from '../context/booking-context';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -219,7 +219,7 @@ export function BookingBoard() {
       setPendingUpdate({
         booking,
         updates: { roomId: targetRoom._id, checkin: newCheckin, checkout: newCheckout },
-        type: targetRoom._id !== getBookingRoomId(booking) ? 'move' : 'resize',
+        type: 'move', // Dragging is always a 'move' or 'shift'
         details: {
           oldRoom: oldRoom?.roomNumber,
           newRoom: targetRoom.roomNumber,
@@ -501,7 +501,7 @@ export function BookingBoard() {
                           "border-r cursor-pointer hover:bg-primary/5 transition-colors flex-shrink-0",
                           isSameDay(day, new Date()) && "bg-primary/5"
                         )}
-                        style={{ width: COLUMN_WIDTH, minWidth: COLUMN_WIDTH, position: 'relative', zIndex: 1 }}
+                        style={{ width: COLUMN_WIDTH, minWidth: COLUMN_WIDTH, position: 'relative', zIndex: 5 }}
                         onClick={() => handleCellClick(room._id, day)}
                       />
                     ))}
@@ -537,7 +537,7 @@ export function BookingBoard() {
                           else visibleCards.push({ primary: b, others: [] });
                         });
 
-                        const heightTotal = ROW_HEIGHT - 6;
+                        const heightTotal = ROW_HEIGHT - 12; // 6px gap top and bottom for easier cell clicking
 
                         return visibleCards.map(({ primary: booking, others }) => {
                           const checkinDate  = startOfDay(parseISO(booking.checkin));
@@ -776,9 +776,10 @@ export function BookingBoard() {
                               )}
                               style={{
                                 left:   cardLeft,
-                                top:    3,
+                                top:    6, // centered in ROW_HEIGHT gaps
                                 width:  cardWidth,
                                 height: heightTotal,
+                                zIndex: 10,
                                 cursor: isEditable ? 'grab' : 'pointer',
                                 touchAction: isEditable ? 'pan-y' : 'auto',
                                 transition: resizingId === booking._id ? 'none' : 'left 0.15s ease, width 0.15s ease',
@@ -787,22 +788,7 @@ export function BookingBoard() {
                               onClick={(e) => {
                                 if (isDraggingRef.current || isResizingRef.current) return;
                                 e.stopPropagation();
-                                
-                                // Gap clicking fix: If clicking the card itself (the background), 
-                                // and not an interactive child, determine if we should pass it to the cell below.
-                                const target = e.target as HTMLElement;
-                                const isCardBg = target.hasAttribute('data-booking-card') || target.hasAttribute('data-card-content');
-                                
-                                if (isCardBg) {
-                                  // Find the day relative to where the card starts
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  const clickX = e.clientX - rect.left;
-                                  const dayWithinCard = Math.floor(clickX / COLUMN_WIDTH);
-                                  const actualDay = addDays(checkinDate, dayWithinCard);
-                                  handleCellClick(room._id, actualDay);
-                                } else {
-                                  setSelectedBooking(booking);
-                                }
+                                setSelectedBooking(booking);
                               }}
                             >
                                <div className="flex flex-col h-full justify-between pointer-events-auto" data-card-content="">
@@ -942,32 +928,36 @@ export function BookingBoard() {
             {pendingUpdate?.details.changeText && (() => {
                const text = pendingUpdate.details.changeText;
                const nights = pendingUpdate.details.nightsDelta;
-               const isExtend = nights && nights > 0 && pendingUpdate.type === 'resize';
-               const isReduce = nights && nights < 0 && pendingUpdate.type === 'resize';
-               const isMove = pendingUpdate.type === 'move';
+               const isResize = pendingUpdate.type === 'resize';
+               const isExtend = isResize && nights && nights > 0;
+               const isReduce = isResize && nights && nights < 0;
+               const isMove   = pendingUpdate.type === 'move';
+               
+               const label = isExtend ? 'Extend Stay' : isReduce ? 'Shorten Stay' : 'Shift Booking';
+               const sublabel = isMove ? text : `${Math.abs(nights || 0)} night${Math.abs(nights || 0) !== 1 ? 's' : ''} ${nights && nights > 0 ? 'added' : 'removed'}`;
                
                return (
                  <div className={cn(
-                   "flex items-center justify-center gap-3 py-4 px-5 rounded-[24px] text-center",
+                   "flex items-center justify-center gap-3 py-3 px-5 rounded-[24px] text-center",
                    isExtend ? "bg-emerald-50 border border-emerald-100" :
                    isReduce ? "bg-amber-50 border border-amber-100" :
                    "bg-primary/5 border border-primary/10"
                  )}>
                    <div className={cn(
-                     "h-10 w-10 rounded-full flex items-center justify-center",
+                     "h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0",
                      isExtend ? "bg-emerald-500 text-white" : isReduce ? "bg-amber-500 text-white" : "bg-primary text-white"
                    )}>
-                     {isExtend ? <Plus className="h-5 w-5" /> : isReduce ? <ChevronLeft className="h-5 w-5" /> : <ArrowRight className="h-5 w-5" />}
+                     {isExtend ? <Plus className="h-4 w-4" /> : isReduce ? <Minus className="h-4 w-4" /> : <ArrowRightLeft className="h-4 w-4" />}
                    </div>
-                   <div className="flex flex-col items-start">
+                   <div className="flex flex-col items-start overflow-hidden">
                      <span className={cn(
-                       "text-[12px] font-black uppercase tracking-widest",
+                       "text-[10px] md:text-[11px] font-black uppercase tracking-wider leading-tight",
                        isExtend ? "text-emerald-700" : isReduce ? "text-amber-700" : "text-primary"
                      )}>
-                       {isExtend ? 'Extend Stay' : isReduce ? 'Shorten Stay' : 'Update Booking'}
+                       {label}
                      </span>
-                     <span className="text-[11px] font-bold text-slate-500">
-                       {isMove ? text : `${Math.abs(nights || 0)} night${Math.abs(nights || 0) !== 1 ? 's' : ''} ${nights && nights > 0 ? 'added' : 'removed'}`}
+                     <span className="text-[10px] font-bold text-slate-500 truncate w-full text-left">
+                       {sublabel}
                      </span>
                    </div>
                  </div>
