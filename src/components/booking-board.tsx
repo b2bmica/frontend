@@ -711,6 +711,21 @@ export function BookingBoard() {
                               }
                               if (moved) {
                                 const snapped = Math.round(dx / COLUMN_WIDTH) * COLUMN_WIDTH;
+                                const addedDays = snapped / COLUMN_WIDTH;
+                                
+                                // Prevent visual expansion into clash
+                                if (addedDays > 0) {
+                                  const newCO = addDays(startOfDay(parseISO(booking.checkout)), addedDays);
+                                  const isClashing = bookings.some(b => {
+                                    if (String(b._id) === String(booking._id) || b.status === 'cancelled' || b.status === 'checked-out') return false;
+                                    if (getBookingRoomId(b) !== getBookingRoomId(booking)) return false;
+                                    const bS = startOfDay(parseISO(b.checkin));
+                                    const bE = startOfDay(parseISO(b.checkout));
+                                    return startOfDay(parseISO(booking.checkin)) < bE && newCO > bS;
+                                  });
+                                  if (isClashing) return;
+                                }
+
                                 cardEl.style.width = `${Math.max(COLUMN_WIDTH, originalWidth + snapped)}px`;
                               }
                             };
@@ -734,25 +749,26 @@ export function BookingBoard() {
                                   const bE = startOfDay(parseISO(b.checkout));
                                   return startOfDay(parseISO(booking.checkin)) < bE && newCheckoutDate > bS;
                                 });
-                                if (isClashingRes) return;
 
-                                setPendingUpdate({
-                                  booking,
-                                  updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout },
-                                  type: 'resize',
-                                  details: {
-                                    oldRoom:     room.roomNumber,
-                                    newRoom:     room.roomNumber,
-                                    oldCheckin:  booking.checkin,
-                                    newCheckin:  booking.checkin,
-                                    oldCheckout: booking.checkout,
-                                    newCheckout,
-                                    changeText: daysDelta > 0
-                                      ? `Extend +${daysDelta} night${daysDelta > 1 ? 's' : ''}`
-                                      : `Reduce ${Math.abs(daysDelta)} night${Math.abs(daysDelta) > 1 ? 's' : ''}`,
-                                    nightsDelta: daysDelta
-                                  },
-                                });
+                                if (!isClashingRes) {
+                                  setPendingUpdate({
+                                    booking,
+                                    updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout },
+                                    type: 'resize',
+                                    details: {
+                                      oldRoom:     room.roomNumber,
+                                      newRoom:     room.roomNumber,
+                                      oldCheckin:  booking.checkin,
+                                      newCheckin:  booking.checkin,
+                                      oldCheckout: booking.checkout,
+                                      newCheckout,
+                                      changeText: daysDelta > 0
+                                        ? `Extend +${daysDelta} night${daysDelta > 1 ? 's' : ''}`
+                                        : `Reduce ${Math.abs(daysDelta)} night${Math.abs(daysDelta) > 1 ? 's' : ''}`,
+                                      nightsDelta: daysDelta
+                                    },
+                                  });
+                                }
                               }
                               cleanup();
                             };
