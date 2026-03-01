@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { format } from 'date-fns';
 import { useBookings, type Booking } from '../context/booking-context';
 import { Badge } from './ui/badge';
@@ -21,6 +21,10 @@ export function BookingTable() {
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
   const [actioningId, setActioningId] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<'createdAt' | 'checkin' | 'checkout'>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [dateFilter, setDateFilter] = useState('');
+  const [dateFilterMode, setDateFilterMode] = useState<'checkin' | 'createdAt'>('checkin');
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -29,19 +33,40 @@ export function BookingTable() {
   // Reset page on search or filter change
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, dateFilter, sortField, sortOrder]);
 
-  const filtered = bookings.filter(b => {
-    const guestName = typeof b.guestId === 'object' ? b.guestId?.name || '' : '';
-    const roomNumber = typeof b.roomId === 'object' ? b.roomId?.roomNumber || '' : '';
-    const bookingId = b._id || '';
-    const matchSearch = !search || 
-      guestName.toLowerCase().includes(search.toLowerCase()) ||
-      roomNumber.toLowerCase().includes(search.toLowerCase()) ||
-      bookingId.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'all' || b.status === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  const filteredAndSorted = useMemo(() => {
+    const list = bookings.filter(b => {
+      const guestName = typeof b.guestId === 'object' ? b.guestId?.name || '' : '';
+      const roomNumber = typeof b.roomId === 'object' ? b.roomId?.roomNumber || '' : '';
+      const bookingId = b._id || '';
+      const matchSearch = !search || 
+        guestName.toLowerCase().includes(search.toLowerCase()) ||
+        roomNumber.toLowerCase().includes(search.toLowerCase()) ||
+        bookingId.toLowerCase().includes(search.toLowerCase());
+      const matchStatus = statusFilter === 'all' || b.status === statusFilter;
+      
+      let matchDate = true;
+      if (dateFilter) {
+        const d = dateFilterMode === 'checkin' ? b.checkin : b.createdAt;
+        matchDate = d?.startsWith(dateFilter) ?? false;
+      }
+      return matchSearch && matchStatus && matchDate;
+    });
+
+    return [...list].sort((a, b) => {
+      const aVal = a[sortField] || '';
+      const bVal = b[sortField] || '';
+      // Use numeric timestamp for comparison if it's a date string
+      const aTime = new Date(aVal).getTime();
+      const bTime = new Date(bVal).getTime();
+      if (aTime < bTime) return sortOrder === 'asc' ? -1 : 1;
+      if (aTime > bTime) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [bookings, search, statusFilter, dateFilter, sortField, sortOrder, dateFilterMode]);
+
+  const filtered = filteredAndSorted;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginatedData = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -78,30 +103,108 @@ export function BookingTable() {
   return (
     <div className="space-y-4">
       {/* Search & Filter - Compact Mobile Row */}
-      <div className="flex items-center gap-2 w-full overflow-hidden">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60" />
+      <div className="flex flex-col sm:flex-row items-center gap-3 w-full bg-white p-2 sm:p-3 rounded-2xl border border-slate-100 shadow-sm">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
           <Input 
-            className="pl-8 h-9 text-xs border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white transition-all shadow-none" 
-            placeholder="Guest, Room or ID..." 
+            className="pl-9 h-10 text-sm border-none bg-slate-50 focus:bg-white transition-all shadow-none rounded-xl" 
+            placeholder="Search guests or rooms..." 
             value={search} 
             onChange={e => setSearch(e.target.value)} 
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[110px] sm:w-[140px] h-9 text-[10px] sm:text-xs rounded-xl border-slate-200 shadow-none bg-slate-50/50">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent className="rounded-xl border-none shadow-2xl">
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="reserved">Reserved</SelectItem>
-            <SelectItem value="checked-in">Checked In</SelectItem>
-            <SelectItem value="checked-out">Checked Out</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
-        <div className="hidden sm:flex items-center px-3 h-9 rounded-xl bg-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-          {filtered.length}
+        
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full sm:w-[130px] h-10 text-xs rounded-xl border-none bg-slate-50 shadow-none">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase font-black opacity-30">Status</span>
+                <SelectValue placeholder="All" />
+              </div>
+            </SelectTrigger>
+            <SelectContent className="rounded-xl border-none shadow-2xl">
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="reserved">Reserved</SelectItem>
+              <SelectItem value="checked-in">Checked In</SelectItem>
+              <SelectItem value="checked-out">Checked Out</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={sortField} onValueChange={(v: any) => setSortField(v)}>
+            <SelectTrigger className="w-full sm:w-[150px] h-10 text-xs rounded-xl border-none bg-slate-50 shadow-none">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase font-black opacity-30">Sort By</span>
+                <SelectValue />
+              </div>
+            </SelectTrigger>
+            <SelectContent className="rounded-xl border-none shadow-2xl">
+              <SelectItem value="createdAt">Created Date</SelectItem>
+              <SelectItem value="checkin">Check-in Date</SelectItem>
+              <SelectItem value="checkout">Check-out Date</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <div className="relative h-10 w-[42px] sm:w-[50px] flex-shrink-0 cursor-pointer">
+                 <div className={cn(
+                   "h-full w-full rounded-xl bg-slate-50 flex items-center justify-center transition-colors hover:bg-slate-100",
+                   dateFilter ? "bg-primary/10 text-primary border border-primary/20" : "text-slate-400"
+                 )}>
+                    <Calendar className="h-4 w-4" />
+                 </div>
+                 {dateFilter && (
+                   <button 
+                     onClick={(e) => { e.stopPropagation(); setDateFilter(''); }}
+                     className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:scale-110 active:scale-90 transition-all z-20"
+                   >
+                     <XCircle className="h-2.5 w-2.5 fill-current" />
+                   </button>
+                 )}
+              </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="p-4 w-64 rounded-3xl shadow-2xl border-none">
+               <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1">
+                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Filter Date Mode</span>
+                     <div className="flex bg-slate-50 p-1 rounded-xl">
+                        <button 
+                           onClick={() => setDateFilterMode('checkin')}
+                           className={cn(
+                              "flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all",
+                              dateFilterMode === 'checkin' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600"
+                           )}
+                        >Check-in</button>
+                        <button 
+                           onClick={() => setDateFilterMode('createdAt')}
+                           className={cn(
+                              "flex-1 py-1.5 text-[10px] font-bold rounded-lg transition-all",
+                              dateFilterMode === 'createdAt' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600"
+                           )}
+                        >Created</button>
+                     </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Select Date</span>
+                     <Input 
+                       type="date" 
+                       className="h-10 text-xs rounded-xl border-slate-100 bg-slate-50"
+                       value={dateFilter}
+                       onChange={e => setDateFilter(e.target.value)}
+                     />
+                  </div>
+                  {dateFilter && (
+                     <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setDateFilter('')}
+                        className="h-8 text-[10px] font-black uppercase tracking-widest text-destructive hover:bg-destructive/5"
+                     >Reset Date Filter</Button>
+                  )}
+               </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -112,6 +215,7 @@ export function BookingTable() {
             <TableHeader>
               <TableRow className="bg-muted/30">
                 <TableHead>Guest</TableHead>
+                <TableHead>Created At</TableHead>
                 <TableHead>Room</TableHead>
                 <TableHead>Check In</TableHead>
                 <TableHead>Check Out</TableHead>
@@ -145,6 +249,9 @@ export function BookingTable() {
                           {guest?.name || '—'}
                         </button>
                         <div className="text-xs text-muted-foreground">{guest?.phone || ''}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm font-medium">{booking.createdAt ? format(new Date(booking.createdAt), 'dd MMM yy HH:mm') : '—'}</div>
                       </TableCell>
                       <TableCell>
                         <div className="font-medium">{room?.roomNumber || '[Deleted]'}</div>
@@ -318,8 +425,13 @@ export function BookingTable() {
                     <span className="flex items-center gap-1"><Calendar className="h-3 w-3" /> {format(new Date(booking.checkin), 'dd MMM')}</span>
                     <ChevronRight className="h-2 w-2 opacity-30" />
                     <span>{format(new Date(booking.checkout), 'dd MMM')}</span>
-                    <span className="ml-1 opacity-40 px-1 py-0.5 bg-slate-50 rounded italic">{nights}N</span>
+                    <span className="ml-1 opacity-40 px-1 py-0.5 bg-slate-50 rounded italic whitespace-nowrap">{nights}N</span>
                   </div>
+                  {sortField === 'createdAt' && booking.createdAt && (
+                     <div className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">
+                        Created: {format(new Date(booking.createdAt), 'dd MMM, HH:mm')}
+                     </div>
+                  )}
                 </div>
                 <div className="text-right">
                    <div className="text-xs font-black text-slate-800">RM {room?.roomNumber || '??'}</div>

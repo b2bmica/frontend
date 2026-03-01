@@ -31,6 +31,8 @@ export interface Booking {
   paymentMethod?: string;
   paymentLogs?: Array<{ _id?: string; amount: number; method: string; date: string; note?: string }>;
   status: 'reserved' | 'checked-in' | 'checked-out' | 'cancelled';
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Guest {
