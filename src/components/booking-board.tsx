@@ -201,10 +201,10 @@ export function BookingBoard() {
       const newCheckoutDate = parseISO(newCheckout);
       
       const isClashing = bookings.some(b => {
-        if (b._id === booking._id || b.status === 'cancelled' || b.status === 'checked-out') return false;
+        if (String(b._id) === String(booking._id) || b.status === 'cancelled' || b.status === 'checked-out') return false;
         if (getBookingRoomId(b) !== targetRoom._id) return false;
-        const bStart = parseISO(b.checkin);
-        const bEnd = parseISO(b.checkout);
+        const bStart = startOfDay(parseISO(b.checkin));
+        const bEnd = startOfDay(parseISO(b.checkout));
         return newCheckinDate < bEnd && newCheckoutDate > bStart;
       });
 
@@ -557,8 +557,8 @@ export function BookingBoard() {
                           const guest      = getGuest(booking);
                           const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
 
-                          const cardLeft  = ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 1;
-                          const cardWidth = (clampedDuration * COLUMN_WIDTH) - 2;
+                          const cardLeft  = ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 2;
+                          const cardWidth = (clampedDuration * COLUMN_WIDTH) - 4;
 
                           // ── Pointer-based drag (long-press on touch) ─────────────────
                           const handleCardDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -722,6 +722,17 @@ export function BookingBoard() {
                                 const origNights  = differenceInDays(parseISO(booking.checkout), origCheckin);
                                 const newNights   = Math.max(1, origNights + daysDelta);
                                 const newCheckout = format(addDays(origCheckin, newNights), 'yyyy-MM-dd');
+                                
+                                // Clash check for resize
+                                const newCheckoutDate = startOfDay(parseISO(newCheckout));
+                                const isClashingRes = bookings.some(b => {
+                                  if (String(b._id) === String(booking._id) || b.status === 'cancelled' || b.status === 'checked-out') return false;
+                                  if (getBookingRoomId(b) !== getBookingRoomId(booking)) return false;
+                                  const bS = startOfDay(parseISO(b.checkin));
+                                  const bE = startOfDay(parseISO(b.checkout));
+                                  return startOfDay(parseISO(booking.checkin)) < bE && newCheckoutDate > bS;
+                                });
+                                if (isClashingRes) return;
 
                                 setPendingUpdate({
                                   booking,
@@ -788,7 +799,20 @@ export function BookingBoard() {
                               onClick={(e) => {
                                 if (isDraggingRef.current || isResizingRef.current) return;
                                 e.stopPropagation();
-                                setSelectedBooking(booking);
+                                
+                                // Smart detection: if clicking near the top/bottom boundary, 
+                                // allow the click to pass through to the day cell below.
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const relativeY = e.clientY - rect.top;
+                                if (relativeY < 12 || relativeY > rect.height - 12) {
+                                  // Find the day relative to where the card starts
+                                  const clickX = e.clientX - rect.left;
+                                  const dayWithinCard = Math.floor(clickX / COLUMN_WIDTH);
+                                  const actualDay = addDays(checkinDate, dayWithinCard);
+                                  handleCellClick(room._id, actualDay);
+                                } else {
+                                  setSelectedBooking(booking);
+                                }
                               }}
                             >
                                <div className="flex flex-col h-full justify-between pointer-events-auto" data-card-content="">
