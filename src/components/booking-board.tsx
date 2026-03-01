@@ -506,7 +506,7 @@ export function BookingBoard() {
                           className={cn(
                             "border-r cursor-pointer hover:bg-primary/5 transition-colors flex-shrink-0",
                             isSameDay(day, new Date()) && "bg-primary/5",
-                            isDayBooked && "bg-slate-100/50"
+                            isDayBooked && "bg-slate-200/40"
                           )}
                           style={{ width: COLUMN_WIDTH, minWidth: COLUMN_WIDTH, position: 'relative', zIndex: 5 }}
                           onClick={() => handleCellClick(room._id, day)}
@@ -591,6 +591,11 @@ export function BookingBoard() {
                               dragGrabOffsetDaysRef.current = (x - ROOM_COL) / COLUMN_WIDTH - differenceInDays(checkinDate, weekStartDay);
                             }
 
+                             const initialScrollL = boardRef.current?.scrollLeft || 0;
+                             const initialScrollT = boardRef.current?.scrollTop || 0;
+                             let currentScrollL = initialScrollL;
+                             let currentScrollT = initialScrollT;
+
                             let dragging         = false;
                             let longPressReady   = false;   // long press timer fired
                             let cancelled        = false;
@@ -628,49 +633,62 @@ export function BookingBoard() {
                               longPressTimer = setTimeout(activateDrag, LONG_MS);
                             }
 
-                            const onMove = (me: PointerEvent) => {
-                              const dx = me.clientX - startX;
-                              const dy = me.clientY - startY;
-                              const dist = Math.abs(dx) + Math.abs(dy);
+                             const onMove = (me: PointerEvent) => {
+                               const dx_view = me.clientX - startX;
+                               const dy_view = me.clientY - startY;
+                               const dist = Math.abs(dx_view) + Math.abs(dy_view);
 
-                              if (isTouch && !longPressReady) {
-                                // Allow more movement for thumb wobble
-                                if (dist > 16) {
-                                  cancelled = true;
-                                  if (longPressTimer) clearTimeout(longPressTimer);
-                                  cleanup();
-                                }
-                                return;
-                              }
+                               if (isTouch && !longPressReady) {
+                                 if (dist > 16) {
+                                   cancelled = true;
+                                   if (longPressTimer) clearTimeout(longPressTimer);
+                                   cleanup();
+                                 }
+                                 return;
+                               }
 
-                              // Mouse: start drag after small movement
-                              if (!isTouch && !dragging && dist > 6) {
-                                dragging = true;
-                                isDraggingRef.current = true;
-                                cardEl.style.opacity    = '0.75';
-                                cardEl.style.zIndex     = '50';
-                                cardEl.style.cursor     = 'grabbing';
-                                cardEl.style.transition = 'none';
-                              }
+                               if (!isTouch && !dragging && dist > 6) {
+                                 dragging = true;
+                                 isDraggingRef.current = true;
+                                 cardEl.style.opacity    = '0.75';
+                                 cardEl.style.zIndex     = '50';
+                                 cardEl.style.cursor     = 'grabbing';
+                                 cardEl.style.transition = 'none';
+                               }
 
-                              if (dragging || longPressReady) {
-                                cardEl.style.transform = `translate(${dx}px,${dy}px)${longPressReady && !dragging ? ' scale(1.04)' : ''}`;
-                                if (longPressReady && !dragging) dragging = true;
+                               if (dragging || longPressReady) {
+                                 const updateTransform = () => {
+                                   const scrollDeltaL = (boardRef.current?.scrollLeft || 0) - initialScrollL;
+                                   const scrollDeltaT = (boardRef.current?.scrollTop || 0) - initialScrollT;
+                                   cardEl.style.transform = `translate(${dx_view + scrollDeltaL}px, ${dy_view + scrollDeltaT}px)${longPressReady && !dragging ? ' scale(1.04)' : ''}`;
+                                 };
+                                 
+                                 updateTransform();
+                                 if (longPressReady && !dragging) dragging = true;
 
-                                // Edge Scrolling Logic
-                                if (boardRef.current) {
-                                  const rect = boardRef.current.getBoundingClientRect();
-                                  const edgeSize = 40; // px from edge to start scrolling
-                                  const scrollSpeed = 15;
-                                  
-                                  if (me.clientX < rect.left + edgeSize) boardRef.current.scrollLeft -= scrollSpeed;
-                                  else if (me.clientX > rect.right - edgeSize) boardRef.current.scrollLeft += scrollSpeed;
-                                  
-                                  if (me.clientY < rect.top + edgeSize) boardRef.current.scrollTop -= scrollSpeed;
-                                  else if (me.clientY > rect.bottom - edgeSize) boardRef.current.scrollTop += scrollSpeed;
-                                }
-                              }
-                            };
+                                 // Auto-scroll logic
+                                 if (boardRef.current) {
+                                   const rect = boardRef.current.getBoundingClientRect();
+                                   const edgeSize = 35;
+                                   const speed = 10;
+                                   
+                                   let scrollDX = 0;
+                                   let scrollDY = 0;
+                                   
+                                   if (me.clientX < rect.left + edgeSize) scrollDX = -speed;
+                                   else if (me.clientX > rect.right - edgeSize) scrollDX = speed;
+                                   
+                                   if (me.clientY < rect.top + edgeSize) scrollDY = -speed;
+                                   else if (me.clientY > rect.bottom - edgeSize) scrollDY = speed;
+
+                                   if (scrollDX !== 0 || scrollDY !== 0) {
+                                      boardRef.current.scrollLeft += scrollDX;
+                                      boardRef.current.scrollTop += scrollDY;
+                                      updateTransform(); // Keep card in sync after scroll
+                                   }
+                                 }
+                               }
+                             };
 
                             const onUp = (ue: PointerEvent) => {
                               const wasDragging = dragging;
@@ -881,7 +899,7 @@ export function BookingBoard() {
                                                    >
                                                       <div className="flex flex-col">
                                                          <span className="text-[11px] font-black text-slate-900 group-hover/o:text-primary">{getGuest(o)?.name || 'Guest'}</span>
-                                                         <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{o.status} • {format(parseISO(o.checkout), 'MMM dd')}</span>
+                                                          <span className="text-[9px] font-bold text-slate-400 capitalize tracking-tighter">{o.status} • {format(parseISO(o.checkout), 'MMM dd')}</span>
                                                       </div>
                                                       <div className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", getStatusColor(o.status).includes('emerald') ? 'bg-emerald-500' : getStatusColor(o.status).includes('blue') ? 'bg-blue-500' : getStatusColor(o.status).includes('orange') ? 'bg-orange-500' : 'bg-slate-400')} />
                                                    </button>
