@@ -52,7 +52,7 @@ export function BookingBoard() {
   const dragGrabOffsetDaysRef = useRef(0);
 
   // Week-based navigation
-  const [weekStart, setWeekStart] = useState(() => addDays(startOfDay(new Date()), -2));
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(startOfDay(new Date()), { weekStartsOn: 1 }));
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>();
@@ -61,9 +61,6 @@ export function BookingBoard() {
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [search, setSearch] = useState('');
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi'>('cash');
-  const [isSettled, setIsSettled] = useState(false);
-  const [showDirtyRoomPrompt, setShowDirtyRoomPrompt] = useState(false);
   const [resizingId, setResizingId] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [pendingUpdate, setPendingUpdate] = useState<{
@@ -95,7 +92,7 @@ export function BookingBoard() {
   }, []);
 
   const DAYS = daysCount;
-  const COLUMN_WIDTH = isMobile ? 90 : 180;
+  const COLUMN_WIDTH = isMobile ? 95 : 155;
   const ROW_HEIGHT  = isMobile ? 62 : 72;
   const ROOM_COL    = isMobile ? 100 : 152;
 
@@ -519,12 +516,15 @@ export function BookingBoard() {
                       return (
                         <div key={day.toISOString()}
                           className={cn(
-                            "border-r cursor-pointer hover:bg-primary/5 transition-colors flex-shrink-0",
+                            "border-r transition-colors flex-shrink-0",
                             isSameDay(day, new Date()) && "bg-primary/5",
-                            isDayBooked && "bg-slate-200/40"
+                            isDayBooked ? "bg-slate-200/60 cursor-not-allowed" : "cursor-pointer hover:bg-primary/5"
                           )}
                           style={{ width: COLUMN_WIDTH, minWidth: COLUMN_WIDTH, position: 'relative', zIndex: 5 }}
-                          onClick={() => handleCellClick(room._id, day)}
+                          title={isDayBooked ? "This room is already occupied on this date" : "Click to add booking"}
+                          onClick={() => {
+                            if (!isDayBooked) handleCellClick(room._id, day);
+                          }}
                         />
                       );
                     })}

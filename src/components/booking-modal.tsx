@@ -442,17 +442,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                       )}
                     </SelectContent>
                   </Select>
-                  <div className="relative">
-                    <IndianRupee className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-                    <Input 
-                      type="number"
-                      className="h-11 rounded-xl pl-7 text-xs font-bold bg-muted/30 border-none"
-                      value={bookingForm.roomPrice}
-                      onChange={e => setBookingForm({ ...bookingForm, roomPrice: parseFloat(e.target.value) || 0 })}
-                      placeholder="Rate"
-                      title="Nightly rate for this stay"
-                    />
-                  </div>
+                  {/* Rate input removed as requested */}
                 </div>
               </div>
 
@@ -485,44 +475,67 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between px-1">
-                  <Label className="text-xs font-black uppercase tracking-widest opacity-70">Advance Payment Received</Label>
-                  {totalAmount > 0 && balanceDue > 0 && (
-                    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-300">
-                      <span className="text-[9px] font-black text-muted-foreground uppercase opacity-40">Settle Full:</span>
-                      <div className="flex bg-primary/10 rounded-lg p-0.5 gap-0.5 border border-primary/20 shadow-sm">
+              <div className="space-y-4">
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-black uppercase tracking-widest opacity-70">Payment Selection</Label>
+                    <div className="flex bg-muted rounded-lg p-1 gap-1">
+                      <button 
+                        type="button"
+                        onClick={() => setBookingForm({ ...bookingForm, advancePayment: 0 })}
+                        className={cn(
+                          "px-3 py-1 text-[10px] font-black uppercase rounded-md transition-all",
+                          bookingForm.advancePayment === 0 ? "bg-white shadow-sm text-primary" : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        Unpaid
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setBookingForm({ ...bookingForm, advancePayment: totalAmount })}
+                        className={cn(
+                          "px-3 py-1 text-[10px] font-black uppercase rounded-md transition-all",
+                          bookingForm.advancePayment === totalAmount ? "bg-emerald-500 text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        Full
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-[1fr_auto] gap-3">
+                    <div className="relative">
+                      <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                        type="number" 
+                        step="any"
+                        className="h-12 rounded-2xl pl-10 bg-slate-50 border-slate-200 font-bold" 
+                        min="0" 
+                        value={bookingForm.advancePayment || ''} 
+                        onChange={e => setBookingForm({ ...bookingForm, advancePayment: parseFloat(e.target.value) || 0 })} 
+                        placeholder="Advance Amount" 
+                      />
+                    </div>
+                    {bookingForm.advancePayment > 0 && (
+                      <div className="flex bg-slate-100 rounded-2xl p-1 gap-1 border border-slate-200">
                         {['cash', 'card', 'upi'].map((m) => (
                           <button
                             key={m}
                             type="button"
-                            disabled={isSubmitting}
-                            onClick={() => setBookingForm({ ...bookingForm, advancePayment: totalAmount, paymentMethod: m as any })}
+                            onClick={() => setBookingForm({ ...bookingForm, paymentMethod: m as any })}
                             className={cn(
-                              "h-6 px-2 text-[8px] font-black uppercase rounded transition-all active:scale-90",
-                              bookingForm.advancePayment === totalAmount && bookingForm.paymentMethod === m 
-                                ? "bg-primary text-white" 
-                                : isSubmitting ? "opacity-50 cursor-not-allowed" : "text-primary hover:bg-primary/10"
+                              "h-10 px-3 text-[10px] font-black uppercase rounded-xl transition-all flex flex-col items-center justify-center min-w-[50px]",
+                              bookingForm.paymentMethod === m 
+                                ? "bg-white shadow-sm text-primary ring-1 ring-slate-200" 
+                                : "text-slate-400 hover:text-slate-600"
                             )}
                           >
-                            {m}
+                            <span className="leading-none">{m}</span>
                           </button>
                         ))}
                       </div>
-                    </div>
-                  )}
-                </div>
-                <div className="relative">
-                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    type="number" 
-                    step="any"
-                    className="h-11 rounded-xl pl-10" 
-                    min="0" 
-                    value={bookingForm.advancePayment || ''} 
-                    onChange={e => setBookingForm({ ...bookingForm, advancePayment: parseFloat(e.target.value) || 0 })} 
-                    placeholder="Amount in INR" 
-                  />
+                    )}
+                  </div>
                 </div>
               </div>
 
