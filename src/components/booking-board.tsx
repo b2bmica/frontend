@@ -495,16 +495,24 @@ export function BookingBoard() {
                     </div>
 
                     {/* Day cells */}
-                    {timeline.map((day) => (
-                      <div key={day.toISOString()}
-                        className={cn(
-                          "border-r cursor-pointer hover:bg-primary/5 transition-colors flex-shrink-0",
-                          isSameDay(day, new Date()) && "bg-primary/5"
-                        )}
-                        style={{ width: COLUMN_WIDTH, minWidth: COLUMN_WIDTH, position: 'relative', zIndex: 5 }}
-                        onClick={() => handleCellClick(room._id, day)}
-                      />
-                    ))}
+                    {timeline.map((day) => {
+                      const isDayBooked = roomBookings.some(b => {
+                        const start = startOfDay(parseISO(b.checkin));
+                        const end   = startOfDay(parseISO(b.checkout));
+                        return day >= start && day < end && b.status !== 'cancelled' && b.status !== 'checked-out';
+                      });
+                      return (
+                        <div key={day.toISOString()}
+                          className={cn(
+                            "border-r cursor-pointer hover:bg-primary/5 transition-colors flex-shrink-0",
+                            isSameDay(day, new Date()) && "bg-primary/5",
+                            isDayBooked && "bg-slate-100/50"
+                          )}
+                          style={{ width: COLUMN_WIDTH, minWidth: COLUMN_WIDTH, position: 'relative', zIndex: 5 }}
+                          onClick={() => handleCellClick(room._id, day)}
+                        />
+                      );
+                    })}
 
                       {(() => {
                         // Priority-based Single-Lane Collapse Logic
@@ -557,8 +565,8 @@ export function BookingBoard() {
                           const guest      = getGuest(booking);
                           const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
 
-                          const cardLeft  = ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 2;
-                          const cardWidth = (clampedDuration * COLUMN_WIDTH) - 4;
+                          const cardLeft  = ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 1;
+                          const cardWidth = (clampedDuration * COLUMN_WIDTH) - 2;
 
                           // ── Pointer-based drag (long-press on touch) ─────────────────
                           const handleCardDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -648,6 +656,19 @@ export function BookingBoard() {
                               if (dragging || longPressReady) {
                                 cardEl.style.transform = `translate(${dx}px,${dy}px)${longPressReady && !dragging ? ' scale(1.04)' : ''}`;
                                 if (longPressReady && !dragging) dragging = true;
+
+                                // Edge Scrolling Logic
+                                if (boardRef.current) {
+                                  const rect = boardRef.current.getBoundingClientRect();
+                                  const edgeSize = 40; // px from edge to start scrolling
+                                  const scrollSpeed = 15;
+                                  
+                                  if (me.clientX < rect.left + edgeSize) boardRef.current.scrollLeft -= scrollSpeed;
+                                  else if (me.clientX > rect.right - edgeSize) boardRef.current.scrollLeft += scrollSpeed;
+                                  
+                                  if (me.clientY < rect.top + edgeSize) boardRef.current.scrollTop -= scrollSpeed;
+                                  else if (me.clientY > rect.bottom - edgeSize) boardRef.current.scrollTop += scrollSpeed;
+                                }
                               }
                             };
 
@@ -817,29 +838,13 @@ export function BookingBoard() {
                               onClick={(e) => {
                                 if (isDraggingRef.current || isResizingRef.current) return;
                                 e.stopPropagation();
-                                
-                                // Smart detection: if clicking near the top/bottom boundary, 
-                                // allow the click to pass through to the day cell below.
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                const relativeY = e.clientY - rect.top;
-                                if (relativeY < 12 || relativeY > rect.height - 12) {
-                                  // Find the day relative to where the card starts
-                                  const clickX = e.clientX - rect.left;
-                                  const dayWithinCard = Math.floor(clickX / COLUMN_WIDTH);
-                                  const actualDay = addDays(checkinDate, dayWithinCard);
-                                  handleCellClick(room._id, actualDay);
-                                } else {
-                                  setSelectedBooking(booking);
-                                }
+                                setSelectedBooking(booking);
                               }}
                             >
                                <div className="flex flex-col h-full justify-between pointer-events-auto" data-card-content="">
                                   <div className="flex justify-between items-start pointer-events-auto gap-1">
                                     <button
-                                      className={cn(
-                                        "font-black truncate text-left hover:underline leading-tight z-10 relative w-fit outline-none text-[10px] md:text-sm lg:text-[14px] tracking-tight",
-                                        isMobile && clampedDuration <= 1 ? "whitespace-normal break-all line-clamp-2" : "truncate"
-                                      )}
+                                      className="font-bold truncate text-left hover:underline leading-tight z-10 relative w-fit outline-none text-[10px] md:text-xs"
                                       onClick={(e) => {
                                         if (isDraggingRef.current || isResizingRef.current) return;
                                         e.stopPropagation();
@@ -855,9 +860,13 @@ export function BookingBoard() {
                                           <PopoverTrigger asChild>
                                              <button
                                                className="bg-white/40 hover:bg-white/60 text-[8px] md:text-[9px] px-1.5 md:px-2 py-0 md:py-0.5 rounded-full font-black z-[100] flex-shrink-0 transition-all hover:scale-110 active:scale-90 shadow-sm pointer-events-auto border border-white/20 ring-1 ring-white/10"
+                                               onClick={(e) => {
+                                                  e.preventDefault();
+                                                  e.stopPropagation();
+                                               }}
                                              >
                                                 +{others.length}
-                                             </button>
+                                              </button>
                                           </PopoverTrigger>
                                           <PopoverContent className="w-64 p-2 rounded-2xl shadow-xl border z-[200]">
                                              <div className="p-2 border-b mb-1">
@@ -883,12 +892,9 @@ export function BookingBoard() {
                                     )}
                                   </div>
 
-                                  {/* Status Indicator - Hide on mobile for very short durations */}
-                                  {(!isMobile || clampedDuration > 1) && (
-                                    <span className="text-[7px] md:text-[9px] bg-black/20 px-1.5 py-0 rounded-full truncate font-bold uppercase tracking-tighter w-fit pointer-events-none opacity-90 border border-white/10 mt-auto shadow-sm">
-                                      {booking.status.replace('-', ' ')}
-                                    </span>
-                                  )}
+                                  <span className="text-[7px] md:text-[9px] bg-black/20 px-1.5 py-0 rounded-full truncate font-semibold capitalize tracking-tighter w-fit pointer-events-none opacity-90 border border-white/10 mt-auto shadow-sm">
+                                    {booking.status.replace('-', ' ')}
+                                  </span>
                                </div>
 
                               {/* Resize handle */}
