@@ -92,7 +92,7 @@ export function BookingBoard() {
   }, []);
 
   const DAYS = daysCount;
-  const COLUMN_WIDTH = isMobile ? 95 : 155;
+  const COLUMN_WIDTH = isMobile ? 95 : 140;
   const ROW_HEIGHT  = isMobile ? 62 : 72;
   const ROOM_COL    = isMobile ? 100 : 152;
 
@@ -791,7 +791,7 @@ export function BookingBoard() {
                               if (moved && daysDelta !== 0) {
                                 const origCheckin = startOfDay(parseISO(booking.checkin));
                                 const origNights  = differenceInDays(parseISO(booking.checkout), origCheckin);
-                                const newNights   = Math.max(1, origNights + daysDelta);
+                                 const newNights = origNights + daysDelta;
                                  if (newNights < 1) {
                                    cleanup();
                                    return;
@@ -868,6 +868,7 @@ export function BookingBoard() {
                                 width:  cardWidth,
                                 height: heightTotal,
                                 zIndex: 10,
+                                opacity: (booking.status === 'cancelled' || booking.status === 'checked-out') ? 0.45 : 1,
                                 cursor: isEditable ? 'grab' : 'pointer',
                                 touchAction: isEditable ? 'none' : 'auto',
                                 transition: resizingId === booking._id ? 'none' : 'left 0.15s ease, width 0.15s ease',
@@ -875,7 +876,10 @@ export function BookingBoard() {
                               onPointerDown={isEditable ? handleCardDragStart : undefined}
                               onClick={(e) => {
                                 if (isDraggingRef.current || isResizingRef.current) return;
-                                e.stopPropagation();
+                                // Allow click to bubble to cell for cancelled/checked-out so new bookings can be added
+                                if (booking.status !== 'cancelled' && booking.status !== 'checked-out') {
+                                  e.stopPropagation();
+                                }
                                 setSelectedBooking(booking);
                               }}
                             >

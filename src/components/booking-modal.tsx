@@ -478,7 +478,12 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               <div className="space-y-4">
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs font-black uppercase tracking-widest opacity-70">Payment Selection</Label>
+                    <Label className="text-xs font-black uppercase tracking-widest opacity-70 flex items-center gap-2">
+                       Payment Selection
+                       {bookingForm.advancePayment > 0 && !bookingForm.paymentMethod && (
+                          <span className="text-[9px] font-black text-red-500 animate-pulse bg-red-50 px-1.5 py-0.5 rounded-full border border-red-100">Select Method</span>
+                       )}
+                    </Label>
                     <div className="flex bg-muted rounded-lg p-1 gap-1">
                       <button 
                         type="button"
@@ -582,8 +587,11 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               
               <DialogFooter className="pt-2 gap-3">
                 <Button type="button" variant="ghost" onClick={() => setStep('guest')} className="font-bold">Back</Button>
-                <Button type="submit" className={cn("h-12 rounded-2xl flex-1 font-black shadow-lg", showSuccess ? "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20 text-white" : "shadow-primary/20")} disabled={isSubmitting || !bookingForm.roomId || nights <= 0 || showSuccess}>
-                  {showSuccess ? <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Confirmed!</span> : isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : initialBooking ? 'Update Stay' : 'Confirm Reservation'}
+                <Button type="submit" 
+                  className={cn("h-12 rounded-2xl flex-1 font-black shadow-lg", showSuccess ? "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20 text-white" : "shadow-primary/20")} 
+                  disabled={isSubmitting || !bookingForm.roomId || nights <= 0 || showSuccess || (bookingForm.advancePayment > 0 && !bookingForm.paymentMethod)}
+                >
+                  {showSuccess ? <span className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Reserved!</span> : isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : initialBooking ? 'Update Stay' : 'Confirm Reservation'}
                 </Button>
               </DialogFooter>
             </form>

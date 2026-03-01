@@ -13,20 +13,18 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 
-const STATUS_TABS = ['all', 'dirty', 'clean', 'occupied', 'repair'] as const;
+const STATUS_TABS = ['all', 'dirty', 'clean', 'occupied'] as const;
 
 const STATUS_META: Record<string, { label: string; badge: string; bar: string }> = {
   clean:    { label: 'Clean',    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',  bar: 'bg-emerald-500' },
   occupied: { label: 'Occupied', badge: 'bg-blue-50 text-blue-700 border-blue-200/80',           bar: 'bg-blue-500'    },
   dirty:    { label: 'Dirty',    badge: 'bg-amber-50 text-amber-700 border-amber-200/80',        bar: 'bg-amber-400'   },
-  repair:   { label: 'Repair',   badge: 'bg-red-50 text-red-700 border-red-200/80',              bar: 'bg-red-500'     },
 };
 
 const TRANSITIONS: Record<string, { label: string; newStatus: string }[]> = {
-  dirty:    [{ label: 'Mark Clean',    newStatus: 'clean'    }, { label: 'Mark Occupied', newStatus: 'occupied' }, { label: 'Move to Repair',   newStatus: 'maintenance' }],
-  occupied: [{ label: 'Mark Dirty',    newStatus: 'dirty'    }, { label: 'Mark Clean',    newStatus: 'clean'    }, { label: 'Move to Repair',   newStatus: 'maintenance' }],
-  clean:    [{ label: 'Mark Occupied', newStatus: 'occupied' }, { label: 'Mark Dirty',    newStatus: 'dirty'    }, { label: 'Move to Repair',   newStatus: 'maintenance' }],
-  repair:   [{ label: 'Mark Clean',    newStatus: 'clean'    }, { label: 'Mark Dirty',    newStatus: 'dirty'    }],
+  dirty:    [{ label: 'Mark Clean',    newStatus: 'clean'    }, { label: 'Mark Occupied', newStatus: 'occupied' }],
+  occupied: [{ label: 'Mark Dirty',    newStatus: 'dirty'    }, { label: 'Mark Clean',    newStatus: 'clean'    }],
+  clean:    [{ label: 'Mark Occupied', newStatus: 'occupied' }, { label: 'Mark Dirty',    newStatus: 'dirty'    }],
 };
 
 export function HousekeepingBoard() {
@@ -37,7 +35,7 @@ export function HousekeepingBoard() {
 
   const filtered = rooms.filter(r => {
     if (filter !== 'all') {
-      const effectiveStatus = (r.status === 'maintenance' || r.status === 'under-maintenance') ? 'repair' : r.status;
+      const effectiveStatus = r.status;
       if (effectiveStatus !== filter) return false;
     }
     if (search) {
@@ -55,7 +53,7 @@ export function HousekeepingBoard() {
   );
 
   const counts = rooms.reduce((acc, r) => {
-    const s = (r.status === 'maintenance' || r.status === 'under-maintenance') ? 'repair' : r.status;
+    const s = r.status;
     acc[s] = (acc[s] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -99,8 +97,8 @@ export function HousekeepingBoard() {
       </div>
 
       {/* Summary KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {(['clean', 'dirty', 'occupied', 'repair'] as const).map(s => {
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {(['clean', 'dirty', 'occupied'] as const).map(s => {
           const m = STATUS_META[s];
           return (
             <button
@@ -165,7 +163,7 @@ export function HousekeepingBoard() {
 
         <div className="divide-y divide-slate-100">
           {filtered.map((room, i) => {
-            const effectiveStatus = (room.status === 'maintenance' || room.status === 'under-maintenance') ? 'repair' : room.status;
+            const effectiveStatus = room.status;
             const meta = STATUS_META[effectiveStatus] || STATUS_META.dirty;
             const transitions = TRANSITIONS[effectiveStatus] || [];
             const isActioning = actioningId === room._id;
