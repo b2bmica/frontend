@@ -555,14 +555,24 @@ export function BookingBoard() {
 
                              const myStart = parseISO(booking.checkin);
                              const myEnd = parseISO(booking.checkout);
-                             const localConcurrentLanes = lanes.filter(lane => 
-                               lane.some(other => {
-                                 const oStart = parseISO(other.checkin);
-                                 const oEnd = parseISO(other.checkout);
-                                 return myStart < oEnd && myEnd > oStart;
-                               })
-                             ).length;
-                             const displayHeight = heightTotal / localConcurrentLanes;
+                             // Find max concurrency at any point in this specific booking's duration
+                             let maxConcurrentAtAnyPoint = 1;
+                             const startDate = parseISO(booking.checkin);
+                             const endDate   = parseISO(booking.checkout);
+                             
+                             // Check each day of this booking
+                             const myDays = eachDayOfInterval({ start: startDate, end: addDays(endDate, -1) });
+                             myDays.forEach(day => {
+                               const countAtDay = roomMatchBookings.filter(b => {
+                                 const s = parseISO(b.checkin);
+                                 const e = parseISO(b.checkout);
+                                 return day >= s && day < e;
+                               }).length;
+                               if (countAtDay > maxConcurrentAtAnyPoint) maxConcurrentAtAnyPoint = countAtDay;
+                             });
+
+                             const displayHeight = heightTotal / maxConcurrentAtAnyPoint;
+                             const isSolitary = maxConcurrentAtAnyPoint === 1;
 
                              const guest = getGuest(booking);
                              const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
@@ -580,7 +590,7 @@ export function BookingBoard() {
                                     const rect = boardContentRef.current.getBoundingClientRect();
                                     const x = info.point.x - rect.left;
                                     const dayAtMouse = (x - ROOM_COL) / COLUMN_WIDTH;
-                                    const bookingStartDay = differenceInDays(checkinDate, weekStartDay);
+                                    const bookingStartDay = differenceInDays(startDate, weekStartDay);
                                     dragGrabOffsetDaysRef.current = dayAtMouse - bookingStartDay;
                                   }
                                 }}
@@ -596,9 +606,9 @@ export function BookingBoard() {
                                 )}
                                  style={{
                                    left:   ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 1,
-                                   top:    3 + (laneIdx * displayHeight),
+                                   top:    3 + (laneIdx * (heightTotal / Math.max(laneIdx + 1, maxConcurrentAtAnyPoint))),
                                    width:  (clampedDuration * COLUMN_WIDTH) - 2,
-                                   height: Math.max(14, displayHeight - 2),
+                                   height: Math.max(14, (heightTotal / Math.max(laneIdx + 1, maxConcurrentAtAnyPoint)) - 2),
                                    transition: (resizingId === booking._id || isDraggingRef.current) ? 'none' : 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                                  }}
                                 onClick={(e) => { 
@@ -611,7 +621,7 @@ export function BookingBoard() {
                                      <button
                                        className={cn(
                                          "font-bold truncate text-left hover:underline leading-tight z-10 relative w-fit outline-none",
-                                         localConcurrentLanes === 1 ? "text-[10px] md:text-xs" : "text-[8px] md:text-[9px]"
+                                         isSolitary ? "text-[10px] md:text-xs" : "text-[8px] md:text-[9px]"
                                        )}
                                        onClick={(e) => {
                                          if (isDraggingRef.current || isResizingRef.current) return;
@@ -634,6 +644,7 @@ export function BookingBoard() {
                                  {isEditable && totalLanes === 1 && (
                                    <div 
                                      className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/30 z-50 flex items-center justify-center opacity-0 group-hover/booking:opacity-100 transition-opacity touch-none"
+                                     onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
                                      onPointerDown={(e) => {
                                        e.stopPropagation();
                                        e.preventDefault();
@@ -649,7 +660,7 @@ export function BookingBoard() {
 
                                        const onPointerMove = (moveEvent: PointerEvent) => {
                                           const deltaX = moveEvent.clientX - startX;
-                                          if (!hasMovedSignificant && Math.abs(deltaX) > 5) { 
+                                          if (!hasMovedSignificant && Math.abs(deltaX) > 8) { // Increased threshold to 8px
                                             hasMovedSignificant = true;
                                             isResizingRef.current = true;
                                             setResizingId(booking._id);
@@ -659,6 +670,7 @@ export function BookingBoard() {
                                             const minWidth = COLUMN_WIDTH;
                                             const newWidth = Math.max(minWidth, originalWidth + snappedDeltaX);
                                             cardElement.style.width = newWidth + "px";
+                                            if (cardElement.style.transition !== 'none') cardElement.style.transition = 'none';
                                           }
                                        };
 
