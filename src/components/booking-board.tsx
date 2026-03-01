@@ -53,7 +53,7 @@ export function BookingBoard() {
   const dragGrabOffsetDaysRef = useRef(0);
 
   // Week-based navigation
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(startOfDay(new Date()), { weekStartsOn: 1 }));
+  const [weekStart, setWeekStart] = useState(() => startOfDay(new Date()));
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string | undefined>();
@@ -119,9 +119,9 @@ export function BookingBoard() {
   }, []);
 
   const DAYS = daysCount;
-  const ROOM_COL = isMobile ? 86 : 152;
+  const ROOM_COL = isMobile ? 80 : 152;
   // Ensure COLUMN_WIDTH fills exactly the available horizontal space, but doesn't shrink awkwardly on tiny devices
-  const COLUMN_WIDTH = isMobile ? 52 : Math.max(48, Math.floor((boardWidth - ROOM_COL) / DAYS));
+  const COLUMN_WIDTH = isMobile ? Math.max(76, Math.floor((boardWidth - ROOM_COL) / DAYS)) : Math.max(48, Math.floor((boardWidth - ROOM_COL) / DAYS));
   const ROW_HEIGHT = isMobile ? 64 : 72;
 
   const timeline = useMemo(() =>
@@ -162,7 +162,7 @@ export function BookingBoard() {
     return globalMatches.filter(m => !filteredBookings.find(fm => fm._id === m._id));
   }, [globalMatches, filteredBookings]);
 
-  const isTodayView = isSameDay(weekStart, addDays(startOfDay(new Date()), -2));
+  const isTodayView = isSameDay(weekStart, startOfDay(new Date()));
 
   // Status counts
   const counts = useMemo(() => {
@@ -256,6 +256,11 @@ export function BookingBoard() {
       const dayDiff = Math.round(differenceInDays(newCheckinDate, startOfDay(parseISO(booking.checkin))));
       const nightText = dayDiff === 0 ? "" : (dayDiff > 0 ? ` +${dayDiff} night${dayDiff > 1 ? 's' : ''}` : ` -${Math.abs(dayDiff)} night${Math.abs(dayDiff) > 1 ? 's' : ''}`);
       const changeText = targetRoom._id !== getBookingRoomId(booking) ? `Push to Rm ${targetRoom.roomNumber}${nightText}` : (nightText ? `Shift ${nightText.trim()}` : "Save changes");
+
+      // Auto-snap calendar to new viewport if dragged significantly off-screen
+      if (dayIndex < 0 || dayIndex >= DAYS) {
+        setWeekStart(startOfDay(targetDay));
+      }
       
       setUseNewPrice(targetRoom.price !== booking.roomPrice);
 
@@ -385,7 +390,7 @@ export function BookingBoard() {
 
                 {!isTodayView && (
                   <Button variant="secondary" size="sm" className="h-10 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white hover:bg-slate-800 transition-all shadow-lg active:scale-95"
-                    onClick={() => setWeekStart(addDays(startOfDay(new Date()), -2))}>
+                    onClick={() => setWeekStart(startOfDay(new Date()))}>
                     {isMobile ? 'Today' : 'Go to Today'}
                   </Button>
                 )}
@@ -698,17 +703,16 @@ export function BookingBoard() {
                                  // Auto-scroll logic
                                  if (boardRef.current) {
                                    const rect = boardRef.current.getBoundingClientRect();
-                                   const edgeSize = 35;
-                                   const speed = 10;
+                                   const edgeSize = isMobile ? 60 : 45;
                                    
                                    let scrollDX = 0;
                                    let scrollDY = 0;
                                    
-                                   if (me.clientX < rect.left + edgeSize) scrollDX = -speed;
-                                   else if (me.clientX > rect.right - edgeSize) scrollDX = speed;
+                                   if (me.clientX < rect.left + edgeSize) scrollDX = -((rect.left + edgeSize) - me.clientX) * 0.8;
+                                   else if (me.clientX > rect.right - edgeSize) scrollDX = (me.clientX - (rect.right - edgeSize)) * 0.8;
                                    
-                                   if (me.clientY < rect.top + edgeSize) scrollDY = -speed;
-                                   else if (me.clientY > rect.bottom - edgeSize) scrollDY = speed;
+                                   if (me.clientY < rect.top + edgeSize) scrollDY = -((rect.top + edgeSize) - me.clientY) * 0.8;
+                                   else if (me.clientY > rect.bottom - edgeSize) scrollDY = (me.clientY - (rect.bottom - edgeSize)) * 0.8;
 
                                    if (scrollDX !== 0 || scrollDY !== 0) {
                                       boardRef.current.scrollLeft += scrollDX;
@@ -798,10 +802,11 @@ export function BookingBoard() {
                                 // Auto-scroll logic for edge pushing
                                 if (boardRef.current) {
                                   const rect = boardRef.current.getBoundingClientRect();
-                                  const edgeSize = 40;
+                                  const edgeSize = isMobile ? 60 : 45;
                                   let scrollDX = 0;
-                                  if (me.clientX < rect.left + edgeSize) scrollDX = -12;
-                                  else if (me.clientX > rect.right - edgeSize) scrollDX = 12;
+                                  
+                                  if (me.clientX < rect.left + edgeSize) scrollDX = -((rect.left + edgeSize) - me.clientX) * 0.8;
+                                  else if (me.clientX > rect.right - edgeSize) scrollDX = (me.clientX - (rect.right - edgeSize)) * 0.8;
 
                                   if (scrollDX !== 0) {
                                     boardRef.current.scrollLeft += scrollDX;
@@ -836,6 +841,12 @@ export function BookingBoard() {
                                 });
 
                                  if (!isClashingRes) {
+                                   
+                                   const addedDaysTotal = differenceInDays(startOfDay(parseISO(newCheckout)), startOfDay(weekStart));
+                                   if (addedDaysTotal >= DAYS) {
+                                     setWeekStart(startOfDay(addDays(weekStart, addedDaysTotal - DAYS + 1)));
+                                   }
+                                   
                                    setUseNewPrice(false); // Resizing usually keeps the same room price
                                    setPendingUpdate({
                                      booking,
@@ -949,7 +960,7 @@ export function BookingBoard() {
                                        </div>
                                     )}
                                   </div>
-                                   <span className="text-[7px] md:text-[8px] bg-black/10 px-1 py-0.5 rounded-sm font-bold uppercase tracking-tighter w-fit opacity-90">
+                                   <span className="text-[7px] md:text-[8px] bg-black/10 px-1 py-0.5 rounded-sm font-bold capitalize tracking-wide w-fit opacity-90">
                                      {booking.status}
                                    </span>
                                  </div>
@@ -958,13 +969,14 @@ export function BookingBoard() {
                                    <div 
                                      className={cn(
                                        "absolute right-0 top-0 bottom-0 cursor-ew-resize z-50 flex items-center justify-center pointer-events-auto transition-all",
-                                       isMobile ? "w-6 opacity-100 bg-black/5" : "w-3 opacity-0 group-hover/card:opacity-100 hover:bg-black/5"
+                                       "w-4 opacity-0 group-hover/card:opacity-100 hover:bg-black/5 active:opacity-100",
+                                       !isMobile && "w-3 opacity-0"
                                      )}
                                      style={{ touchAction: 'none' }}
                                      onPointerDown={(e) => handleResizeDragStart(e as any)}
                                      onClick={e => e.stopPropagation()}
                                    >
-                                     <div className={cn("rounded-full bg-white/60", isMobile ? "h-6 w-1.5" : "h-4 w-1")} />
+                                     <div className={cn("rounded-full bg-white/60", isMobile ? "h-6 w-1.5 shadow-sm" : "h-4 w-1")} />
                                    </div>
                                  )}
                              </motion.div>
@@ -985,7 +997,7 @@ export function BookingBoard() {
 
                            const dayOffset = differenceInDays(startOfDay(dayDate), startOfDay(weekStart));
                            if (dayOffset < 0 || dayOffset >= DAYS) return null;
-                           const badgeLeft = ROOM_COL + dayOffset * COLUMN_WIDTH + COLUMN_WIDTH - 20;
+                           const badgeLeft = ROOM_COL + dayOffset * COLUMN_WIDTH + COLUMN_WIDTH - 24;
 
                            const cancelledOnDayList = cancelledBookings.filter(b => {
                              const cIn = startOfDay(parseISO(b.checkin));
