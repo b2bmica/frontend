@@ -558,17 +558,20 @@ export function BookingBoard() {
                           const cardLeft  = ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 1;
                           const cardWidth = (clampedDuration * COLUMN_WIDTH) - 2;
 
-                          // ── Pointer-based drag ─────────────────────────────────────────
+                          // ── Pointer-based drag (long-press on touch) ─────────────────
                           const handleCardDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
                             if (!isEditable) return;
                             if (isResizingRef.current) return;
-                            if (e.button !== 0) return;
+                            // Allow left-click on mouse, any button on touch/pen
+                            if (e.pointerType === 'mouse' && e.button !== 0) return;
                             const target = e.target as HTMLElement;
                             if (target.closest('[data-resize-handle]')) return;
 
-                            const cardEl = e.currentTarget as HTMLDivElement;
+                            const cardEl   = e.currentTarget as HTMLDivElement;
+                            const isTouch  = e.pointerType === 'touch' || e.pointerType === 'pen';
+                            const LONG_MS  = 380; // ms for long-press activation
+
                             e.stopPropagation();
-                            try { cardEl.setPointerCapture(e.pointerId); } catch (_) {}
 
                             const startX = e.clientX;
                             const startY = e.clientY;
@@ -577,12 +580,58 @@ export function BookingBoard() {
                               const x = e.clientX - rect.left;
                               dragGrabOffsetDaysRef.current = (x - ROOM_COL) / COLUMN_WIDTH - differenceInDays(checkinDate, weekStartDay);
                             }
-                            let dragging = false;
+
+                            let dragging         = false;
+                            let longPressReady   = false;   // long press timer fired
+                            let cancelled        = false;
+                            let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+
+                            // For mouse, capture immediately; for touch wait until long press
+                            if (!isTouch) {
+                              try { cardEl.setPointerCapture(e.pointerId); } catch (_) {}
+                            }
+
+                            const activateDrag = () => {
+                              if (cancelled) return;
+                              longPressReady = true;
+                              isDraggingRef.current = true;
+                              try { cardEl.setPointerCapture(e.pointerId); } catch (_) {}
+                              // Haptic feedback
+                              try { (navigator as any).vibrate?.([12, 40, 12]); } catch (_) {}
+                              cardEl.style.opacity    = '0.85';
+                              cardEl.style.zIndex     = '50';
+                              cardEl.style.transition = 'transform 0.12s ease, box-shadow 0.12s ease';
+                              cardEl.style.transform  = 'scale(1.04)';
+                              cardEl.style.boxShadow  = '0 12px 32px rgba(0,0,0,0.25)';
+                              // Allow small delay for visual bounce, then go free
+                              setTimeout(() => {
+                                if (!cancelled) cardEl.style.transition = 'none';
+                              }, 130);
+                            };
+
+                            if (isTouch) {
+                              // Long-press: start a timer; animate a "charging" ring via outline
+                              cardEl.style.transition = `outline-width ${LONG_MS}ms ease`;
+                              longPressTimer = setTimeout(activateDrag, LONG_MS);
+                            }
 
                             const onMove = (me: PointerEvent) => {
                               const dx = me.clientX - startX;
                               const dy = me.clientY - startY;
-                              if (!dragging && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+                              const dist = Math.abs(dx) + Math.abs(dy);
+
+                              if (isTouch && !longPressReady) {
+                                // Cancel long press if user moved (they're scrolling)
+                                if (dist > 8) {
+                                  cancelled = true;
+                                  if (longPressTimer) clearTimeout(longPressTimer);
+                                  cleanup();
+                                }
+                                return;
+                              }
+
+                              // Mouse: start drag after small movement
+                              if (!isTouch && !dragging && dist > 6) {
                                 dragging = true;
                                 isDraggingRef.current = true;
                                 cardEl.style.opacity    = '0.75';
@@ -590,8 +639,10 @@ export function BookingBoard() {
                                 cardEl.style.cursor     = 'grabbing';
                                 cardEl.style.transition = 'none';
                               }
-                              if (dragging) {
-                                cardEl.style.transform = `translate(${dx}px,${dy}px)`;
+
+                              if (dragging || longPressReady) {
+                                cardEl.style.transform = `translate(${dx}px,${dy}px)${longPressReady && !dragging ? ' scale(1.04)' : ''}`;
+                                if (longPressReady && !dragging) dragging = true;
                               }
                             };
 
@@ -604,17 +655,18 @@ export function BookingBoard() {
                             };
 
                             const cleanup = () => {
+                              if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
                               try { cardEl.releasePointerCapture(e.pointerId); } catch (_) {}
                               window.removeEventListener('pointermove', onMove);
                               window.removeEventListener('pointerup',   onUp);
                               window.removeEventListener('pointercancel', cleanup);
-                              // Only clear if drag was actually started
-                              if (dragging) {
+                              if (dragging || longPressReady) {
                                 cardEl.style.transform  = '';
                                 cardEl.style.opacity    = '';
                                 cardEl.style.zIndex     = '';
                                 cardEl.style.cursor     = '';
                                 cardEl.style.transition = '';
+                                cardEl.style.boxShadow  = '';
                               }
                               setTimeout(() => { isDraggingRef.current = false; }, 100);
                             };
@@ -721,6 +773,7 @@ export function BookingBoard() {
                                 width:  cardWidth,
                                 height: heightTotal,
                                 cursor: isEditable ? 'grab' : 'pointer',
+                                touchAction: isEditable ? 'pan-y' : 'auto',
                                 transition: resizingId === booking._id ? 'none' : 'left 0.15s ease, width 0.15s ease',
                               }}
                               onPointerDown={isEditable ? handleCardDragStart : undefined}
