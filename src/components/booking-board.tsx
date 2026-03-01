@@ -597,6 +597,7 @@ export function BookingBoard() {
                               if (cancelled) return;
                               longPressReady = true;
                               isDraggingRef.current = true;
+                              cardEl.style.touchAction = 'none';
                               try { cardEl.setPointerCapture(e.pointerId); } catch (_) {}
                               // Haptic feedback
                               try { (navigator as any).vibrate?.([12, 40, 12]); } catch (_) {}
@@ -673,6 +674,7 @@ export function BookingBoard() {
                                 cardEl.style.boxShadow  = '';
                                 cardEl.style.outline = '';
                                 cardEl.style.outlineOffset = '';
+                                cardEl.style.touchAction = isEditable ? 'none' : 'auto';
                               }
                               setTimeout(() => { isDraggingRef.current = false; }, 100);
                             };
@@ -792,7 +794,7 @@ export function BookingBoard() {
                                 height: heightTotal,
                                 zIndex: 10,
                                 cursor: isEditable ? 'grab' : 'pointer',
-                                touchAction: isEditable ? 'pan-y' : 'auto',
+                                touchAction: isEditable ? 'none' : 'auto',
                                 transition: resizingId === booking._id ? 'none' : 'left 0.15s ease, width 0.15s ease',
                               }}
                               onPointerDown={isEditable ? handleCardDragStart : undefined}
