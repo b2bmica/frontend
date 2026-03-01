@@ -443,9 +443,9 @@ export function BookingBoard() {
           <div className="relative min-h-full min-w-full w-max" ref={boardContentRef}>
 
             {/* Column headers */}
-            <div className="flex sticky top-0 z-[60] bg-card/80 backdrop-blur-md border-b shadow-sm">
+            <div className="flex z-[50] bg-card/80 backdrop-blur-md border-b shadow-sm w-max">
               <div 
-                className="sticky left-0 z-[100] bg-slate-50 border-r flex items-center font-black text-slate-400 uppercase tracking-[0.15em] shadow-[4px_0_12px_rgba(0,0,0,0.06)]"
+                className="bg-slate-50 border-r flex items-center font-black text-slate-400 uppercase tracking-[0.15em]"
                 style={{ width: ROOM_COL, height: 48, minWidth: ROOM_COL, fontSize: isMobile ? 8 : 10, paddingLeft: isMobile ? 6 : 16 }}
               >
                 Rooms
@@ -473,7 +473,7 @@ export function BookingBoard() {
             </div>
 
             {/* Room rows */}
-            <div className="relative">
+            <div className="relative w-max">
               {rooms
                 .filter(r => statusFilter === 'maintenance' ? (r.status === 'maintenance' || r.status === 'under-maintenance') : true)
                 .map((room, rowIndex) => {
@@ -483,13 +483,13 @@ export function BookingBoard() {
                     key={room._id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: rowIndex * 0.02, duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+                    transition={{ delay: Math.min(rowIndex * 0.02, 0.4), duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
                     className="flex border-b group relative hover:bg-white transition-colors" 
                     style={{ height: ROW_HEIGHT }}
                   >
-                    {/* Room label sticky */}
+                    {/* Room label */}
                     <div 
-                      className="sticky left-0 z-[80] bg-white border-r flex flex-col justify-center shadow-[6px_0_16px_-4px_rgba(0,0,0,0.08)] flex-shrink-0"
+                      className="bg-white border-r flex flex-col justify-center flex-shrink-0 relative z-10"
                       style={{ width: ROOM_COL, minWidth: ROOM_COL, paddingLeft: isMobile ? 6 : 16, paddingRight: isMobile ? 4 : 12 }}
                     >
                       <div className="font-black flex items-center gap-1 text-slate-800" style={{ fontSize: isMobile ? 10 : 13 }}>
