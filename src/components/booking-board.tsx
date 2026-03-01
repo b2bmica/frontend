@@ -75,6 +75,7 @@ export function BookingBoard() {
       oldCheckout: string;
       newCheckout: string;
       changeText: string;
+      nightsDelta?: number;
     }
   } | null>(null);
 
@@ -226,7 +227,8 @@ export function BookingBoard() {
           newCheckin,
           oldCheckout: booking.checkout,
           newCheckout,
-          changeText
+          changeText,
+          nightsDelta: dayDiff
         }
       });
     }
@@ -598,11 +600,13 @@ export function BookingBoard() {
                               try { cardEl.setPointerCapture(e.pointerId); } catch (_) {}
                               // Haptic feedback
                               try { (navigator as any).vibrate?.([12, 40, 12]); } catch (_) {}
-                              cardEl.style.opacity    = '0.85';
-                              cardEl.style.zIndex     = '50';
-                              cardEl.style.transition = 'transform 0.12s ease, box-shadow 0.12s ease';
-                              cardEl.style.transform  = 'scale(1.04)';
-                              cardEl.style.boxShadow  = '0 12px 32px rgba(0,0,0,0.25)';
+                              cardEl.style.opacity    = '0.9';
+                              cardEl.style.zIndex     = '100';
+                              cardEl.style.transition = 'transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.15s ease';
+                              cardEl.style.transform  = 'scale(1.06) translateY(-4px)';
+                              cardEl.style.boxShadow  = '0 20px 40px rgba(0,0,0,0.3)';
+                              cardEl.style.outline = '2px solid white';
+                              cardEl.style.outlineOffset = '2px';
                               // Allow small delay for visual bounce, then go free
                               setTimeout(() => {
                                 if (!cancelled) cardEl.style.transition = 'none';
@@ -621,8 +625,8 @@ export function BookingBoard() {
                               const dist = Math.abs(dx) + Math.abs(dy);
 
                               if (isTouch && !longPressReady) {
-                                // Cancel long press if user moved (they're scrolling)
-                                if (dist > 8) {
+                                // Allow more movement for thumb wobble
+                                if (dist > 16) {
                                   cancelled = true;
                                   if (longPressTimer) clearTimeout(longPressTimer);
                                   cleanup();
@@ -667,6 +671,8 @@ export function BookingBoard() {
                                 cardEl.style.cursor     = '';
                                 cardEl.style.transition = '';
                                 cardEl.style.boxShadow  = '';
+                                cardEl.style.outline = '';
+                                cardEl.style.outlineOffset = '';
                               }
                               setTimeout(() => { isDraggingRef.current = false; }, 100);
                             };
@@ -730,7 +736,8 @@ export function BookingBoard() {
                                     newCheckout,
                                     changeText: daysDelta > 0
                                       ? `Extend +${daysDelta} night${daysDelta > 1 ? 's' : ''}`
-                                      : `Reduce ${daysDelta} night${Math.abs(daysDelta) > 1 ? 's' : ''}`,
+                                      : `Reduce ${Math.abs(daysDelta)} night${Math.abs(daysDelta) > 1 ? 's' : ''}`,
+                                    nightsDelta: daysDelta
                                   },
                                 });
                               }
@@ -780,10 +787,25 @@ export function BookingBoard() {
                               onClick={(e) => {
                                 if (isDraggingRef.current || isResizingRef.current) return;
                                 e.stopPropagation();
-                                setSelectedBooking(booking);
+                                
+                                // Gap clicking fix: If clicking the card itself (the background), 
+                                // and not an interactive child, determine if we should pass it to the cell below.
+                                const target = e.target as HTMLElement;
+                                const isCardBg = target.hasAttribute('data-booking-card') || target.hasAttribute('data-card-content');
+                                
+                                if (isCardBg) {
+                                  // Find the day relative to where the card starts
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  const clickX = e.clientX - rect.left;
+                                  const dayWithinCard = Math.floor(clickX / COLUMN_WIDTH);
+                                  const actualDay = addDays(checkinDate, dayWithinCard);
+                                  handleCellClick(room._id, actualDay);
+                                } else {
+                                  setSelectedBooking(booking);
+                                }
                               }}
                             >
-                               <div className="flex flex-col h-full justify-between pointer-events-none">
+                               <div className="flex flex-col h-full justify-between pointer-events-auto" data-card-content="">
                                   <div className="flex justify-between items-start pointer-events-auto gap-1">
                                     <button
                                       className="font-bold truncate text-left hover:underline leading-tight z-10 relative w-fit outline-none text-[10px] md:text-xs"
@@ -801,8 +823,11 @@ export function BookingBoard() {
                                        <Popover>
                                           <PopoverTrigger asChild>
                                              <button
-                                               className="bg-white/20 hover:bg-white/40 text-[9px] px-1.5 py-0.5 rounded-full font-black z-20 flex-shrink-0"
-                                               onClick={e => e.stopPropagation()}
+                                               className="bg-white/30 hover:bg-white/50 text-[10px] px-2 py-0.5 rounded-full font-black z-30 flex-shrink-0 transition-all hover:scale-110 active:scale-95 shadow-sm pointer-events-auto"
+                                               onClick={e => {
+                                                  e.preventDefault();
+                                                  e.stopPropagation();
+                                               }}
                                              >
                                                 +{others.length}
                                              </button>
@@ -916,40 +941,34 @@ export function BookingBoard() {
 
             {pendingUpdate?.details.changeText && (() => {
                const text = pendingUpdate.details.changeText;
-               const isExtend  = text.toLowerCase().startsWith('extend');
-               const isReduce  = text.toLowerCase().startsWith('reduce');
-               const isMove    = !isExtend && !isReduce;
-               const icon      = isExtend ? '↔ +' : isReduce ? '↔ −' : '✦';
-               const nightsNum = text.match(/[+-]?\d+/);
-               const nights    = nightsNum ? Math.abs(Number(nightsNum[0])) : null;
+               const nights = pendingUpdate.details.nightsDelta;
+               const isExtend = nights && nights > 0 && pendingUpdate.type === 'resize';
+               const isReduce = nights && nights < 0 && pendingUpdate.type === 'resize';
+               const isMove = pendingUpdate.type === 'move';
+               
                return (
                  <div className={cn(
-                   "flex items-center justify-center gap-2 py-3 px-4 rounded-2xl text-center",
+                   "flex items-center justify-center gap-3 py-4 px-5 rounded-[24px] text-center",
                    isExtend ? "bg-emerald-50 border border-emerald-100" :
                    isReduce ? "bg-amber-50 border border-amber-100" :
                    "bg-primary/5 border border-primary/10"
                  )}>
-                   <span className={cn(
-                     "text-lg font-black leading-none",
-                     isExtend ? "text-emerald-500" : isReduce ? "text-amber-500" : "text-primary"
-                   )}>{icon}</span>
+                   <div className={cn(
+                     "h-10 w-10 rounded-full flex items-center justify-center",
+                     isExtend ? "bg-emerald-500 text-white" : isReduce ? "bg-amber-500 text-white" : "bg-primary text-white"
+                   )}>
+                     {isExtend ? <Plus className="h-5 w-5" /> : isReduce ? <ChevronLeft className="h-5 w-5" /> : <ArrowRight className="h-5 w-5" />}
+                   </div>
                    <div className="flex flex-col items-start">
                      <span className={cn(
-                       "text-[11px] font-black uppercase tracking-widest",
-                       isExtend ? "text-emerald-600" : isReduce ? "text-amber-600" : "text-primary"
+                       "text-[12px] font-black uppercase tracking-widest",
+                       isExtend ? "text-emerald-700" : isReduce ? "text-amber-700" : "text-primary"
                      )}>
-                       {isExtend ? 'Extend Stay' : isReduce ? 'Shorten Stay' : 'Move Booking'}
+                       {isExtend ? 'Extend Stay' : isReduce ? 'Shorten Stay' : 'Update Booking'}
                      </span>
-                     {nights && (
-                       <span className="text-[10px] font-bold text-slate-400">
-                         {isExtend ? `+${nights}` : isReduce ? `−${nights}` : ''} night{nights !== 1 ? 's' : ''}
-                       </span>
-                     )}
-                     {isMove && (
-                       <span className="text-[10px] font-bold text-slate-400">
-                         {text}
-                       </span>
-                     )}
+                     <span className="text-[11px] font-bold text-slate-500">
+                       {isMove ? text : `${Math.abs(nights || 0)} night${Math.abs(nights || 0) !== 1 ? 's' : ''} ${nights && nights > 0 ? 'added' : 'removed'}`}
+                     </span>
                    </div>
                  </div>
                );
