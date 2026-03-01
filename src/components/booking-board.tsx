@@ -112,11 +112,10 @@ export function BookingBoard() {
   }, []);
 
   const DAYS = daysCount;
-  const ROOM_COL = isMobile ? 76 : 152;
-  // Ensure COLUMN_WIDTH fills exactly the available horizontal space
-  // boardWidth starts at window.innerWidth to avoid 0 on first render
+  const ROOM_COL = isMobile ? 86 : 152;
+  // Ensure COLUMN_WIDTH fills exactly the available horizontal space, but doesn't shrink awkwardly on tiny devices
   const effectiveBoardWidth = boardWidth > 0 ? boardWidth : (typeof window !== 'undefined' ? window.innerWidth : 375);
-  const COLUMN_WIDTH = Math.floor(Math.max(44, (effectiveBoardWidth - ROOM_COL) / DAYS));
+  const COLUMN_WIDTH = isMobile ? 52 : Math.floor(Math.max(48, (effectiveBoardWidth - ROOM_COL) / DAYS));
   const ROW_HEIGHT = isMobile ? 64 : 72;
 
   const timeline = useMemo(() =>
@@ -637,7 +636,8 @@ export function BookingBoard() {
                             let cancelled        = false;
                             let longPressTimer: ReturnType<typeof setTimeout> | null = null;
 
-                            // For mouse, capture immediately; for touch wait until long press
+                            // For mobile, we will still use a tiny 250ms press to lift the card,
+                            // but we MUST have set touch-action: none on the card natively, so the browser doesn't steal it for scrolling.
                             if (!isTouch) {
                               try { cardEl.setPointerCapture(e.pointerId); } catch (_) {}
                             }
@@ -646,42 +646,29 @@ export function BookingBoard() {
                               if (cancelled) return;
                               longPressReady = true;
                               isDraggingRef.current = true;
-                              cardEl.style.touchAction = 'none';
                               try { cardEl.setPointerCapture(e.pointerId); } catch (_) {}
                               // Haptic feedback
                               try { (navigator as any).vibrate?.([12, 40, 12]); } catch (_) {}
                               cardEl.style.opacity    = '0.9';
                               cardEl.style.zIndex     = '100';
                               cardEl.style.transition = 'transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.15s ease';
-                              cardEl.style.transform  = 'scale(1.06) translateY(-4px)';
+                              cardEl.style.transform  = 'scale(1.04) translateY(-2px)';
                               cardEl.style.boxShadow  = '0 20px 40px rgba(0,0,0,0.3)';
-                              cardEl.style.outline = '2px solid white';
-                              cardEl.style.outlineOffset = '2px';
-                              // Allow small delay for visual bounce, then go free
+                              
                               setTimeout(() => {
                                 if (!cancelled) cardEl.style.transition = 'none';
                               }, 130);
                             };
 
                             if (isTouch) {
-                              // Long-press: start a timer; animate a "charging" ring via outline
-                              cardEl.style.transition = `outline-width ${LONG_MS}ms ease`;
-                              longPressTimer = setTimeout(activateDrag, LONG_MS);
+                               // Start drag instantly on mobile when touch action is bound
+                               activateDrag();
                             }
 
                              const onMove = (me: PointerEvent) => {
                                const dx_view = me.clientX - startX;
                                const dy_view = me.clientY - startY;
                                const dist = Math.abs(dx_view) + Math.abs(dy_view);
-
-                               if (isTouch && !longPressReady) {
-                                 if (dist > 16) {
-                                   cancelled = true;
-                                   if (longPressTimer) clearTimeout(longPressTimer);
-                                   cleanup();
-                                 }
-                                 return;
-                               }
 
                                if (!isTouch && !dragging && dist > 6) {
                                  dragging = true;
@@ -696,7 +683,7 @@ export function BookingBoard() {
                                  const updateTransform = () => {
                                    const scrollDeltaL = (boardRef.current?.scrollLeft || 0) - initialScrollL;
                                    const scrollDeltaT = (boardRef.current?.scrollTop || 0) - initialScrollT;
-                                   cardEl.style.transform = `translate(${dx_view + scrollDeltaL}px, ${dy_view + scrollDeltaT}px)${longPressReady && !dragging ? ' scale(1.04)' : ''}`;
+                                   cardEl.style.transform = `translate(${dx_view + scrollDeltaL}px, ${dy_view + scrollDeltaT}px)${isTouch && !dragging ? ' scale(1.04)' : ''}`;
                                  };
                                  
                                  updateTransform();
@@ -727,7 +714,7 @@ export function BookingBoard() {
                              };
 
                             const onUp = (ue: PointerEvent) => {
-                              const wasDragging = dragging;
+                              const wasDragging = dragging || Math.abs(ue.clientX - startX) > 10;
                               cleanup();
                               if (wasDragging) {
                                 handleDragEnd(ue, { point: { x: ue.clientX, y: ue.clientY } }, booking);
@@ -735,7 +722,6 @@ export function BookingBoard() {
                             };
 
                             const cleanup = () => {
-                              if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
                               try { cardEl.releasePointerCapture(e.pointerId); } catch (_) {}
                               window.removeEventListener('pointermove', onMove);
                               window.removeEventListener('pointerup',   onUp);
@@ -802,6 +788,19 @@ export function BookingBoard() {
                                 }
 
                                 cardEl.style.width = `${Math.max(COLUMN_WIDTH, originalWidth + snapped)}px`;
+
+                                // Auto-scroll logic for edge pushing
+                                if (boardRef.current) {
+                                  const rect = boardRef.current.getBoundingClientRect();
+                                  const edgeSize = 40;
+                                  let scrollDX = 0;
+                                  if (me.clientX < rect.left + edgeSize) scrollDX = -12;
+                                  else if (me.clientX > rect.right - edgeSize) scrollDX = 12;
+
+                                  if (scrollDX !== 0) {
+                                    boardRef.current.scrollLeft += scrollDX;
+                                  }
+                                }
                               }
                             };
 
@@ -880,10 +879,11 @@ export function BookingBoard() {
                               layout
                               layoutId={booking._id}
                               key={booking._id}
+                              data-booking-card=""
                               className={cn(
-                                "absolute overflow-hidden shadow-md group/card border-2 rounded-2xl z-40 transition-shadow",
+                                "absolute overflow-hidden shadow-sm group/card border rounded-[12px] z-40 transition-shadow",
                                 getStatusColor(booking.status),
-                                isEditable ? "hover:scale-[1.01] hover:shadow-xl hover:z-50" : "opacity-80"
+                                isEditable ? "hover:shadow-md hover:z-50" : "opacity-80"
                               )}
                               style={{
                                 left:   cardLeft,
@@ -892,6 +892,7 @@ export function BookingBoard() {
                                 height: heightTotal,
                                 opacity: (booking.status === 'cancelled' || booking.status === 'checked-out') ? 0.75 : 1,
                                 cursor: isEditable ? 'grab' : 'pointer',
+                                touchAction: isEditable && isMobile ? 'none' : undefined,
                                 transition: 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease',
                                 transformOrigin: 'center left'
                               }}
@@ -902,10 +903,10 @@ export function BookingBoard() {
                                 setSelectedBooking(booking);
                               }}
                             >
-                                <div className="flex flex-col h-full justify-between p-2 text-white pointer-events-none" data-card-content="">
+                                <div className="flex flex-col h-full justify-between p-1.5 md:p-2 text-white" data-card-content="">
                                   <div className="flex justify-between items-start gap-1">
                                     <button
-                                      className="font-black truncate text-left hover:underline leading-tight z-10 relative outline-none text-[10px] md:text-xs pointer-events-auto"
+                                      className="font-bold truncate text-left hover:underline leading-tight z-10 relative outline-none text-[9px] md:text-[10px]"
                                       onClick={(e) => {
                                         if (isDraggingRef.current || isResizingRef.current) return;
                                         e.stopPropagation();
@@ -917,21 +918,21 @@ export function BookingBoard() {
                                     </button>
 
                                     {others.length > 0 && (
-                                       <div className="pointer-events-auto" onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
+                                       <div onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
                                          <Popover>
                                             <PopoverTrigger asChild>
-                                               <button className="bg-white/30 hover:bg-white/40 text-[8px] md:text-[9px] px-1.5 md:px-2 py-0.5 rounded-full font-black flex-shrink-0 shadow-sm border border-white/20">
+                                               <button className="bg-white/30 hover:bg-white/40 text-[8px] md:text-[9px] px-1.5 py-0.5 rounded-md font-bold flex-shrink-0">
                                                   +{others.length}
                                                 </button>
                                             </PopoverTrigger>
-                                            <PopoverContent className="w-64 p-2 rounded-2xl shadow-xl border z-[300]">
-                                                <div className="p-2 border-b mb-1"><p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Other Stays</p></div>
+                                            <PopoverContent className="w-64 p-2 rounded-xl shadow-xl border z-[300]">
+                                                <div className="p-2 border-b mb-1"><p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Other Stays</p></div>
                                                 <div className="space-y-1">
                                                   {others.map(o => (
                                                       <button key={o._id} className="w-full p-2 hover:bg-slate-50 rounded-lg text-left flex items-center justify-between group/o" onClick={(e) => { e.stopPropagation(); setSelectedBooking(o); }}>
                                                          <div className="flex flex-col">
-                                                            <span className="text-[11px] font-bold text-slate-900 group-hover/o:text-primary">{getGuest(o)?.name || 'Guest'}</span>
-                                                            <span className="text-[9px] font-bold text-slate-400 capitalize tracking-tighter">{o.status}</span>
+                                                            <span className="text-[10px] font-bold text-slate-900 group-hover/o:text-primary">{getGuest(o)?.name || 'Guest'}</span>
+                                                            <span className="text-[8px] font-bold text-slate-400 capitalize tracking-tighter">{o.status}</span>
                                                          </div>
                                                          <div className={cn("w-2 h-2 rounded-full", getStatusColor(o.status).includes('emerald') ? 'bg-emerald-500' : 'bg-blue-500')} />
                                                       </button>
@@ -942,18 +943,22 @@ export function BookingBoard() {
                                        </div>
                                     )}
                                   </div>
-                                   <span className="text-[7px] md:text-[8px] bg-black/10 px-1.5 py-0 rounded-full font-black uppercase tracking-tighter w-fit opacity-80 border border-white/5 shadow-sm">
+                                   <span className="text-[7px] md:text-[8px] bg-black/10 px-1 py-0.5 rounded-sm font-bold uppercase tracking-tighter w-fit opacity-90">
                                      {booking.status}
                                    </span>
                                  </div>
 
                                  {isEditable && (
                                    <div 
-                                     className="absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize z-50 flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-opacity pointer-events-auto"
+                                     className={cn(
+                                       "absolute right-0 top-0 bottom-0 cursor-ew-resize z-50 flex items-center justify-center pointer-events-auto transition-all",
+                                       isMobile ? "w-6 opacity-100 bg-black/5" : "w-3 opacity-0 group-hover/card:opacity-100 hover:bg-black/5"
+                                     )}
+                                     style={{ touchAction: 'none' }}
                                      onPointerDown={(e) => handleResizeDragStart(e as any)}
                                      onClick={e => e.stopPropagation()}
                                    >
-                                     <div className="h-4 w-1 bg-white/40 rounded-full" />
+                                     <div className={cn("rounded-full bg-white/60", isMobile ? "h-6 w-1.5" : "h-4 w-1")} />
                                    </div>
                                  )}
                              </motion.div>
@@ -963,13 +968,38 @@ export function BookingBoard() {
                          // Return cancelled mini-badges alongside active card JSX.
                          const cancelledBadgeEls = Object.entries(cancelledByDay).map(([dayIso, count]) => {
                            const dayDate  = new Date(dayIso);
+
+                           // Prevent badge from rendering under semi-transparent active cards causing an overlapping, dirty look
+                           const isOverlayedByCard = visibleCards.some(vc => {
+                             const vcStart = startOfDay(parseISO(vc.primary.checkin));
+                             const vcEnd = startOfDay(parseISO(vc.primary.checkout));
+                             return dayDate >= vcStart && dayDate < vcEnd;
+                           });
+                           if (isOverlayedByCard) return null;
+
                            const dayOffset = differenceInDays(startOfDay(dayDate), startOfDay(weekStart));
                            if (dayOffset < 0 || dayOffset >= DAYS) return null;
-                           const badgeLeft = ROOM_COL + dayOffset * COLUMN_WIDTH + COLUMN_WIDTH - 18;
+                           const badgeLeft = ROOM_COL + dayOffset * COLUMN_WIDTH + COLUMN_WIDTH - 20;
+
+                           const cancelledOnDay = cancelledBookings.find(b => {
+                             const cIn = startOfDay(parseISO(b.checkin));
+                             const cOut = startOfDay(parseISO(b.checkout));
+                             return dayDate >= cIn && dayDate < cOut;
+                           });
+
                            return (
-                             <div key={`cnl-badge-${dayIso}`} className="absolute top-1 z-30 pointer-events-none" style={{ left: badgeLeft }}>
-                               <div className="w-4 h-4 rounded-full bg-slate-300/80 border border-white flex items-center justify-center shadow-sm" title={`${count} cancelled`}>
-                                 <span className="text-[7px] font-black text-slate-500 leading-none">{count}</span>
+                             <div 
+                               key={`cnl-badge-${dayIso}`} 
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 if (cancelledOnDay) setSelectedBooking(cancelledOnDay);
+                               }}
+                               className="absolute top-1.5 z-30 pointer-events-auto cursor-pointer transition-transform hover:scale-110 active:scale-95" 
+                               style={{ left: badgeLeft }}
+                               title={`${count} cancelled${cancelledOnDay ? ` - Click to view` : ''}`}
+                             >
+                               <div className="w-5 h-5 rounded-full bg-slate-200/90 hover:bg-slate-300 border border-white flex items-center justify-center shadow-sm">
+                                 <span className="text-[9px] font-black text-slate-500 leading-none">{count}</span>
                                </div>
                              </div>
                            );
@@ -1011,28 +1041,32 @@ export function BookingBoard() {
           </div>
 
           <div className="p-6 space-y-6">
-            <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center">
+            <div className="grid grid-cols-[1fr_auto_1fr] gap-2 md:gap-4 items-center px-1">
               {/* CURRENT */}
-              <div className="space-y-2 text-center">
-                 <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Original</p>
-                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 shadow-inner group/card transition-all opacity-60">
-                    <p className="font-black text-slate-900 text-sm mb-1 leading-none">{pendingUpdate ? `Rm ${pendingUpdate.details.oldRoom}` : 'Room'}</p>
-                    <p className="text-[10px] font-bold text-slate-400">
+              <div className="space-y-2 text-center min-w-0">
+                 <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest truncate">Original</p>
+                 <div className="p-3 md:p-4 rounded-2xl bg-slate-50 border border-slate-100 shadow-inner group/card transition-all opacity-60 flex flex-col justify-center min-h-[72px]">
+                    <p className="font-black text-slate-900 text-xs md:text-sm mb-1 leading-none truncate w-full" title={pendingUpdate ? `Rm ${pendingUpdate.details.oldRoom}` : 'Room'}>
+                      {pendingUpdate ? `Rm ${pendingUpdate.details.oldRoom}` : 'Room'}
+                    </p>
+                    <p className="text-[9px] md:text-[10px] font-bold text-slate-400 whitespace-nowrap overflow-hidden text-ellipsis">
                       {pendingUpdate && format(parseISO(pendingUpdate.details.oldCheckin), 'MMM dd')} - {pendingUpdate && format(parseISO(pendingUpdate.details.oldCheckout), 'MMM dd')}
                     </p>
                  </div>
               </div>
 
-              <div className="bg-slate-100 h-8 w-8 rounded-full flex items-center justify-center border border-white shadow-sm opacity-50">
-                 <ArrowRight className="h-4 w-4 text-slate-400" />
+              <div className="bg-slate-100 h-6 w-6 md:h-8 md:w-8 rounded-full flex items-center justify-center border border-white shadow-sm opacity-50 flex-shrink-0">
+                 <ArrowRight className="h-3 w-3 md:h-4 md:w-4 text-slate-400" />
               </div>
 
               {/* NEW */}
-              <div className="space-y-2 text-center">
-                 <p className="text-[9px] font-black uppercase text-primary/60 tracking-widest">Proposed</p>
-                 <div className="p-4 rounded-2xl bg-primary/5 border border-primary/20 shadow-lg shadow-primary/5 ring-1 ring-primary/5 scale-105">
-                    <p className="font-black text-primary text-sm mb-1 leading-none">{pendingUpdate ? `Rm ${pendingUpdate.details.newRoom}` : 'Room'}</p>
-                    <p className="text-[10px] font-black text-primary">
+              <div className="space-y-2 text-center min-w-0">
+                 <p className="text-[9px] font-black uppercase text-primary/60 tracking-widest truncate">Proposed</p>
+                 <div className="p-3 md:p-4 rounded-2xl bg-primary/5 border border-primary/20 shadow-lg shadow-primary/5 ring-1 ring-primary/5 scale-105 flex flex-col justify-center min-h-[72px]">
+                    <p className="font-black text-primary text-xs md:text-sm mb-1 leading-none truncate w-full" title={pendingUpdate ? `Rm ${pendingUpdate.details.newRoom}` : 'Room'}>
+                      {pendingUpdate ? `Rm ${pendingUpdate.details.newRoom}` : 'Room'}
+                    </p>
+                    <p className="text-[9px] md:text-[10px] font-black text-primary whitespace-nowrap overflow-hidden text-ellipsis">
                       {pendingUpdate && format(parseISO(pendingUpdate.details.newCheckin), 'MMM dd')} - {pendingUpdate && format(parseISO(pendingUpdate.details.newCheckout), 'MMM dd')}
                     </p>
                  </div>

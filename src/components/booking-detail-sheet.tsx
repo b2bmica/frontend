@@ -425,10 +425,26 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                 {!showPaymentSelection ? (
                   <Button 
                     variant="outline"
-                    className="flex-1 h-full rounded-xl font-black border-orange-200 text-orange-600 hover:bg-orange-600 hover:text-white text-[11px] uppercase tracking-wider truncate shadow-sm transition-all active:scale-95"
-                    onClick={() => setShowPaymentSelection(true)}
+                    className={cn(
+                      "flex-1 h-full rounded-xl font-black text-[11px] uppercase tracking-wider truncate shadow-sm transition-all active:scale-95",
+                      balance <= 0 
+                        ? "border-emerald-200 text-emerald-600 hover:bg-emerald-600 hover:text-white"
+                        : "border-orange-200 text-orange-600 hover:bg-orange-600 hover:text-white"
+                    )}
+                    onClick={() => {
+                      if (balance <= 0) {
+                        handleAction((id) => updateBooking(id, { status: 'checked-out' }), true);
+                      } else {
+                        setShowPaymentSelection(true);
+                      }
+                    }}
                   >
-                    Settle & Checkout
+                    {balance <= 0 ? (
+                      <div className="flex items-center gap-2">
+                         <CheckCircle2 className="h-4 w-4" />
+                         Checkout
+                      </div>
+                    ) : 'Settle & Checkout'}
                   </Button>
                 ) : (
                   <div className={cn(
