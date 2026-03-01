@@ -181,9 +181,11 @@ export function BookingBoard() {
     const dayIndex = Math.round(dayAtMouse - dragGrabOffsetDaysRef.current);
     const roomIndex = Math.floor((y - VER_OFFSET) / ROW_HEIGHT);
 
-    if (dayIndex >= 0 && dayIndex < DAYS && roomIndex >= 0 && roomIndex < rooms.length) {
+    const activeRooms = rooms.filter(r => statusFilter === 'maintenance' ? (r.status === 'maintenance' || r.status === 'under-maintenance') : true);
+    
+    if (dayIndex >= 0 && dayIndex < DAYS && roomIndex >= 0 && roomIndex < activeRooms.length) {
       const targetDay = addDays(weekStart, dayIndex);
-      const targetRoom = rooms[roomIndex];
+      const targetRoom = activeRooms[roomIndex];
       const duration = differenceInDays(new Date(booking.checkout), new Date(booking.checkin));
       const newCheckin = format(targetDay, 'yyyy-MM-dd');
       const newCheckout = format(addDays(targetDay, duration), 'yyyy-MM-dd');
@@ -754,27 +756,41 @@ export function BookingBoard() {
                                <Popover key={`group-${segIdx}`}>
                                  <PopoverTrigger asChild>
                                    <div
-                                     className="absolute z-10 rounded-md p-1.5 text-white shadow-xl flex flex-col justify-center items-center transition-all bg-slate-900 cursor-pointer overflow-hidden border border-white/20"
+                                     className="absolute z-10 rounded-md p-0.5 text-white shadow-lg flex flex-col items-stretch transition-all bg-slate-100/30 cursor-pointer overflow-hidden border border-slate-200/50 backdrop-blur-sm group/overlap"
                                      style={{
-                                       left:   ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 1,
-                                       top:    3,
-                                       width:  (clampedDuration * COLUMN_WIDTH) - 2,
-                                       height: ROW_HEIGHT - 6,
+                                       left:   ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 2,
+                                       top:    4,
+                                       width:  (clampedDuration * COLUMN_WIDTH) - 4,
+                                       height: ROW_HEIGHT - 8,
                                      }}
                                    >
-                                      <div className="flex flex-col items-center">
-                                         <span className="text-[14px] md:text-base font-black italic tracking-tighter leading-none">{group.length}</span>
-                                         <span className="text-[8px] font-black capitalize opacity-60 tracking-widest -mt-0.5">Overlap</span>
-                                      </div>
-                                      {/* Indicator dots */}
-                                      <div className="flex gap-1 mt-1.5 flex-wrap justify-center px-1">
-                                         {group.map((b, i) => (
-                                           <div key={b._id} className={cn("w-1.5 h-1.5 rounded-full border border-white/20", getStatusColor(b.status).split(' ')[0])} />
+                                      {/* Stacked thin bars representing each booking */}
+                                      <div className="flex-1 flex flex-col gap-[1px]">
+                                         {group.slice(0, 4).map((b, i) => (
+                                           <div 
+                                              key={b._id} 
+                                              className={cn(
+                                                "flex-1 rounded-sm opacity-90 transition-all hover:opacity-100", 
+                                                getStatusColor(b.status).split(' ')[0]
+                                              )} 
+                                           />
                                          ))}
+                                         {group.length > 4 && (
+                                           <div className="h-1 flex items-center justify-center bg-slate-900/50 rounded-sm">
+                                              <span className="text-[6px] font-black">+{group.length - 4}</span>
+                                           </div>
+                                         )}
+                                      </div>
+                                      
+                                      {/* Mini Registry Indicator */}
+                                      <div className="absolute inset-x-0 bottom-0 py-0.5 flex justify-center bg-slate-900/10 backdrop-blur-[2px] opacity-0 group-hover/overlap:opacity-100 transition-opacity">
+                                         <span className="text-[10px] font-black italic tracking-tighter text-slate-900">
+                                            {group.length} Registry
+                                         </span>
                                       </div>
                                    </div>
                                  </PopoverTrigger>
-                                 <PopoverContent className="w-64 p-2 rounded-2xl shadow-3xl border-none z-[600]">
+                                 <PopoverContent className="w-64 p-2 rounded-[24px] shadow-3xl border-none z-[600] bg-white/95 backdrop-blur-xl">
                                     <div className="space-y-1">
                                        <div className="px-2 py-1.5 border-b mb-1">
                                           <h4 className="text-[9px] font-black uppercase tracking-widest text-slate-400">Overlapping Registry</h4>
@@ -837,66 +853,59 @@ export function BookingBoard() {
 
       {/* Refined Confirmation Dialog */}
       <Dialog open={!!pendingUpdate} onOpenChange={(open) => !open && !isUpdating && setPendingUpdate(null)}>
-        <DialogContent className="sm:max-w-[400px] rounded-[24px] p-0 border-none shadow-2xl overflow-hidden bg-white">
-          <div className="p-6 border-b bg-slate-50/50">
-            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary mb-3">
-              <ShieldCheck className="h-5 w-5" />
+        <DialogContent className="sm:max-w-[400px] rounded-[32px] p-0 border-none shadow-3xl overflow-hidden bg-white">
+          <div className="p-6 border-b bg-slate-50/50 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+               <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-inner shadow-primary/5">
+                 <ShieldCheck className="h-5 w-5" />
+               </div>
+               <DialogHeader>
+                  <DialogTitle className="text-lg font-black tracking-tight text-slate-900 leading-none">Confirm Update</DialogTitle>
+                  <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.2em] mt-2">Registry Force Synchronization</p>
+               </DialogHeader>
             </div>
-            <DialogHeader>
-              <DialogTitle className="text-xl font-black tracking-tight text-slate-900">Confirm Changes?</DialogTitle>
-              <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] mt-1">Manual Registry Override</p>
-            </DialogHeader>
+            <div className="px-3 py-1.5 rounded-full bg-primary/5 border border-primary/20 shadow-sm">
+               <span className="text-xs font-black italic text-primary leading-none">{pendingUpdate?.details.changeText}</span>
+            </div>
           </div>
 
-          <div className="p-6 space-y-5">
-            <div className="space-y-4">
-              {/* Changes List */}
-              <div className="px-4 py-3 rounded-xl bg-primary/5 border border-primary/10 flex flex-col gap-1">
-                <span className="text-sm font-black text-primary italic leading-none">{pendingUpdate?.details.changeText}</span>
-                <span className="text-[10px] font-black uppercase text-primary/40 tracking-[0.2em]">Registry Override Summary</span>
-              </div>
-              {/* Room Change */}
-              {pendingUpdate?.type === 'move' && pendingUpdate.details.oldRoom !== pendingUpdate.details.newRoom && (
-                <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 border border-slate-100">
-                  <div className="space-y-0.5">
-                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">From</p>
-                    <p className="font-black text-slate-900 text-sm">Rm {pendingUpdate.details.oldRoom}</p>
-                  </div>
-                  <div className="h-8 w-8 rounded-full bg-white border border-slate-100 flex items-center justify-center">
-                    <ArrowRight className="h-3.5 w-3.5 text-slate-300" />
-                  </div>
-                  <div className="space-y-0.5 text-right">
-                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">To</p>
-                    <p className="font-black text-slate-900 text-sm">Rm {pendingUpdate.details.newRoom}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Date Change Visualizer */}
-              <div className="grid grid-cols-2 gap-3">
-                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex flex-col items-center">
-                    <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-1">Current Dates</p>
-                    <p className="text-[11px] font-bold text-slate-600">
+          <div className="p-6 space-y-6">
+            <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-center">
+              {/* CURRENT */}
+              <div className="space-y-2 text-center">
+                 <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Original</p>
+                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 shadow-inner group/card transition-all opacity-60">
+                    <p className="font-black text-slate-900 text-sm mb-1 leading-none">Rm {pendingUpdate?.details.oldRoom}</p>
+                    <p className="text-[10px] font-bold text-slate-400 italic">
                       {pendingUpdate && format(parseISO(pendingUpdate.details.oldCheckin), 'MMM dd')} - {pendingUpdate && format(parseISO(pendingUpdate.details.oldCheckout), 'MMM dd')}
                     </p>
                  </div>
-                 <div className="p-3 rounded-xl bg-primary/5 border border-primary/10 flex flex-col items-center">
-                    <p className="text-[8px] font-black uppercase text-primary/60 tracking-widest mb-1">New Dates</p>
-                    <p className="text-[11px] font-black text-primary">
+              </div>
+
+              <div className="bg-slate-100 h-8 w-8 rounded-full flex items-center justify-center border border-white shadow-sm opacity-50">
+                 <ArrowRight className="h-4 w-4 text-slate-400" />
+              </div>
+
+              {/* NEW */}
+              <div className="space-y-2 text-center">
+                 <p className="text-[9px] font-black uppercase text-primary/60 tracking-widest">Proposed</p>
+                 <div className="p-4 rounded-2xl bg-primary/5 border border-primary/20 shadow-lg shadow-primary/5 ring-1 ring-primary/5 scale-105">
+                    <p className="font-black text-primary text-sm mb-1 leading-none">Rm {pendingUpdate?.details.newRoom}</p>
+                    <p className="text-[10px] font-black text-primary italic">
                       {pendingUpdate && format(parseISO(pendingUpdate.details.newCheckin), 'MMM dd')} - {pendingUpdate && format(parseISO(pendingUpdate.details.newCheckout), 'MMM dd')}
                     </p>
                  </div>
               </div>
             </div>
 
-            <DialogFooter className="flex flex-row gap-2 sm:justify-stretch">
+            <DialogFooter className="flex flex-row gap-3 pt-2">
               <Button 
-                variant="outline" 
+                variant="ghost" 
                 disabled={isUpdating}
                 onClick={() => setPendingUpdate(null)}
-                className="flex-1 h-11 rounded-xl text-[10px] font-black uppercase tracking-widest border-slate-200 hover:bg-slate-50 transition-all active:scale-95"
+                className="flex-1 h-12 rounded-2xl text-[11px] font-black uppercase tracking-[0.1em] text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all active:scale-95"
               >
-                Cancel
+                Discard
               </Button>
               <Button 
                 disabled={isUpdating}
@@ -913,9 +922,9 @@ export function BookingBoard() {
                     }
                   }
                 }}
-                className="flex-1 h-11 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-slate-900/10 transition-all active:scale-95"
+                className="flex-[1.5] h-12 rounded-2xl bg-slate-900 text-white hover:bg-slate-800 text-[11px] font-black uppercase tracking-[0.1em] shadow-xl shadow-slate-900/20 ring-1 ring-white/10 transition-all active:scale-95"
               >
-                {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Apply Sync'}
+                {isUpdating ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Apply Entry'}
               </Button>
             </DialogFooter>
           </div>
