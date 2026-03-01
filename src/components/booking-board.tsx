@@ -61,6 +61,9 @@ export function BookingBoard() {
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [search, setSearch] = useState('');
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi'>('cash');
+  const [isSettled, setIsSettled] = useState(false);
+  const [showDirtyRoomPrompt, setShowDirtyRoomPrompt] = useState(false);
   const [resizingId, setResizingId] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [pendingUpdate, setPendingUpdate] = useState<{
@@ -80,14 +83,11 @@ export function BookingBoard() {
   } | null>(null);
 
   const [isMobile, setIsMobile] = useState(false);
-  const [daysCount, setDaysCount] = useState(14);
+  const daysCount = 7;
   useEffect(() => {
     const check = () => {
       const width = window.innerWidth;
       setIsMobile(width < 768);
-      if (width < 768) setDaysCount(12);
-      else if (width < 1200) setDaysCount(18);
-      else setDaysCount(28);
     };
     check();
     window.addEventListener('resize', check);
@@ -95,8 +95,8 @@ export function BookingBoard() {
   }, []);
 
   const DAYS = daysCount;
-  const COLUMN_WIDTH = isMobile ? 65 : 100;
-  const ROW_HEIGHT  = isMobile ? 60 : 68;
+  const COLUMN_WIDTH = isMobile ? 90 : 180;
+  const ROW_HEIGHT  = isMobile ? 62 : 72;
   const ROOM_COL    = isMobile ? 100 : 152;
 
   const timeline = useMemo(() =>
@@ -296,7 +296,7 @@ export function BookingBoard() {
           <div className="flex items-center justify-between gap-2">
             <Button variant="outline" size="sm" className="h-9 px-3 rounded-xl border-slate-200 bg-white shadow-sm font-bold text-xs"
               onClick={() => setWeekStart(addDays(weekStart, -DAYS))}>
-              <ChevronLeft className="h-4 w-4 mr-1" /> {isMobile ? '' : 'Earlier'}
+              <ChevronLeft className="h-4 w-4 mr-1" /> {isMobile ? '' : 'Previous Week'}
             </Button>
             
             <div className="flex flex-col items-center flex-1">
@@ -327,7 +327,7 @@ export function BookingBoard() {
 
             <Button variant="outline" size="sm" className="h-9 px-3 rounded-xl border-slate-200 bg-white shadow-sm font-bold text-xs"
               onClick={() => setWeekStart(addDays(weekStart, DAYS))}>
-              {isMobile ? '' : 'Later'} <ChevronRight className="h-4 w-4 ml-1" />
+              {isMobile ? '' : 'Next Week'} <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           </div>
 
@@ -447,7 +447,6 @@ export function BookingBoard() {
             {[
               { dot: 'bg-green-500', label: 'Clean' },
               { dot: 'bg-yellow-400', label: 'Dirty' },
-              { dot: 'bg-red-500',   label: 'Repair' },
             ].map(({ dot, label }) => (
               <span key={label} className="flex items-center gap-1">
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
@@ -793,7 +792,12 @@ export function BookingBoard() {
                                 const origCheckin = startOfDay(parseISO(booking.checkin));
                                 const origNights  = differenceInDays(parseISO(booking.checkout), origCheckin);
                                 const newNights   = Math.max(1, origNights + daysDelta);
-                                const newCheckout = format(addDays(origCheckin, newNights), 'yyyy-MM-dd');
+                                 if (newNights < 1) {
+                                   cleanup();
+                                   return;
+                                 }
+                                 
+                                 const newCheckout = format(addDays(origCheckin, newNights), 'yyyy-MM-dd');
                                 
                                 // Clash check for resize
                                 const newCheckoutDate = startOfDay(parseISO(newCheckout));
@@ -1020,28 +1024,20 @@ export function BookingBoard() {
                
                return (
                  <div className={cn(
-                   "flex items-center justify-center gap-3 py-3 px-5 rounded-[24px] text-center",
+                   "flex flex-col items-center justify-center py-4 px-6 rounded-[24px] text-center gap-1",
                    isExtend ? "bg-emerald-50 border border-emerald-100" :
                    isReduce ? "bg-amber-50 border border-amber-100" :
                    "bg-primary/5 border border-primary/10"
                  )}>
-                   <div className={cn(
-                     "h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0",
-                     isExtend ? "bg-emerald-500 text-white" : isReduce ? "bg-amber-500 text-white" : "bg-primary text-white"
+                   <span className={cn(
+                     "text-[10px] md:text-[11px] font-black uppercase tracking-wider leading-tight",
+                     isExtend ? "text-emerald-700" : isReduce ? "text-amber-700" : "text-primary"
                    )}>
-                     {isExtend ? <Plus className="h-4 w-4" /> : isReduce ? <Minus className="h-4 w-4" /> : <ArrowRightLeft className="h-4 w-4" />}
-                   </div>
-                   <div className="flex flex-col items-start overflow-hidden">
-                     <span className={cn(
-                       "text-[10px] md:text-[11px] font-black uppercase tracking-wider leading-tight",
-                       isExtend ? "text-emerald-700" : isReduce ? "text-amber-700" : "text-primary"
-                     )}>
-                       {label}
-                     </span>
-                     <span className="text-[10px] font-bold text-slate-500 truncate w-full text-left">
-                       {sublabel}
-                     </span>
-                   </div>
+                     {label}
+                   </span>
+                   <span className="text-[10px] font-bold text-slate-500 text-center">
+                     {sublabel}
+                   </span>
                  </div>
                );
             })()}

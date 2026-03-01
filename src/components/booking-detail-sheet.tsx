@@ -46,6 +46,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi'>('cash');
   const [isSettled, setIsSettled] = useState(false);
+  const [showDirtyRoomPrompt, setShowDirtyRoomPrompt] = useState(false);
 
   if (!booking) return null;
 
@@ -92,11 +93,36 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
         await new Promise(r => setTimeout(r, 1500));
       }
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
     }
     setIsActioning(false);
     setIsSettled(false);
+  };
+
+  const { updateRoomStatus } = useBookings();
+
+  const handleInitialCheckIn = () => {
+    if (room?.status === 'dirty') {
+      setShowDirtyRoomPrompt(true);
+    } else {
+      handleAction(checkIn);
+    }
+  };
+
+  const handleCheckInWithCleanup = async () => {
+    setShowDirtyRoomPrompt(false);
+    setIsActioning(true);
+    try {
+      // Step 1: Clean the room
+      await updateRoomStatus(room._id, 'clean');
+      // Step 2: Check in
+      await checkIn(booking._id);
+      onClose();
+    } catch (err) {
+      console.error(err);
+    }
+    setIsActioning(false);
   };
 
   return (
@@ -123,8 +149,15 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                 Stay Duration: {nights} Night{nights > 1 ? 's' : ''} • {format(new Date(booking.checkin), 'MMM dd')} - {format(new Date(booking.checkout), 'MMM dd')}
               </p>
               {booking.createdAt && (
-                <div className="text-[10px] font-bold text-slate-300 uppercase tracking-widest flex items-center gap-1.5">
-                  <Clock className="h-2.5 w-2.5" /> Booked On: {format(new Date(booking.createdAt), 'dd MMM, yyyy HH:mm')}
+                <div className="text-[10px] font-bold text-slate-300 uppercase tracking-widest flex items-center gap-x-3 gap-y-1 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="h-2.5 w-2.5" /> Booked: {format(new Date(booking.createdAt), 'dd MMM, HH:mm')}
+                  </div>
+                  {booking.createdBy && (
+                    <div className="flex items-center gap-1.5 text-primary/60">
+                      <User className="h-2.5 w-2.5" /> By: {typeof booking.createdBy === 'object' ? booking.createdBy.name : 'System'}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -375,7 +408,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
             {booking.status === 'reserved' && (
               <Button 
                 className="flex-1 h-full rounded-xl font-black bg-blue-600 hover:bg-blue-700 text-[11px] uppercase tracking-wider shadow-lg shadow-blue-500/20 transition-all active:scale-95"
-                onClick={() => handleAction(checkIn)}
+                onClick={handleInitialCheckIn}
                 disabled={isActioning || isBefore(new Date(), startOfDay(new Date(booking.checkin)))}
                 title={isBefore(new Date(), startOfDay(new Date(booking.checkin))) ? `Check-in will be enabled on ${format(new Date(booking.checkin), 'MMM dd, yyyy')}` : undefined}
               >
@@ -495,6 +528,31 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                 disabled={isActioning}
               >
                 {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Yes, Cancel'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        {/* Dirty Room Confirmation */}
+        <Dialog open={showDirtyRoomPrompt} onOpenChange={setShowDirtyRoomPrompt}>
+          <DialogContent className="sm:max-w-[360px] rounded-2xl border-none shadow-2xl">
+            <DialogHeader>
+              <div className="mx-auto w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-2">
+                <Info className="h-6 w-6 text-amber-600" />
+              </div>
+              <DialogTitle className="text-lg font-black tracking-tight text-center">Room is still Dirty</DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground font-medium text-center">
+                Room <span className="font-bold text-foreground">{room?.roomNumber}</span> is currently marked as dirty. Would you like to mark it as <span className="text-emerald-600 font-bold">Clean</span> and proceed with Check-in?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-2">
+              <Button variant="ghost" className="rounded-xl font-bold flex-1 order-2 sm:order-1" onClick={() => setShowDirtyRoomPrompt(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="rounded-xl font-bold flex-1 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20 order-1 sm:order-2"
+                onClick={handleCheckInWithCleanup}
+              >
+                Mark Clean & Check-in
               </Button>
             </DialogFooter>
           </DialogContent>

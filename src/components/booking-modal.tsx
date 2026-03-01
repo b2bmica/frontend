@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useBookings } from '../context/booking-context';
 import { useAuth } from '../context/auth-context';
-import { differenceInDays, format, addDays } from 'date-fns';
+import { differenceInDays, format, addDays, parseISO, startOfDay, isBefore, isSameDay } from 'date-fns';
 import { Loader2, Search, UserPlus, IndianRupee, Info, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -60,14 +60,20 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
     baseOccupancy: 2, extraPersonPrice: 0, roomPrice: 0
   });
 
+  // Safe date parser helper
+  const safeParse = (dStr: string) => {
+    if (!dStr) return new Date();
+    // For YYYY-MM-DD, parseISO is clean. 
+    return startOfDay(parseISO(dStr));
+  };
+
   // Derived State
   const selectedRoom = rooms.find(r => r._id === bookingForm.roomId);
-  const nights = bookingForm.checkin && bookingForm.checkout
-    ? differenceInDays(new Date(bookingForm.checkout), new Date(bookingForm.checkin))
+  const nights = (bookingForm.checkin && bookingForm.checkout)
+    ? differenceInDays(safeParse(bookingForm.checkout), safeParse(bookingForm.checkin))
     : 0;
   
-  const roomPrice = initialBooking ? bookingForm.roomPrice : (selectedRoom?.price || 0);
-  const baseSubtotal = nights * roomPrice;
+  const baseSubtotal = nights * (bookingForm.roomPrice || 0);
   
   // Extra person logic
   const extraAdults = Math.max(0, bookingForm.adults - (bookingForm.baseOccupancy || 2));
@@ -91,8 +97,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const availableRooms = useMemo(() => {
     if (!bookingForm.checkin || !bookingForm.checkout) return rooms;
     
-    const start = new Date(bookingForm.checkin);
-    const end = new Date(bookingForm.checkout);
+    const start = safeParse(bookingForm.checkin);
+    const end = safeParse(bookingForm.checkout);
 
     return rooms.filter(room => {
       // Check for overlapping active bookings
@@ -102,8 +108,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         if (bRoomId !== room._id) return false;
         if (b.status === 'cancelled' || b.status === 'checked-out') return false;
 
-        const bStart = new Date(b.checkin);
-        const bEnd = new Date(b.checkout);
+        const bStart = safeParse(b.checkin);
+        const bEnd = safeParse(b.checkout);
 
         // Standard overlap: (StartA < EndB) && (EndA > StartB)
         return start < bEnd && end > bStart;
@@ -142,10 +148,15 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         setShowNewGuest(false);
         setError(null);
         setNewGuest({ name: '', phone: '', email: '', nationality: 'Indian', idProof: { idType: 'aadhaar', number: '' } });
+        
+        const initialCheckin = selectedDate || format(new Date(), 'yyyy-MM-dd');
+        // Avoid TZ issues by adding day to the start-of-day parsed date
+        const initialCheckout = format(addDays(safeParse(initialCheckin), 1), 'yyyy-MM-dd');
+
         setBookingForm({
           roomId: selectedRoomId || '',
-          checkin: selectedDate || format(new Date(), 'yyyy-MM-dd'),
-          checkout: selectedDate ? format(addDays(new Date(selectedDate), 1), 'yyyy-MM-dd') : format(addDays(new Date(), 1), 'yyyy-MM-dd'),
+          checkin: initialCheckin,
+          checkout: initialCheckout,
           adults: 2, children: 0,
           advancePayment: 0,
           paymentMethod: 'cash',
@@ -160,15 +171,39 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
   useEffect(() => {
     if (selectedRoom) {
-      setBookingForm(prev => ({
-        ...prev,
-        baseOccupancy: selectedRoom.baseOccupancy || 2,
-        extraPersonPrice: selectedRoom.extraPersonPrice || 0,
-        // Always update roomPrice when room is selected/changed (both new and edit)
-        roomPrice: selectedRoom.price || 0
-      }));
+      // Logic: Only update the price automatically if:
+      // 1. It's a new booking
+      // 2. It's an existing booking but the ROOM has changed from its original room
+      const originalRoomId = initialBooking 
+        ? (typeof initialBooking.roomId === 'object' ? initialBooking.roomId._id : initialBooking.roomId)
+        : null;
+
+      if (!initialBooking || bookingForm.roomId !== originalRoomId) {
+        setBookingForm(prev => ({
+          ...prev,
+          baseOccupancy: selectedRoom.baseOccupancy || 2,
+          extraPersonPrice: selectedRoom.extraPersonPrice || 0,
+          roomPrice: selectedRoom.price || 0
+        }));
+      }
     }
-  }, [selectedRoom]);
+  }, [bookingForm.roomId, selectedRoom, initialBooking]);
+
+  // Ensure checkout is after checkin
+  useEffect(() => {
+    if (bookingForm.checkin && bookingForm.checkout) {
+      const start = safeParse(bookingForm.checkin);
+      const end = safeParse(bookingForm.checkout);
+      
+      if (!isBefore(start, end) || isSameDay(start, end)) {
+        // Automatically bump checkout to checkin + 1
+        setBookingForm(prev => ({
+          ...prev,
+          checkout: format(addDays(start, 1), 'yyyy-MM-dd')
+        }));
+      }
+    }
+  }, [bookingForm.checkin]);
 
   const handleGuestSearch = async (query: string) => {
     setGuestQuery(query);
@@ -182,14 +217,59 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   };
 
   const handleCreateGuest = async () => {
+    // Basic validations
+    if (!newGuest.name.trim()) { setError('Guest name is required'); return; }
+    
+    // Phone validation (10-15 digits, allowing leading +)
+    const phoneRegex = /^\+?[0-9]{10,15}$/;
+    if (!phoneRegex.test(newGuest.phone)) {
+      setError('Please enter a valid phone number (10-15 digits)');
+      return;
+    }
+
+    // Email validation
+    if (newGuest.email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(newGuest.email)) {
+        setError('Please enter a valid email address');
+        return;
+      }
+    }
+
+    // ID Proof validation
+    if (newGuest.idProof.number) {
+      if (newGuest.idProof.idType === 'aadhaar') {
+        // Aadhaar should be 12 digits
+        if (!/^\d{12}$/.test(newGuest.idProof.number)) {
+          setError('Aadhaar number must be exactly 12 digits');
+          return;
+        }
+      }
+    }
+
     setIsSubmitting(true);
     setError(null);
     try {
-      const guest = await createGuest(newGuest);
+      // Sanitize payload: only send idProof if a number is provided
+      const payload: any = { 
+        name: newGuest.name,
+        phone: newGuest.phone,
+        email: newGuest.email || undefined,
+        nationality: newGuest.nationality
+      };
+
+      if (newGuest.idProof.number) {
+        payload.idProof = {
+          idType: newGuest.idProof.idType,
+          number: newGuest.idProof.number
+        };
+      }
+
+      const guest = await createGuest(payload);
       setSelectedGuest(guest);
       setStep('booking');
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Failed to create guest record');
     }
     setIsSubmitting(false);
   };
@@ -341,26 +421,39 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
             <form onSubmit={handleSubmit} className="space-y-4 py-0">
               <div className="space-y-2">
                 <Label className="text-xs font-black uppercase tracking-widest opacity-70">Inventory Selection *</Label>
-                <Select value={bookingForm.roomId} onValueChange={val => setBookingForm({ ...bookingForm, roomId: val })}>
-                  <SelectTrigger className="h-11 rounded-xl bg-muted/30 border-none font-bold">
-                    <SelectValue placeholder="Which room are they staying in?" />
-                  </SelectTrigger>
-                   <SelectContent>
-                    {initialBooking && (
-                      <SelectItem value={bookingForm.roomId} className="font-medium">
-                        Current: Room {selectedRoom?.roomNumber} — {selectedRoom?.roomType}
-                      </SelectItem>
-                    )}
-                    {availableRooms.map(room => (
-                      <SelectItem key={room._id} value={room._id} className="font-medium">
-                        Room {room.roomNumber} — {room.roomType} (₹{room.price}/night) • Limit: {room.baseOccupancy}
-                      </SelectItem>
-                    ))}
-                    {availableRooms.length === 0 && !initialBooking && (
-                      <div className="p-4 text-center text-xs text-muted-foreground font-bold">No rooms available for these dates</div>
-                    )}
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-[1fr,120px] gap-2">
+                  <Select value={bookingForm.roomId} onValueChange={val => setBookingForm({ ...bookingForm, roomId: val })}>
+                    <SelectTrigger className="h-11 rounded-xl bg-muted/30 border-none font-bold">
+                      <SelectValue placeholder="Which room are they staying in?" />
+                    </SelectTrigger>
+                     <SelectContent>
+                      {initialBooking && (
+                        <SelectItem value={bookingForm.roomId} className="font-medium">
+                          Current: Room {selectedRoom?.roomNumber} — {selectedRoom?.roomType}
+                        </SelectItem>
+                      )}
+                      {availableRooms.map(room => (
+                        <SelectItem key={room._id} value={room._id} className="font-medium">
+                          Room {room.roomNumber} — {room.roomType} (₹{room.price}/night) • Limit: {room.baseOccupancy}
+                        </SelectItem>
+                      ))}
+                      {availableRooms.length === 0 && !initialBooking && (
+                        <div className="p-4 text-center text-xs text-muted-foreground font-bold">No rooms available for these dates</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                    <Input 
+                      type="number"
+                      className="h-11 rounded-xl pl-7 text-xs font-bold bg-muted/30 border-none"
+                      value={bookingForm.roomPrice}
+                      onChange={e => setBookingForm({ ...bookingForm, roomPrice: parseFloat(e.target.value) || 0 })}
+                      placeholder="Rate"
+                      title="Nightly rate for this stay"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -437,7 +530,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                 <div className="rounded-3xl bg-muted/30 border border-primary/5 p-5 space-y-3 overflow-hidden relative">
                   <div className="absolute top-0 right-0 p-4 opacity-5 rotate-12"><IndianRupee className="h-16 w-16" /></div>
                   <div className="flex justify-between text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                    <span>Base Fare ({nights} N × ₹{roomPrice.toLocaleString()})</span>
+                    <span>Base Fare ({nights} N × ₹{bookingForm.roomPrice.toLocaleString()})</span>
                     <span className="text-foreground">₹{baseSubtotal.toLocaleString()}</span>
                   </div>
                   {extraAdults > 0 && (
