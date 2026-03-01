@@ -85,18 +85,25 @@ export function BookingBoard() {
 
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const daysCount = 7;
-  const [boardWidth, setBoardWidth] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 375);
+  const [boardWidth, setBoardWidth] = useState(0);
 
   useEffect(() => {
     const updateWidth = () => {
       setIsMobile(window.innerWidth < 768);
-      if (boardRef.current) {
-        setBoardWidth(boardRef.current.clientWidth);
-      } else {
-        setBoardWidth(window.innerWidth);
-      }
+      
+      // Request animation frame allows the browser to paint layout first
+      // preventing the "wider on reload" bug where the panel doesn't know its size yet.
+      requestAnimationFrame(() => {
+        if (boardRef.current) {
+          setBoardWidth(boardRef.current.clientWidth);
+        } else {
+          setBoardWidth(window.innerWidth);
+        }
+      });
     };
-    updateWidth();
+    
+    // Slight delay on first mount to let container shape settle
+    setTimeout(updateWidth, 10);
     window.addEventListener('resize', updateWidth);
     window.addEventListener('orientationchange', updateWidth);
     let observer: ResizeObserver | null = null;
@@ -114,8 +121,7 @@ export function BookingBoard() {
   const DAYS = daysCount;
   const ROOM_COL = isMobile ? 86 : 152;
   // Ensure COLUMN_WIDTH fills exactly the available horizontal space, but doesn't shrink awkwardly on tiny devices
-  const effectiveBoardWidth = boardWidth > 0 ? boardWidth : (typeof window !== 'undefined' ? window.innerWidth : 375);
-  const COLUMN_WIDTH = isMobile ? 52 : Math.floor(Math.max(48, (effectiveBoardWidth - ROOM_COL) / DAYS));
+  const COLUMN_WIDTH = isMobile ? 52 : Math.max(48, Math.floor((boardWidth - ROOM_COL) / DAYS));
   const ROW_HEIGHT = isMobile ? 64 : 72;
 
   const timeline = useMemo(() =>
@@ -981,7 +987,7 @@ export function BookingBoard() {
                            if (dayOffset < 0 || dayOffset >= DAYS) return null;
                            const badgeLeft = ROOM_COL + dayOffset * COLUMN_WIDTH + COLUMN_WIDTH - 20;
 
-                           const cancelledOnDay = cancelledBookings.find(b => {
+                           const cancelledOnDayList = cancelledBookings.filter(b => {
                              const cIn = startOfDay(parseISO(b.checkin));
                              const cOut = startOfDay(parseISO(b.checkout));
                              return dayDate >= cIn && dayDate < cOut;
@@ -990,17 +996,33 @@ export function BookingBoard() {
                            return (
                              <div 
                                key={`cnl-badge-${dayIso}`} 
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 if (cancelledOnDay) setSelectedBooking(cancelledOnDay);
-                               }}
-                               className="absolute top-1.5 z-30 pointer-events-auto cursor-pointer transition-transform hover:scale-110 active:scale-95" 
+                               className="absolute top-1.5 z-[100] pointer-events-auto" 
                                style={{ left: badgeLeft }}
-                               title={`${count} cancelled${cancelledOnDay ? ` - Click to view` : ''}`}
                              >
-                               <div className="w-5 h-5 rounded-full bg-slate-200/90 hover:bg-slate-300 border border-white flex items-center justify-center shadow-sm">
-                                 <span className="text-[9px] font-black text-slate-500 leading-none">{count}</span>
-                               </div>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                      <button className="w-5 h-5 rounded-full bg-slate-200/90 hover:bg-slate-300 border border-white flex items-center justify-center shadow-sm transition-transform hover:scale-110 active:scale-95">
+                                        <span className="text-[9px] font-black text-slate-500 leading-none">{count}</span>
+                                      </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-64 p-2 rounded-xl shadow-xl border z-[300]">
+                                        <div className="p-2 border-b mb-1 flex items-center gap-2">
+                                          <div className="w-2 h-2 rounded-full bg-slate-400" />
+                                          <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Cancelled Bookings</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                          {cancelledOnDayList.map(o => (
+                                              <button key={o._id} className="w-full p-2 hover:bg-slate-50 rounded-lg text-left flex items-center justify-between group/o" onClick={(e) => { e.stopPropagation(); setSelectedBooking(o); }}>
+                                                 <div className="flex flex-col">
+                                                    <span className="text-[10px] font-bold text-slate-900 group-hover/o:text-primary line-through decoration-slate-300">{getGuest(o)?.name || 'Guest'}</span>
+                                                    <span className="text-[8px] font-bold text-slate-400 capitalize tracking-tighter">{o.status}</span>
+                                                 </div>
+                                                 <div className="w-2 h-2 rounded-full bg-slate-300" />
+                                              </button>
+                                          ))}
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
                              </div>
                            );
                          });
