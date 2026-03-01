@@ -4,7 +4,7 @@ import {
   differenceInDays, startOfDay, isBefore, parseISO
 } from 'date-fns';
 import { motion } from 'framer-motion';
-import { Loader2, Search, UserPlus, IndianRupee, Info, Printer, ChevronLeft, ChevronRight, ChevronDown, Plus, Minus, Bed, X, ShieldCheck, ArrowRight, Calendar } from 'lucide-react';
+import { Loader2, Search, UserPlus, IndianRupee, Info, Printer, ChevronLeft, ChevronRight, ChevronDown, Plus, Bed, X, ShieldCheck, ArrowRight, Calendar } from 'lucide-react';
 import { useBookings, type Booking } from '../context/booking-context';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -551,51 +551,180 @@ export function BookingBoard() {
                           const clampedDuration = Math.min(offsetDays + duration, DAYS) - clampedOffset;
                           if (clampedDuration <= 0) return null;
 
-                          const guest = getGuest(booking);
+
+                          const guest      = getGuest(booking);
                           const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
-                          
+
+                          const cardLeft  = ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 1;
+                          const cardWidth = (clampedDuration * COLUMN_WIDTH) - 2;
+
+                          // ── Pointer-based drag ─────────────────────────────────────────
+                          const handleCardDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
+                            if (!isEditable) return;
+                            if (isResizingRef.current) return;
+                            if (e.button !== 0) return;
+                            // Skip if pointer started inside the resize handle
+                            const target = e.target as HTMLElement;
+                            if (target.closest('[data-resize-handle]')) return;
+
+                            const cardEl = e.currentTarget as HTMLDivElement;
+                            e.stopPropagation();
+                            try { cardEl.setPointerCapture(e.pointerId); } catch (_) {}
+
+                            const startX = e.clientX;
+                            const startY = e.clientY;
+                            if (boardContentRef.current) {
+                              const rect = boardContentRef.current.getBoundingClientRect();
+                              const x = e.clientX - rect.left;
+                              dragGrabOffsetDaysRef.current = (x - ROOM_COL) / COLUMN_WIDTH - differenceInDays(checkinDate, weekStartDay);
+                            }
+                            let dragging = false;
+
+                            const onMove = (me: PointerEvent) => {
+                              const dx = me.clientX - startX;
+                              const dy = me.clientY - startY;
+                              if (!dragging && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+                                dragging = true;
+                                isDraggingRef.current = true;
+                                cardEl.style.opacity    = '0.75';
+                                cardEl.style.zIndex     = '50';
+                                cardEl.style.cursor     = 'grabbing';
+                                cardEl.style.transition = 'none';
+                              }
+                              if (dragging) {
+                                cardEl.style.transform = `translate(${dx}px,${dy}px)`;
+                              }
+                            };
+
+                            const onUp = (ue: PointerEvent) => {
+                              cleanup();
+                              if (dragging) {
+                                handleDragEnd(ue, { point: { x: ue.clientX, y: ue.clientY } }, booking);
+                              }
+                            };
+
+                            const cleanup = () => {
+                              try { cardEl.releasePointerCapture(e.pointerId); } catch (_) {}
+                              window.removeEventListener('pointermove', onMove);
+                              window.removeEventListener('pointerup',   onUp);
+                              window.removeEventListener('pointercancel', cleanup);
+                              cardEl.style.transform  = '';
+                              cardEl.style.opacity    = '';
+                              cardEl.style.zIndex     = '';
+                              cardEl.style.cursor     = '';
+                              cardEl.style.transition = '';
+                              setTimeout(() => { isDraggingRef.current = false; }, 100);
+                            };
+
+                            window.addEventListener('pointermove', onMove);
+                            window.addEventListener('pointerup',   onUp);
+                            window.addEventListener('pointercancel', cleanup);
+                          };
+
+                          // ── Pointer-based resize ───────────────────────────────────────
+                          const handleResizeDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            if (!isEditable) return;
+
+                            const handleEl = e.currentTarget as HTMLDivElement;
+                            const cardEl   = handleEl.closest('[data-booking-card]') as HTMLDivElement;
+                            if (!cardEl) return;
+
+                            try { handleEl.setPointerCapture(e.pointerId); } catch (_) {}
+
+                            const startX        = e.clientX;
+                            const originalWidth = cardEl.offsetWidth;
+                            let moved = false;
+
+                            const onMove = (me: PointerEvent) => {
+                              const dx = me.clientX - startX;
+                              if (!moved && Math.abs(dx) > 5) {
+                                moved = true;
+                                isResizingRef.current = true;
+                                setResizingId(booking._id);
+                                cardEl.style.transition = 'none';
+                                cardEl.style.zIndex = '50';
+                              }
+                              if (moved) {
+                                const snapped = Math.round(dx / COLUMN_WIDTH) * COLUMN_WIDTH;
+                                cardEl.style.width = `${Math.max(COLUMN_WIDTH, originalWidth + snapped)}px`;
+                              }
+                            };
+
+                            const onUp = (ue: PointerEvent) => {
+                              const dx        = ue.clientX - startX;
+                              const daysDelta = Math.round(dx / COLUMN_WIDTH);
+
+                              if (moved && daysDelta !== 0) {
+                                const origCheckin = startOfDay(parseISO(booking.checkin));
+                                const origNights  = differenceInDays(parseISO(booking.checkout), origCheckin);
+                                const newNights   = Math.max(1, origNights + daysDelta);
+                                const newCheckout = format(addDays(origCheckin, newNights), 'yyyy-MM-dd');
+
+                                setPendingUpdate({
+                                  booking,
+                                  updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout },
+                                  type: 'resize',
+                                  details: {
+                                    oldRoom:     room.roomNumber,
+                                    newRoom:     room.roomNumber,
+                                    oldCheckin:  booking.checkin,
+                                    newCheckin:  booking.checkin,
+                                    oldCheckout: booking.checkout,
+                                    newCheckout,
+                                    changeText: daysDelta > 0
+                                      ? `Extend +${daysDelta} night${daysDelta > 1 ? 's' : ''}`
+                                      : `Reduce ${daysDelta} night${Math.abs(daysDelta) > 1 ? 's' : ''}`,
+                                  },
+                                });
+                              }
+                              cleanup();
+                            };
+
+                            const cleanup = () => {
+                              try { handleEl.releasePointerCapture(e.pointerId); } catch (_) {}
+                              window.removeEventListener('pointermove', onMove);
+                              window.removeEventListener('pointerup',   onUp);
+                              window.removeEventListener('pointercancel', cleanup);
+                              // Always restore to React-controlled size
+                              cardEl.style.width      = '';
+                              cardEl.style.zIndex     = '';
+                              cardEl.style.transition = '';
+                              setResizingId(null);
+                              setTimeout(() => { isResizingRef.current = false; }, 100);
+                            };
+
+                            window.addEventListener('pointermove', onMove);
+                            window.addEventListener('pointerup',   onUp);
+                            window.addEventListener('pointercancel', cleanup);
+                          };
+
                           return (
-                            <motion.div
+                            <div
                               key={`${booking._id}-visible`}
-                              drag={isEditable && resizingId !== booking._id}
-                              dragSnapToOrigin
-                              dragElastic={0}
-                              dragMomentum={false}
-                              onDragStart={(e, info) => { 
-                                isDraggingRef.current = true; 
-                                if (boardContentRef.current) {
-                                  const rect = boardContentRef.current.getBoundingClientRect();
-                                  const x = info.point.x - rect.left;
-                                  const dayAtMouse = (x - ROOM_COL) / COLUMN_WIDTH;
-                                  const bookingStartDay = differenceInDays(checkinDate, weekStartDay);
-                                  dragGrabOffsetDaysRef.current = dayAtMouse - bookingStartDay;
-                                }
-                              }}
-                              onDragEnd={(e, info) => handleDragEnd(e, info, booking)}
-                              whileDrag={{ scale: 1.02, zIndex: 100, opacity: 0.9, cursor: 'grabbing' }}
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
+                              data-booking-card=""
                               className={cn(
-                                "absolute z-10 rounded-md p-1.5 text-white shadow-lg overflow-hidden flex flex-col justify-between transition-all group/booking",
+                                "absolute z-10 rounded-md p-1.5 text-white shadow-md overflow-hidden flex flex-col justify-between group/booking select-none",
                                 getStatusColor(booking.status),
                                 isEditable ? "cursor-grab" : "cursor-pointer",
-                                isDraggingRef.current && "opacity-50"
                               )}
                               style={{
-                                left:   ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 1,
+                                left:   cardLeft,
                                 top:    3,
-                                width:  (clampedDuration * COLUMN_WIDTH) - 2,
+                                width:  cardWidth,
                                 height: heightTotal,
-                                transition: (resizingId === booking._id || isDraggingRef.current) ? 'none' : 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                transition: resizingId === booking._id ? 'none' : 'left 0.15s ease, width 0.15s ease',
                               }}
-                              onClick={(e) => { 
+                              onPointerDown={handleCardDragStart}
+                              onClick={(e) => {
                                 if (isDraggingRef.current || isResizingRef.current) return;
-                                e.stopPropagation(); 
-                                setSelectedBooking(booking); 
+                                e.stopPropagation();
+                                setSelectedBooking(booking);
                               }}
                             >
-                               <div className="flex flex-col h-full justify-between">
-                                  <div className="flex justify-between items-start">
+                               <div className="flex flex-col h-full justify-between pointer-events-none">
+                                  <div className="flex justify-between items-start pointer-events-auto gap-1">
                                     <button
                                       className="font-bold truncate text-left hover:underline leading-tight z-10 relative w-fit outline-none text-[10px] md:text-xs"
                                       onClick={(e) => {
@@ -611,16 +740,16 @@ export function BookingBoard() {
                                     {others.length > 0 && (
                                        <Popover>
                                           <PopoverTrigger asChild>
-                                             <button 
-                                               className="bg-white/20 hover:bg-white/40 text-[9px] px-1.5 py-0.5 rounded-full font-black animate-pulse z-20"
+                                             <button
+                                               className="bg-white/20 hover:bg-white/40 text-[9px] px-1.5 py-0.5 rounded-full font-black z-20 flex-shrink-0"
                                                onClick={e => e.stopPropagation()}
                                              >
                                                 +{others.length}
                                              </button>
                                           </PopoverTrigger>
-                                          <PopoverContent className="w-64 p-2 rounded-2xl shadow-3xl border-none">
+                                          <PopoverContent className="w-64 p-2 rounded-2xl shadow-xl border z-[200]">
                                              <div className="p-2 border-b mb-1">
-                                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Co-existing Entries</p>
+                                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Other Bookings</p>
                                              </div>
                                              <div className="space-y-1">
                                                 {others.map(o => (
@@ -633,7 +762,7 @@ export function BookingBoard() {
                                                          <span className="text-[11px] font-black text-slate-900 group-hover/o:text-primary">{getGuest(o)?.name || 'Guest'}</span>
                                                          <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{o.status} • {format(parseISO(o.checkout), 'MMM dd')}</span>
                                                       </div>
-                                                      <div className={cn("w-1.5 h-1.5 rounded-full", getStatusColor(o.status).includes('emerald') ? 'bg-emerald-500' : 'bg-slate-400')} />
+                                                      <div className={cn("w-1.5 h-1.5 rounded-full flex-shrink-0", getStatusColor(o.status).includes('emerald') ? 'bg-emerald-500' : getStatusColor(o.status).includes('blue') ? 'bg-blue-500' : getStatusColor(o.status).includes('orange') ? 'bg-orange-500' : 'bg-slate-400')} />
                                                    </button>
                                                 ))}
                                              </div>
@@ -641,126 +770,27 @@ export function BookingBoard() {
                                        </Popover>
                                     )}
                                   </div>
-                                  
-                                   <div className="flex items-center gap-1.5 overflow-hidden">
-                                      <span className="text-[8px] md:text-[10px] bg-black/20 px-1 py-0.5 rounded-full truncate font-semibold capitalize tracking-tighter w-fit z-10 relative pointer-events-none">
-                                        {booking.status.replace('-', ' ')}
-                                      </span>
-                                      
-                                      {/* Quick Actions for Primary Card */}
-                                      {isEditable && (
-                                        <div className="flex items-center gap-1 ml-auto opacity-0 group-hover/booking:opacity-100 transition-opacity whitespace-nowrap">
-                                          <button 
-                                            className="h-4 w-4 rounded-md bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors"
-                                            onClick={(e) => handleQuickReduce(e, booking)}
-                                          >
-                                            <Minus className="h-2 w-2" />
-                                          </button>
-                                          <button 
-                                            className="h-4 w-4 rounded-md bg-white/20 hover:bg-white/40 flex items-center justify-center transition-colors"
-                                            onClick={(e) => handleQuickExtend(e, booking)}
-                                          >
-                                            <Plus className="h-2 w-2" />
-                                          </button>
-                                        </div>
-                                      )}
-                                   </div>
+
+                                  <span className="text-[8px] md:text-[10px] bg-black/20 px-1 py-0.5 rounded-full truncate font-semibold capitalize tracking-tighter w-fit pointer-events-none">
+                                    {booking.status.replace('-', ' ')}
+                                  </span>
                                </div>
 
-                                 {/* Resize handle (Right edge) */}
-                                 {isEditable && (
-                                   <div 
-                                     className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize hover:bg-white/20 z-[60] flex items-center justify-center opacity-0 group-hover/booking:opacity-100 transition-opacity touch-none group-active/booking:opacity-100"
-                                     onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
-                                     onPointerDown={(e) => {
-                                       e.stopPropagation();
-                                       e.preventDefault();
-                                       const handleEl = e.currentTarget as HTMLElement;
-                                       const cardElement = handleEl.parentElement as HTMLElement;
-                                       if (!cardElement) return;
-
-                                       try { handleEl.setPointerCapture(e.pointerId); } catch (err) {}
-                                       
-                                       const startX = e.clientX;
-                                       const originalWidth = cardElement.offsetWidth;
-                                       let hasMovedSignificant = false;
-
-                                       const onPointerMove = (moveEvent: PointerEvent) => {
-                                          const deltaX = moveEvent.clientX - startX;
-                                          if (!hasMovedSignificant && Math.abs(deltaX) > 5) {
-                                            hasMovedSignificant = true;
-                                            isResizingRef.current = true;
-                                            setResizingId(booking._id);
-                                          }
-
-                                          if (hasMovedSignificant) {
-                                            const snappedDeltaX = Math.round(deltaX / COLUMN_WIDTH) * COLUMN_WIDTH;
-                                            const newWidth = Math.max(COLUMN_WIDTH, originalWidth + snappedDeltaX);
-                                            cardElement.style.width = `${newWidth}px`;
-                                            cardElement.style.transition = 'none';
-                                            cardElement.style.zIndex = '100';
-                                          }
-                                       };
-
-                                       const onPointerUp = (upEvent: PointerEvent) => {
-                                         const deltaX = upEvent.clientX - startX;
-                                         const rawDaysDelta = Math.round(deltaX / COLUMN_WIDTH);
-                                         
-                                         if (hasMovedSignificant && rawDaysDelta !== 0) {
-                                           const originalCheckin = startOfDay(parseISO(booking.checkin));
-                                           const originalNights = differenceInDays(parseISO(booking.checkout), originalCheckin);
-                                           const newNights = Math.max(1, originalNights + rawDaysDelta);
-                                           const newCheckout = format(addDays(originalCheckin, newNights), 'yyyy-MM-dd');
-                                           
-                                           setPendingUpdate({
-                                              booking,
-                                              updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout },
-                                              type: 'resize',
-                                              details: {
-                                                oldRoom: room.roomNumber,
-                                                newRoom: room.roomNumber,
-                                                oldCheckin: booking.checkin,
-                                                newCheckin: booking.checkin,
-                                                oldCheckout: booking.checkout,
-                                                newCheckout,
-                                                changeText: rawDaysDelta > 0 
-                                                  ? `Extend +${rawDaysDelta} night${Math.abs(rawDaysDelta) > 1 ? 's' : ''}` 
-                                                  : `Reduce -${Math.abs(rawDaysDelta)} night${Math.abs(rawDaysDelta) > 1 ? 's' : ''}`
-                                              }
-                                           });
-                                         }
-                                         cleanup();
-                                       };
-
-                                       const cleanup = () => {
-                                         try { handleEl.releasePointerCapture(e.pointerId); } catch (err) {}
-                                         window.removeEventListener('pointermove', onPointerMove);
-                                         window.removeEventListener('pointerup', onPointerUp);
-                                         window.removeEventListener('pointercancel', cleanup);
-                                         
-                                         if (cardElement) {
-                                           cardElement.style.width = ""; 
-                                           cardElement.style.zIndex = "";
-                                           setTimeout(() => {
-                                              if (cardElement) cardElement.style.transition = "";
-                                           }, 50);
-                                         }
-                                         setResizingId(null);
-                                         setTimeout(() => { isResizingRef.current = false; }, 100);
-                                       };
-
-                                       window.addEventListener('pointermove', onPointerMove);
-                                       window.addEventListener('pointerup', onPointerUp);
-                                       window.addEventListener('pointercancel', cleanup);
-                                     }}
-                                   >
-                                     <div className="h-6 w-1 bg-white/50 rounded-full shadow-sm" />
-                                   </div>
-                                 )}
-                              </motion.div>
-                            );
-                          });
-                        })()}
+                              {/* Resize handle */}
+                              {isEditable && (
+                                <div
+                                  data-resize-handle=""
+                                  className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize hover:bg-white/20 z-[60] flex items-center justify-center opacity-0 group-hover/booking:opacity-100 transition-opacity touch-none pointer-events-auto"
+                                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                                  onPointerDown={handleResizeDragStart}
+                                >
+                                  <div className="h-6 w-1 bg-white/50 rounded-full shadow-sm" />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        });
+                      })()}
                   </div>
                 );
               })}
