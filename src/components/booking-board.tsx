@@ -664,31 +664,28 @@ export function BookingBoard() {
                                           const deltaX = upEvent.clientX - startX;
                                           const rawDaysDelta = Math.round(deltaX / COLUMN_WIDTH);
                                           
-                                          // Reset visuals immediately
+                                          // Reset visuals immediately and absolutely
                                           if (cardElement) {
                                             cardElement.style.width = ""; 
                                             cardElement.style.zIndex = "";
                                             cardElement.style.transition = "";
                                           }
 
-                                          const finalHasMoved = hasMovedSignificant;
-                                          
                                           // Always reset resizing state promptly
                                           setResizingId(null);
                                           setTimeout(() => {
                                             isResizingRef.current = false;
-                                          }, 100);
+                                          }, 50);
 
-                                          if (finalHasMoved && rawDaysDelta !== 0) {
-                                            const originalCheckin = parseISO(booking.checkin);
-                                            const originalCheckout = parseISO(booking.checkout);
+                                          if (hasMovedSignificant && rawDaysDelta !== 0) {
+                                            const originalCheckin = startOfDay(parseISO(booking.checkin));
+                                            const originalCheckout = startOfDay(parseISO(booking.checkout));
                                             const originalNights = differenceInDays(originalCheckout, originalCheckin);
                                             const newNights = Math.max(1, originalNights + rawDaysDelta);
                                             const newCheckout = format(addDays(originalCheckin, newNights), 'yyyy-MM-dd');
                                             
-                                            // Overlap Check
-                                            const proposedEnd = parseISO(newCheckout);
-                                            const proposedStart = parseISO(booking.checkin);
+                                            const proposedEnd = startOfDay(parseISO(newCheckout));
+                                            const proposedStart = originalCheckin;
                                             
                                             const isClashing = bookings.some(b => {
                                               if (b._id === booking._id || b.status === 'cancelled' || b.status === 'checked-out') return false;
@@ -848,13 +845,12 @@ export function BookingBoard() {
           </div>
 
           <div className="p-6 space-y-5">
-            <div className="space-y-3">
-              {/* Change Highlight */}
-              <div className="px-4 py-2.5 rounded-xl bg-primary/5 border border-primary/10 flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase text-primary/60 tracking-widest">Type of Change</span>
-                <span className="text-xs font-black text-primary uppercase italic">{pendingUpdate?.details.changeText}</span>
+            <div className="space-y-4">
+              {/* Changes List */}
+              <div className="px-4 py-3 rounded-xl bg-primary/5 border border-primary/10 flex flex-col gap-1">
+                <span className="text-[10px] font-black uppercase text-primary/60 tracking-widest">Update Summary</span>
+                <span className="text-sm font-black text-primary italic leading-none">{pendingUpdate?.details.changeText}</span>
               </div>
-
               {/* Room Change */}
               {pendingUpdate?.type === 'move' && pendingUpdate.details.oldRoom !== pendingUpdate.details.newRoom && (
                 <div className="flex items-center justify-between p-4 rounded-xl bg-slate-50 border border-slate-100">
