@@ -261,7 +261,7 @@ export function BookingBoard() {
       const changeText = targetRoom._id !== getBookingRoomId(booking) ? `Push to Rm ${targetRoom.roomNumber}${nightText}` : (nightText ? `Shift ${nightText.trim()}` : "Save changes");
 
       // Auto-snap calendar to new viewport if dragged significantly off-screen
-      if (dayIndex < 0 || dayIndex >= DAYS) {
+      if (dayIndexFinal < 0 || dayIndexFinal >= DAYS) {
         setWeekStart(startOfDay(targetDay));
       }
       
