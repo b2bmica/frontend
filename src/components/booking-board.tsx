@@ -223,10 +223,12 @@ export function BookingBoard() {
 
     const activeRooms = rooms.filter(r => statusFilter === 'maintenance' ? (r.status === 'maintenance' || r.status === 'under-maintenance') : true);
     
-    // Bounds clamping
+    // Bounds clamping - exact header match
     const dayAtMouse = (x - HOZ_OFFSET) / COLUMN_WIDTH;
     const dayIndexFinal = Math.round(dayAtMouse - dragGrabOffsetDaysRef.current);
-    const roomIndexFinal = Math.max(0, Math.min(activeRooms.length - 1, Math.floor((y - VER_OFFSET) / ROW_HEIGHT)));
+    
+    // Exact vertical clamping matching ROW_HEIGHT and header
+    const roomIndexFinal = Math.max(0, Math.min(activeRooms.length - 1, Math.floor((y - 48) / ROW_HEIGHT)));
 
     // Allow drop anywhere valid — including outside the visible window (next/prev week)
     const isValidDay = dayIndexFinal >= -(DAYS * 2) && dayIndexFinal < DAYS * 3;
@@ -413,7 +415,7 @@ export function BookingBoard() {
                   key={key}
                   onClick={() => setStatusFilter(key)}
                   className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black tracking-wider border transition-all active:scale-95",
+                    "flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.1em] border transition-all active:scale-95",
                     statusFilter === key
                       ? "bg-slate-900 text-white border-slate-900 shadow-lg scale-105"
                       : "bg-white text-slate-500 border-slate-200 hover:border-slate-300 shadow-sm"
@@ -422,7 +424,7 @@ export function BookingBoard() {
                   {color && <span className={cn("w-2 h-2 rounded-full flex-shrink-0 shadow-sm", color)} />}
                   {label}
                   <span className={cn(
-                    "inline-flex items-center justify-center rounded-full min-w-[18px] h-[18px] text-[8px] font-black px-1 ml-0.5",
+                    "inline-flex items-center justify-center rounded-full min-w-[20px] h-[20px] text-[9px] font-black px-1.5 ml-1",
                     statusFilter === key ? "bg-white/20 text-white" : "bg-slate-100 text-slate-400"
                   )}>{count}</span>
                 </button>
@@ -430,15 +432,16 @@ export function BookingBoard() {
             })}
           </div>
 
-          <div className="flex items-center gap-3 pt-2 border-t border-slate-100/50">
-            <span className="text-[9px] font-black tracking-[0.2em] text-slate-400 opacity-60">Status:</span>
+          <div className="flex items-center gap-4 pt-2 border-t border-slate-100/50">
+            <span className="text-[9px] font-black tracking-[0.2em] text-slate-400 uppercase">Room:</span>
             {[
               { dot: 'bg-emerald-500', label: 'Clean' },
               { dot: 'bg-amber-400', label: 'Dirty' },
+              { dot: 'bg-red-500', label: 'Repair' },
             ].map(({ dot, label }) => (
               <span key={label} className="flex items-center gap-1.5">
                 <span className={cn("w-2 h-2 rounded-full flex-shrink-0 shadow-sm", dot)} />
-                <span className="text-[10px] font-black text-slate-400 tracking-tighter">{label}</span>
+                <span className="text-[10px] font-black text-slate-400 tracking-tighter uppercase">{label}</span>
               </span>
             ))}
           </div>
@@ -573,12 +576,12 @@ export function BookingBoard() {
                             const bStart = parseISO(b.checkin);
                             const bEnd = parseISO(b.checkout);
                             
-                            // Only merge if the booking is fully contained within an existing primary's span
-                            // This ensures that if a booking extends beyond, it gets its own visual card
+                            // Group ANY intersecting bookings into a single card stack
+                            // Since we sorted by priority, the first one found is the most "important" visibility-wise
                             const overlapCard = visibleCards.find(card => {
                               const cS = parseISO(card.primary.checkin);
                               const cE = parseISO(card.primary.checkout);
-                              return bStart >= cS && bEnd <= cE;
+                              return bStart < cE && bEnd > cS;
                             });
 
                             if (overlapCard) {
@@ -603,22 +606,28 @@ export function BookingBoard() {
                         const heightTotal = ROW_HEIGHT - 12; // 6px gap top and bottom for easier cell clicking
 
                         const cardJsx = visibleCards.map(({ primary: booking, others }) => {
-                          const checkinDate  = startOfDay(parseISO(booking.checkin));
-                          const checkoutDate = startOfDay(parseISO(booking.checkout));
                           const weekStartDay = startOfDay(weekStart);
                           const periodEnd    = addDays(weekStart, DAYS);
 
-                          if (checkoutDate <= weekStart || checkinDate >= periodEnd) return null;
+                          const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
+                          // Expand visual card to the maximum extent of all grouped bookings so we can see the full duration
+                          const groupStart = [booking, ...others].reduce((min, b) => {
+                            const d = parseISO(b.checkin);
+                            return d < min ? d : min;
+                          }, parseISO(booking.checkin));
+                          
+                          const groupEnd = [booking, ...others].reduce((max, b) => {
+                            const d = parseISO(b.checkout);
+                            return d > max ? d : max;
+                          }, parseISO(booking.checkout));
 
-                          const offsetDays   = differenceInDays(checkinDate, weekStartDay);
-                          const duration     = differenceInDays(checkoutDate, checkinDate);
+                          const offsetDays   = differenceInDays(groupStart, weekStartDay);
+                          const duration     = differenceInDays(groupEnd, groupStart);
                           const clampedOffset   = Math.max(0, offsetDays);
                           const clampedDuration = Math.min(offsetDays + duration, DAYS) - clampedOffset;
                           if (clampedDuration <= 0) return null;
 
-
                           const guest      = getGuest(booking);
-                          const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
 
                           const cardLeft  = ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 1;
                           const cardWidth = (clampedDuration * COLUMN_WIDTH) - 2;
@@ -634,7 +643,7 @@ export function BookingBoard() {
 
                             const cardEl   = e.currentTarget as HTMLDivElement;
                             const isTouch  = e.pointerType === 'touch' || e.pointerType === 'pen';
-                            const LONG_MS  = 380; // ms for long-press activation
+                            const LONG_MS  = isTouch ? 380 : 150; // Quicker for mouse, standard for touch
 
                             e.stopPropagation();
 
@@ -643,7 +652,7 @@ export function BookingBoard() {
                             if (boardContentRef.current) {
                               const rect = boardContentRef.current.getBoundingClientRect();
                               const x = e.clientX - rect.left;
-                              dragGrabOffsetDaysRef.current = (x - ROOM_COL) / COLUMN_WIDTH - differenceInDays(checkinDate, weekStartDay);
+                              dragGrabOffsetDaysRef.current = (x - ROOM_COL) / COLUMN_WIDTH - differenceInDays(startOfDay(parseISO(booking.checkin)), startOfDay(weekStart));
                             }
 
                              const initialScrollL = boardRef.current?.scrollLeft || 0;
@@ -692,13 +701,14 @@ export function BookingBoard() {
                                const dy_view = me.clientY - startY;
                                const dist = Math.abs(dx_view) + Math.abs(dy_view);
 
-                               if (!longPressReady && dist > 10) {
-                                 // Moved too much before hold finished? Cancel drag.
-                                 cancelled = true;
-                                 if (longPressTimer) clearTimeout(longPressTimer);
-                               }
+                                // If we moved a lot before hold is finished, it's a scroll, cancel.
+                                // For touch, we are more forgiving (35px). For mouse, 15px.
+                                if (!longPressReady && dist > (isTouch ? 35 : 15)) {
+                                  cancelled = true;
+                                  if (longPressTimer) clearTimeout(longPressTimer);
+                                }
 
-                               if (!isTouch && !dragging && dist > 6 && !cancelled) {
+                                if (!isTouch && !dragging && dist > 15 && !cancelled) {
                                   if (!longPressReady) activateDrag();
                                   dragging = true;
                                   isDraggingRef.current = true;
@@ -716,7 +726,10 @@ export function BookingBoard() {
                                  };
                                  
                                  updateTransform();
-                                 if (longPressReady && !dragging) dragging = true;
+                                 if (longPressReady && !dragging) {
+                                   dragging = true;
+                                   isDraggingRef.current = true; // Ensure it stays true to prevent click-through
+                                 }
 
                                  // Auto-scroll logic
                                  if (boardRef.current) {
@@ -938,7 +951,7 @@ export function BookingBoard() {
                                 top:    6,
                                 width:  cardWidth,
                                 height: heightTotal,
-                                opacity: (booking.status === 'cancelled' || booking.status === 'checked-out') ? 0.75 : 1,
+                                opacity: 1, // Solid cards as requested
                                 cursor: isEditable ? 'grab' : 'pointer',
                                 touchAction: isEditable && isMobile ? 'none' : undefined,
                                 transition: 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease',
@@ -1002,7 +1015,7 @@ export function BookingBoard() {
                                        </div>
                                      )}
                                   </div>
-                                   <span className="text-[7px] md:text-[8px] bg-black/10 px-1 py-0.5 rounded-sm font-semibold capitalize tracking-wide w-fit opacity-90 border border-white/10">
+                                   <span className="text-[8px] font-black uppercase tracking-widest bg-black/10 px-1.5 py-0.5 rounded-sm w-fit border border-white/10">
                                      {booking.status}
                                    </span>
                                  </div>
@@ -1089,6 +1102,8 @@ export function BookingBoard() {
                 );
               })}
             </div>
+            {/* Significant spacer at bottom to ensure the last room is never cut off on mobile devices */}
+            <div className="h-32 w-full pointer-events-none" />
           </div>
         </div>
       </div>
