@@ -1,9 +1,9 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay,
   differenceInDays, startOfDay, isBefore, parseISO
 } from 'date-fns';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Search, UserPlus, IndianRupee, Info, Printer, ChevronLeft, ChevronRight, ChevronDown, Plus, Minus, Bed, X, ShieldCheck, ArrowRight, ArrowRightLeft, Calendar } from 'lucide-react';
 import { useBookings, type Booking } from '../context/booking-context';
 import { cn } from '../lib/utils';
@@ -85,40 +85,61 @@ export function BookingBoard() {
 
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const daysCount = 7;
-  const [boardWidth, setBoardWidth] = useState(0);
+  const [boardWidth, setBoardWidth] = useState(() => typeof window !== 'undefined' ? window.innerWidth - (window.innerWidth < 768 ? 20 : 300) : 1000);
 
+  // Use a callback ref + ResizeObserver so we always get the correct width,
+  // even if the sidebar animation hasn't finished yet on first load.
+  const boardObserverRef = useRef<ResizeObserver | null>(null);
+  
+  // Use useLayoutEffect to measure before paint if possible, avoiding the 'small' jump
   useEffect(() => {
-    const updateWidth = () => {
-      setIsMobile(window.innerWidth < 768);
-      
-      // Request animation frame allows the browser to paint layout first
-      // preventing the "wider on reload" bug where the panel doesn't know its size yet.
-      requestAnimationFrame(() => {
-        if (boardRef.current) {
-          setBoardWidth(boardRef.current.clientWidth);
+    // Initial measure
+    if (boardRef.current) {
+      setBoardWidth(boardRef.current.clientWidth);
+    }
+    // Periodic check to ensure layout is settled (sidebar animations etc)
+    const timers = [
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 50),
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 150),
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 400),
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
+  const setBoardRef = useCallback((node: HTMLDivElement | null) => {
+    // Cleanup old observer
+    if (boardObserverRef.current) {
+      boardObserverRef.current.disconnect();
+      boardObserverRef.current = null;
+    }
+    // Store the ref for other code that reads boardRef.current
+    boardRef.current = node;
+    if (node) {
+      // Measure immediately
+      setBoardWidth(node.clientWidth);
+      // Observe for future resizes (sidebar toggle, window resize, etc.)
+      boardObserverRef.current = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const w = entry.contentBoxSize?.[0]?.inlineSize ?? entry.contentRect.width;
+          setBoardWidth(w);
         }
       });
-    };
-    
-    // Slight delay on first mount to let container shape settle
-    const t = setTimeout(updateWidth, 50);
-
-    window.addEventListener('resize', updateWidth);
-    window.addEventListener('orientationchange', updateWidth);
-    let observer: ResizeObserver | null = null;
-    if (boardRef.current) {
-      observer = new ResizeObserver(updateWidth);
-      observer.observe(boardRef.current);
+      boardObserverRef.current.observe(node);
     }
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
     return () => {
-      clearTimeout(t);
-      window.removeEventListener('resize', updateWidth);
-      window.removeEventListener('orientationchange', updateWidth);
-      observer?.disconnect();
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+      boardObserverRef.current?.disconnect();
     };
   }, []);
 
-  const DAYS = daysCount;
+  const DAYS = 7;
   const ROOM_COL = isMobile ? 80 : 152;
   // Ensure COLUMN_WIDTH fills exactly the available horizontal space, but doesn't shrink awkwardly on tiny devices
   const COLUMN_WIDTH = isMobile 
@@ -129,6 +150,10 @@ export function BookingBoard() {
   const timeline = useMemo(() =>
     eachDayOfInterval({ start: weekStart, end: addDays(weekStart, DAYS - 1) }),
     [weekStart, DAYS]);
+
+  const activeRooms = useMemo(() => 
+    rooms.filter(r => statusFilter === 'maintenance' ? (r.status === 'maintenance' || r.status === 'under-maintenance') : true),
+  [rooms, statusFilter]);
 
   // All bookings matching search/status filters globally (ignoring date window)
   const globalMatches = useMemo(() => {
@@ -153,10 +178,13 @@ export function BookingBoard() {
   // Bookings specifically in the current calendar window
   const filteredBookings = useMemo(() => {
     const periodEnd = addDays(weekStart, DAYS);
+    // Include a 1-day buffer on each side for smoother transitions
+    const bufferStart = addDays(weekStart, -1);
+    const bufferEnd = addDays(periodEnd, 1);
     return globalMatches.filter(b => {
       const ci = startOfDay(new Date(b.checkin));
       const co = startOfDay(new Date(b.checkout));
-      return ci < periodEnd && co > weekStart;
+      return ci < bufferEnd && co > bufferStart;
     });
   }, [globalMatches, weekStart, DAYS]);
 
@@ -324,6 +352,261 @@ export function BookingBoard() {
 
   const periodLabel = `${format(weekStart, "MMM dd")} – ${format(addDays(weekStart, DAYS - 1), "MMM dd, yyyy")}`;
 
+  // ── Pointer-based drag (long-press on touch) ─────────────────
+  const handleCardDragStart = (e: React.PointerEvent<HTMLDivElement>, booking: Booking) => {
+    const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
+    if (!isEditable) return;
+    if (isResizingRef.current) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-resize-handle]')) return;
+
+    const cardEl   = e.currentTarget as HTMLDivElement;
+    const isTouch  = e.pointerType === 'touch' || e.pointerType === 'pen';
+    const LONG_MS  = isTouch ? 380 : 150;
+
+    e.stopPropagation();
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    
+    if (boardContentRef.current) {
+      const rect = boardContentRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      dragGrabOffsetDaysRef.current = (x - ROOM_COL) / COLUMN_WIDTH - differenceInDays(startOfDay(parseISO(booking.checkin)), startOfDay(weekStart));
+    }
+
+     const initialScrollL = boardRef.current?.scrollLeft || 0;
+     const initialScrollT = boardRef.current?.scrollTop || 0;
+
+    let dragging         = false;
+    let longPressReady   = false;
+    let cancelled        = false;
+    let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+    let weekSwapTimer: ReturnType<typeof setTimeout> | null = null;
+
+    let weekShiftRefX = 0; // Local ref tracker for coordinate shift
+
+    if (!isTouch) {
+      try { cardEl.setPointerCapture(e.pointerId); } catch (_) {}
+    }
+
+     const activateDrag = () => {
+       if (cancelled) return;
+       longPressReady = true;
+       isDraggingRef.current = true;
+       try { cardEl.setPointerCapture(e.pointerId); } catch (_) {}
+       try { (navigator as any).vibrate?.([12, 40, 12]); } catch (_) {}
+       
+       cardEl.style.opacity    = '0.9';
+       cardEl.style.zIndex     = '500';
+       cardEl.style.transition = 'transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.15s ease';
+       cardEl.style.transform  = 'scale(1.04) translateY(-2px)';
+       cardEl.style.boxShadow  = '0 20px 40px rgba(0,0,0,0.3)';
+       cardEl.style.outline = '2px solid white';
+       cardEl.style.outlineOffset = '-2px';
+       
+       setTimeout(() => {
+         if (!cancelled) cardEl.style.transition = 'none';
+       }, 130);
+     };
+
+     longPressTimer = setTimeout(activateDrag, LONG_MS);
+
+     const updateTransform = (meX: number, meY: number) => {
+       const dx_view = meX - startX;
+       const dy_view = meY - startY;
+       const scrollDeltaL = (boardRef.current?.scrollLeft || 0) - initialScrollL;
+       const scrollDeltaT = (boardRef.current?.scrollTop || 0) - initialScrollT;
+       
+       // Vertical clamping within room lanes
+       const rect = boardContentRef.current?.getBoundingClientRect();
+       let finalDY = dy_view + scrollDeltaT;
+       
+       if (rect) {
+          const boardTop = rect.top + 48;
+          const boardBottom = rect.top + 48 + (activeRooms.length * ROW_HEIGHT);
+          const cardRect = cardEl.getBoundingClientRect();
+          const cardH = cardRect.height;
+          
+          const currentT = (startY + (dy_view + scrollDeltaT)) - (startY - cardRect.top);
+          const currentB = currentT + cardH;
+
+          if (currentT < boardTop) finalDY -= (currentT - boardTop);
+          else if (currentB > boardBottom) finalDY -= (currentB - boardBottom);
+       }
+
+       cardEl.style.transform = `translate(${dx_view + scrollDeltaL - weekShiftRefX}px, ${finalDY}px)${isTouch && !dragging ? ' scale(1.04)' : ''}`;
+     };
+
+     const onMove = (me: PointerEvent) => {
+        const dist = Math.abs(me.clientX - startX) + Math.abs(me.clientY - startY);
+
+        if (!longPressReady && dist > (isTouch ? 35 : 15)) {
+          cancelled = true;
+          if (longPressTimer) clearTimeout(longPressTimer);
+        }
+
+        if (dragging || longPressReady) {
+          if (!dragging) {
+            dragging = true;
+            isDraggingRef.current = true;
+          }
+          
+          updateTransform(me.clientX, me.clientY);
+
+          if (boardRef.current) {
+            const rect = boardRef.current.getBoundingClientRect();
+            const edgeSize = isMobile ? 60 : 45;
+            
+            let scrollDY = 0;
+            if (me.clientY < rect.top + edgeSize) scrollDY = -((rect.top + edgeSize) - me.clientY) * 0.8;
+            else if (me.clientY > rect.bottom - edgeSize) scrollDY = (me.clientY - (rect.bottom - edgeSize)) * 0.8;
+            
+            if (scrollDY !== 0) {
+              boardRef.current.scrollTop += scrollDY;
+              updateTransform(me.clientX, me.clientY);
+            }
+
+            // WEEK SWAP dwell detection
+            const atRight = me.clientX > rect.right - edgeSize;
+            const atLeft  = me.clientX < rect.left + edgeSize + ROOM_COL;
+            
+            if ((atRight || atLeft) && !weekSwapTimer) {
+              weekSwapTimer = setTimeout(() => {
+                const direction = atRight ? 7 : -7;
+                weekShiftRefX += (direction > 0 ? 1 : -1) * (7 * COLUMN_WIDTH);
+                setWeekStart(p => addDays(p, direction));
+                weekSwapTimer = null;
+              }, 600);
+            } else if (!atRight && !atLeft && weekSwapTimer) {
+              clearTimeout(weekSwapTimer);
+              weekSwapTimer = null;
+            }
+          }
+        }
+      };
+
+    const onUp = (ue: PointerEvent) => {
+       const dist = Math.abs(ue.clientX - startX) + Math.abs(ue.clientY - startY);
+       const wasDragging = dragging;
+       cleanup();
+       if (wasDragging && dist > 10) {
+         handleDragEnd(ue, { point: { x: ue.clientX, y: ue.clientY } }, booking);
+       } else if (!wasDragging && dist < 10) {
+         setSelectedBooking(booking);
+       }
+    };
+
+    const cleanup = () => {
+      try { cardEl.releasePointerCapture(e.pointerId); } catch (_) {}
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup',   onUp);
+      window.removeEventListener('pointercancel', cleanup);
+      if (weekSwapTimer) { clearTimeout(weekSwapTimer); weekSwapTimer = null; }
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+      if (dragging || longPressReady) {
+        cardEl.style.transform  = '';
+        cardEl.style.opacity    = '';
+        cardEl.style.zIndex     = '';
+        cardEl.style.cursor     = '';
+        cardEl.style.transition = '';
+        cardEl.style.boxShadow  = '';
+        cardEl.style.outline = '';
+        cardEl.style.outlineOffset = '';
+        cardEl.style.touchAction = isEditable ? 'none' : 'auto';
+      }
+      setTimeout(() => { isDraggingRef.current = false; }, 100);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup',   onUp);
+    window.addEventListener('pointercancel', cleanup);
+  };
+
+  // ── Pointer-based resize ───────────────────────────────────────
+  const handleResizeDragStart = (e: React.PointerEvent<HTMLDivElement>, booking: Booking, room: any) => {
+    e.stopPropagation();
+    const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
+    if (!isEditable) return;
+    const handleEl = e.currentTarget as HTMLDivElement;
+    const cardEl   = handleEl.closest('[data-booking-card]') as HTMLDivElement;
+    if (!cardEl) return;
+    try { handleEl.setPointerCapture(e.pointerId); } catch (_) {}
+
+    const startX        = e.clientX;
+    const originalWidth = cardEl.offsetWidth;
+    let moved = false;
+
+    const onMove = (me: PointerEvent) => {
+      const dx = me.clientX - startX;
+      if (!moved && Math.abs(dx) > 5) {
+        moved = true;
+        isResizingRef.current = true;
+        setResizingId(booking._id);
+        cardEl.style.transition = 'none';
+        cardEl.style.zIndex = '50';
+      }
+      if (moved) {
+        const snapped = Math.round(dx / COLUMN_WIDTH) * COLUMN_WIDTH;
+        cardEl.style.width = `${Math.max(COLUMN_WIDTH, originalWidth + snapped)}px`;
+
+        if (boardRef.current) {
+          const rect = boardRef.current.getBoundingClientRect();
+          const edgeSize = isMobile ? 60 : 45;
+          let scrollDX = 0;
+          if (me.clientX < rect.left + edgeSize) scrollDX = -((rect.left + edgeSize) - me.clientX) * 0.8;
+          else if (me.clientX > rect.right - edgeSize) scrollDX = (me.clientX - (rect.right - edgeSize)) * 0.8;
+          if (scrollDX !== 0) boardRef.current.scrollLeft += scrollDX;
+        }
+      }
+    };
+
+    const onUp = (ue: PointerEvent) => {
+      const dx = ue.clientX - startX;
+      const daysDelta = Math.round(dx / COLUMN_WIDTH);
+      if (moved && daysDelta !== 0) {
+        const origIn = startOfDay(parseISO(booking.checkin));
+        const newCO = format(addDays(origIn, differenceInDays(parseISO(booking.checkout), origIn) + daysDelta), 'yyyy-MM-dd');
+        if (newCO > booking.checkin) {
+          setPendingUpdate({
+            booking,
+            updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCO },
+            type: 'resize',
+            details: {
+              oldRoom: room.roomNumber, newRoom: room.roomNumber,
+              oldCheckin: booking.checkin, newCheckin: booking.checkin,
+              oldCheckout: booking.checkout, newCheckout: newCO,
+              changeText: daysDelta > 0 ? "Extend" : "Shorten",
+              nightsDelta: daysDelta,
+              oldPrice: booking.roomPrice || 0, newPrice: booking.roomPrice || 0
+            }
+          });
+        }
+      }
+      cleanup();
+    };
+
+    const cleanup = () => {
+      try { handleEl.releasePointerCapture(e.pointerId); } catch (_) {}
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup',   onUp);
+      window.removeEventListener('pointercancel', cleanup);
+      if (moved) {
+        cardEl.style.width = `${originalWidth}px`;
+        cardEl.style.zIndex     = '';
+        cardEl.style.transition = '';
+      }
+      setResizingId(null);
+      setTimeout(() => { isResizingRef.current = false; }, 100);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup',   onUp);
+    window.addEventListener('pointercancel', cleanup);
+  };
+
+
   return (
     <>
       <div 
@@ -449,7 +732,7 @@ export function BookingBoard() {
         {/* ── Board ── */}
         <div 
           className="flex-1 overflow-auto select-none" 
-          ref={boardRef}
+          ref={setBoardRef}
           style={{ 
             WebkitOverflowScrolling: 'touch',
             overscrollBehavior: 'contain',
@@ -488,622 +771,201 @@ export function BookingBoard() {
               ))}
             </div>
 
-            {/* Room rows */}
-            <div className="relative w-max">
-              {rooms
-                .filter(r => statusFilter === 'maintenance' ? (r.status === 'maintenance' || r.status === 'under-maintenance') : true)
-                .map((room, rowIndex) => {
-                const roomBookings = filteredBookings.filter(b => getBookingRoomId(b) === room._id);
-                return (
-                  <motion.div 
-                    key={room._id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: Math.min(rowIndex * 0.02, 0.4), duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
-                    className="flex border-b group relative hover:bg-white transition-colors" 
-                    style={{ height: ROW_HEIGHT }}
-                  >
-                    {/* Room label */}
-                    <div 
-                      className="bg-white border-r flex flex-col justify-center flex-shrink-0 sticky left-0 z-20 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.05)]"
-                      style={{ width: ROOM_COL, minWidth: ROOM_COL, paddingLeft: isMobile ? 12 : 16, paddingRight: isMobile ? 8 : 12 }}
-                    >
-                      <div className="font-black flex items-center gap-1.5 text-slate-800" style={{ fontSize: isMobile ? 11 : 13 }}>
-                        <span className="truncate">{room.roomNumber}</span>
-                        {/* Always show clean/dirty status indicator */}
-                        {room.status === 'clean' ? (
-                          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.4)]" title="Clean" />
-                        ) : room.status === 'dirty' ? (
-                          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.4)]" title="Dirty" />
-                        ) : (room.status === 'maintenance' || room.status === 'under-maintenance') ? (
-                          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-red-500 animate-pulse" title="Maintenance" />
-                        ) : null}
-                      </div>
-                      {!isMobile && <div className="text-[10px] font-black text-slate-400 truncate opacity-60 capitalize tracking-tighter leading-none mt-1">{room.roomType}</div>}
-                      <div className="font-bold text-primary/70 mt-0.5" style={{ fontSize: isMobile ? 10 : 10 }}>₹{room.price}</div>
-                    </div>
+            {/* Grid Area with smooth week-swap animation */}
+            <div className="relative w-max h-full">
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.div
+                  key={weekStart.toISOString()}
+                  initial={{ x: 20, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  exit={{ x: -20, opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  className="w-full"
+                >
+                  {activeRooms.map((room, rowIndex) => {
+                    const roomBookings = filteredBookings.filter(b => getBookingRoomId(b) === room._id);
+                    return (
+                      <div 
+                        key={room._id}
+                        className="flex border-b group relative hover:bg-white transition-colors" 
+                        style={{ height: ROW_HEIGHT }}
+                      >
+                        {/* Room label */}
+                        <div 
+                          className="bg-white border-r flex flex-col justify-center flex-shrink-0 sticky left-0 z-20 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.05)]"
+                          style={{ width: ROOM_COL, minWidth: ROOM_COL, paddingLeft: isMobile ? 12 : 16, paddingRight: isMobile ? 8 : 12 }}
+                        >
+                          <div className="font-black flex items-center gap-1.5 text-slate-800" style={{ fontSize: isMobile ? 11 : 13 }}>
+                            <span className="truncate">{room.roomNumber}</span>
+                            {room.status === 'clean' ? (
+                              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.4)]" title="Clean" />
+                            ) : room.status === 'dirty' ? (
+                              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.4)]" title="Dirty" />
+                            ) : (room.status === 'maintenance' || room.status === 'under-maintenance') ? (
+                              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-red-500 animate-pulse" title="Maintenance" />
+                            ) : null}
+                          </div>
+                          {!isMobile && <div className="text-[10px] font-black text-slate-400 truncate opacity-60 capitalize tracking-tighter leading-none mt-1">{room.roomType}</div>}
+                          <div className="font-bold text-primary/70 mt-0.5" style={{ fontSize: isMobile ? 10 : 10 }}>₹{room.price}</div>
+                        </div>
 
-                    {/* Day cells */}
-                    {timeline.map((day) => {
-                      const isDayBooked = roomBookings.some(b => {
-                        const start = startOfDay(parseISO(b.checkin));
-                        const end   = startOfDay(parseISO(b.checkout));
-                        return day >= start && day < end && b.status !== 'cancelled' && b.status !== 'checked-out';
-                      });
-                      return (
-                        <div key={day.toISOString()}
-                          className={cn(
-                            "border-r transition-colors flex-shrink-0 relative z-10",
-                            isSameDay(day, new Date()) && "bg-primary/[0.02]",
-                            isDayBooked ? "bg-slate-50/30 cursor-not-allowed" : "cursor-pointer hover:bg-primary/[0.04]"
-                          )}
-                          style={{ width: COLUMN_WIDTH, minWidth: COLUMN_WIDTH }}
-                          title={isDayBooked ? "This room is already occupied on this date" : "Click to add booking"}
-                          onClick={() => {
-                            if (!isDayBooked) handleCellClick(room._id, day);
-                          }}
-                        />
-                      );
-                    })}
-
-                    {/* Booking cards overlay */}
-                    {(() => {
-                        // Separate cancelled from active bookings
-                        const activeBookings = roomBookings.filter(b => b.status !== 'cancelled');
-                        const cancelledBookings = roomBookings.filter(b => b.status === 'cancelled');
-
-                        // Priority-based Single-Lane Collapse Logic (active only)
-                        const statusPriority: Record<string, number> = {
-                          'checked-in': 4,
-                          'reserved': 3,
-                          'checked-out': 2,
-                        };
-
-                          const roomSortedBookings = [...activeBookings].sort((a, b) => {
-                            const pA = statusPriority[a.status] || 0;
-                            const pB = statusPriority[b.status] || 0;
-                            if (pA !== pB) return pB - pA;
-                            // Sort by duration (wider first) so they act as containers for others
-                            const durA = differenceInDays(parseISO(a.checkout), parseISO(a.checkin));
-                            const durB = differenceInDays(parseISO(b.checkout), parseISO(b.checkin));
-                            if (durA !== durB) return durB - durA;
-                            return parseISO(a.checkin).getTime() - parseISO(b.checkin).getTime();
+                        {/* Day cells */}
+                        {timeline.map((day) => {
+                          const isDayBooked = roomBookings.some(b => {
+                            const start = startOfDay(parseISO(b.checkin));
+                            const end   = startOfDay(parseISO(b.checkout));
+                            return day >= start && day < end && b.status !== 'cancelled' && b.status !== 'checked-out';
                           });
-
-                          const visibleCards: { primary: Booking, others: Booking[] }[] = [];
-                          roomSortedBookings.forEach(b => {
-                            const bStart = parseISO(b.checkin);
-                            const bEnd = parseISO(b.checkout);
-                            
-                            // Merge if there's ANY date overlap with an existing primary card
-                            const overlapCard = visibleCards.find(card => {
-                              const cS = parseISO(card.primary.checkin);
-                              const cE = parseISO(card.primary.checkout);
-                              return bStart < cE && bEnd > cS;
-                            });
-
-                            if (overlapCard) {
-                              overlapCard.others.push(b);
-                            }
-                            else visibleCards.push({ primary: b, others: [] });
-                          });
-
-                        // Build per-day cancelled badge map
-                        const cancelledByDay: Record<string, number> = {};
-                        cancelledBookings.forEach(b => {
-                          const cIn  = startOfDay(parseISO(b.checkin));
-                          const cOut = startOfDay(parseISO(b.checkout));
-                          timeline.forEach(day => {
-                            if (day >= cIn && day < cOut) {
-                              const key = day.toISOString();
-                              cancelledByDay[key] = (cancelledByDay[key] || 0) + 1;
-                            }
-                          });
-                        });
-
-                        const heightTotal = ROW_HEIGHT - 12; // 6px gap top and bottom for easier cell clicking
-
-                        const cardJsx = visibleCards.map(({ primary: booking, others }) => {
-                          const checkinDate  = startOfDay(parseISO(booking.checkin));
-                          const checkoutDate = startOfDay(parseISO(booking.checkout));
-                          const weekStartDay = startOfDay(weekStart);
-                          const periodEnd    = addDays(weekStart, DAYS);
-
-                          if (checkoutDate <= weekStart || checkinDate >= periodEnd) return null;
-
-                          const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
-
-                          const offsetDays   = differenceInDays(checkinDate, weekStartDay);
-                          const duration     = differenceInDays(checkoutDate, checkinDate);
-                          const clampedOffset   = Math.max(0, offsetDays);
-                          const clampedDuration = Math.min(offsetDays + duration, DAYS) - clampedOffset;
-                          if (clampedDuration <= 0) return null;
-
-                          const guest      = getGuest(booking);
-
-                          const cardLeft  = ROOM_COL + (clampedOffset * COLUMN_WIDTH) + 1;
-                          const cardWidth = (clampedDuration * COLUMN_WIDTH) - 2;
-
-                          // ── Pointer-based drag (long-press on touch) ─────────────────
-                          const handleCardDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
-                            if (!isEditable) return;
-                            if (isResizingRef.current) return;
-                            // Allow left-click on mouse, any button on touch/pen
-                            if (e.pointerType === 'mouse' && e.button !== 0) return;
-                            const target = e.target as HTMLElement;
-                            if (target.closest('[data-resize-handle]')) return;
-
-                            const cardEl   = e.currentTarget as HTMLDivElement;
-                            const isTouch  = e.pointerType === 'touch' || e.pointerType === 'pen';
-                            const LONG_MS  = isTouch ? 380 : 150; // Quicker for mouse, standard for touch
-
-                            e.stopPropagation();
-
-                            const startX = e.clientX;
-                            const startY = e.clientY;
-                            if (boardContentRef.current) {
-                              const rect = boardContentRef.current.getBoundingClientRect();
-                              const x = e.clientX - rect.left;
-                              dragGrabOffsetDaysRef.current = (x - ROOM_COL) / COLUMN_WIDTH - differenceInDays(startOfDay(parseISO(booking.checkin)), startOfDay(weekStart));
-                            }
-
-                             const initialScrollL = boardRef.current?.scrollLeft || 0;
-                             const initialScrollT = boardRef.current?.scrollTop || 0;
-                             let currentScrollL = initialScrollL;
-                             let currentScrollT = initialScrollT;
-
-                            let dragging         = false;
-                            let longPressReady   = false;   // long press timer fired
-                            let cancelled        = false;
-                            let longPressTimer: ReturnType<typeof setTimeout> | null = null;
-                            let weekSwapTimer: ReturnType<typeof setTimeout> | null = null;
-
-                            // For mobile, we will still use a tiny 250ms press to lift the card,
-                            // but we MUST have set touch-action: none on the card natively, so the browser doesn't steal it for scrolling.
-                            if (!isTouch) {
-                              try { cardEl.setPointerCapture(e.pointerId); } catch (_) {}
-                            }
-
-                             const activateDrag = () => {
-                               if (cancelled) return;
-                               longPressReady = true;
-                               isDraggingRef.current = true;
-                               try { cardEl.setPointerCapture(e.pointerId); } catch (_) {}
-                               // Haptic feedback
-                               try { (navigator as any).vibrate?.([12, 40, 12]); } catch (_) {}
-                               cardEl.style.opacity    = '0.9';
-                               cardEl.style.zIndex     = '100';
-                               cardEl.style.transition = 'transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.15s ease';
-                               cardEl.style.transform  = 'scale(1.04) translateY(-2px)';
-                               cardEl.style.boxShadow  = '0 20px 40px rgba(0,0,0,0.3)';
-                               cardEl.style.outline = '2px solid white';
-                               cardEl.style.outlineOffset = '-2px';
-                               
-                               setTimeout(() => {
-                                 if (!cancelled) cardEl.style.transition = 'none';
-                               }, 130);
-                             };
-
-                             // DELIBERATE HOLD: Start timer.
-                             longPressTimer = setTimeout(() => {
-                               activateDrag();
-                             }, LONG_MS);
-
-                             const onMove = (me: PointerEvent) => {
-                               const dx_view = me.clientX - startX;
-                               const dy_view = me.clientY - startY;
-                               const dist = Math.abs(dx_view) + Math.abs(dy_view);
-
-                                // If we moved a lot before hold is finished, it's a scroll, cancel.
-                                // For touch, we are more forgiving (35px). For mouse, 15px.
-                                if (!longPressReady && dist > (isTouch ? 35 : 15)) {
-                                  cancelled = true;
-                                  if (longPressTimer) clearTimeout(longPressTimer);
-                                }
-
-                                if (!isTouch && !dragging && dist > 15 && !cancelled) {
-                                  if (!longPressReady) activateDrag();
-                                  dragging = true;
-                                  isDraggingRef.current = true;
-                                  cardEl.style.opacity    = '0.75';
-                                  cardEl.style.zIndex     = '50';
-                                  cardEl.style.cursor     = 'grabbing';
-                                  cardEl.style.transition = 'none';
-                               }
-                               
-                               if (dragging || longPressReady) {
-                                 const updateTransform = () => {
-                                   const scrollDeltaL = (boardRef.current?.scrollLeft || 0) - initialScrollL;
-                                   const scrollDeltaT = (boardRef.current?.scrollTop || 0) - initialScrollT;
-                                   cardEl.style.transform = `translate(${dx_view + scrollDeltaL}px, ${dy_view + scrollDeltaT}px)${isTouch && !dragging ? ' scale(1.04)' : ''}`;
-                                 };
-                                 
-                                 updateTransform();
-                                 if (longPressReady && !dragging) {
-                                   dragging = true;
-                                   isDraggingRef.current = true; // Ensure it stays true to prevent click-through
-                                 }
-
-                                 // Auto-scroll logic (vertical only, since columns fill viewport)
-                                 if (boardRef.current) {
-                                   const rect = boardRef.current.getBoundingClientRect();
-                                   const edgeSize = isMobile ? 60 : 45;
-                                   
-                                   // Vertical auto-scroll
-                                   let scrollDY = 0;
-                                   if (me.clientY < rect.top + edgeSize) scrollDY = -((rect.top + edgeSize) - me.clientY) * 0.8;
-                                   else if (me.clientY > rect.bottom - edgeSize) scrollDY = (me.clientY - (rect.bottom - edgeSize)) * 0.8;
-                                   
-                                   if (scrollDY !== 0) {
-                                     boardRef.current.scrollTop += scrollDY;
-                                     updateTransform();
-                                   }
-
-                                   // WEEK SWAP: If cursor is near horizontal edge, swap week after a dwell
-                                   const atRightEdge = me.clientX > rect.right - edgeSize;
-                                   const atLeftEdge = me.clientX < rect.left + edgeSize + ROOM_COL;
-                                   
-                                   if (atRightEdge && !weekSwapTimer) {
-                                     weekSwapTimer = setTimeout(() => {
-                                       setWeekStart(prev => addDays(prev, 7));
-                                       weekSwapTimer = null;
-                                     }, 600);
-                                   } else if (atLeftEdge && !weekSwapTimer) {
-                                     weekSwapTimer = setTimeout(() => {
-                                       setWeekStart(prev => addDays(prev, -7));
-                                       weekSwapTimer = null;
-                                     }, 600);
-                                   } else if (!atRightEdge && !atLeftEdge && weekSwapTimer) {
-                                     clearTimeout(weekSwapTimer);
-                                     weekSwapTimer = null;
-                                   }
-                                 }
-                               }
-                             };
-
-                            const onUp = (ue: PointerEvent) => {
-                              const totalDist = Math.abs(ue.clientX - startX) + Math.abs(ue.clientY - startY);
-                              const wasDragging = dragging;
-                              cleanup();
-                              if (wasDragging && totalDist > 10) {
-                                handleDragEnd(ue, { point: { x: ue.clientX, y: ue.clientY } }, booking);
-                              } else if (!wasDragging && totalDist < 10) {
-                                // It was a click, not a drag - show booking details
-                                setSelectedBooking(booking);
-                              }
-                            };
-
-                            const cleanup = () => {
-                              try { cardEl.releasePointerCapture(e.pointerId); } catch (_) {}
-                              window.removeEventListener('pointermove', onMove);
-                              window.removeEventListener('pointerup',   onUp);
-                              window.removeEventListener('pointercancel', cleanup);
-                              if (weekSwapTimer) { clearTimeout(weekSwapTimer); weekSwapTimer = null; }
-                              if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-                              if (dragging || longPressReady) {
-                                cardEl.style.transform  = '';
-                                cardEl.style.opacity    = '';
-                                cardEl.style.zIndex     = '';
-                                cardEl.style.cursor     = '';
-                                cardEl.style.transition = '';
-                                cardEl.style.boxShadow  = '';
-                                cardEl.style.outline = '';
-                                cardEl.style.outlineOffset = '';
-                                cardEl.style.touchAction = isEditable ? 'none' : 'auto';
-                              }
-                              setTimeout(() => { isDraggingRef.current = false; }, 100);
-                            };
-
-                            window.addEventListener('pointermove', onMove);
-                            window.addEventListener('pointerup',   onUp);
-                            window.addEventListener('pointercancel', cleanup);
-                          };
-
-                          // ── Pointer-based resize ───────────────────────────────────────
-                          const handleResizeDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
-                            e.stopPropagation();
-                            e.preventDefault();
-                            if (!isEditable) return;
-
-                            const handleEl = e.currentTarget as HTMLDivElement;
-                            const cardEl   = handleEl.closest('[data-booking-card]') as HTMLDivElement;
-                            if (!cardEl) return;
-
-                            try { handleEl.setPointerCapture(e.pointerId); } catch (_) {}
-
-                            const startX        = e.clientX;
-                            const originalWidth = cardEl.offsetWidth;
-                            let moved = false;
-
-                            const onMove = (me: PointerEvent) => {
-                              const dx = me.clientX - startX;
-                              if (!moved && Math.abs(dx) > 5) {
-                                moved = true;
-                                isResizingRef.current = true;
-                                setResizingId(booking._id);
-                                cardEl.style.transition = 'none';
-                                cardEl.style.zIndex = '50';
-                              }
-                              if (moved) {
-                                const snapped = Math.round(dx / COLUMN_WIDTH) * COLUMN_WIDTH;
-                                const addedDays = snapped / COLUMN_WIDTH;
-                                
-                                // Prevent visual expansion into clash
-                                if (addedDays > 0) {
-                                  const newCO = addDays(startOfDay(parseISO(booking.checkout)), addedDays);
-                                  const isClashing = bookings.some(b => {
-                                    if (String(b._id) === String(booking._id) || b.status === 'cancelled' || b.status === 'checked-out') return false;
-                                    if (getBookingRoomId(b) !== getBookingRoomId(booking)) return false;
-                                    const bS = startOfDay(parseISO(b.checkin));
-                                    const bE = startOfDay(parseISO(b.checkout));
-                                    return startOfDay(parseISO(booking.checkin)) < bE && newCO > bS;
-                                  });
-                                  if (isClashing) return;
-                                }
-
-                                cardEl.style.width = `${Math.max(COLUMN_WIDTH, originalWidth + snapped)}px`;
-
-                                // Auto-scroll logic for edge pushing
-                                if (boardRef.current) {
-                                  const rect = boardRef.current.getBoundingClientRect();
-                                  const edgeSize = isMobile ? 60 : 45;
-                                  let scrollDX = 0;
-                                  
-                                  if (me.clientX < rect.left + edgeSize) scrollDX = -((rect.left + edgeSize) - me.clientX) * 0.8;
-                                  else if (me.clientX > rect.right - edgeSize) scrollDX = (me.clientX - (rect.right - edgeSize)) * 0.8;
-
-                                  if (scrollDX !== 0) {
-                                    boardRef.current.scrollLeft += scrollDX;
-                                  }
-                                }
-                              }
-                            };
-
-                            const onUp = (ue: PointerEvent) => {
-                              const dx        = ue.clientX - startX;
-                              const daysDelta = Math.round(dx / COLUMN_WIDTH);
-
-                              if (moved && daysDelta !== 0) {
-                                const origCheckin = startOfDay(parseISO(booking.checkin));
-                                const origNights  = differenceInDays(parseISO(booking.checkout), origCheckin);
-                                 const newNights = origNights + daysDelta;
-                                 if (newNights < 1) {
-                                   cleanup();
-                                   return;
-                                 }
-                                 
-                                 const newCheckout = format(addDays(origCheckin, newNights), 'yyyy-MM-dd');
-                                
-                                // Clash check for resize
-                                const newCheckoutDate = startOfDay(parseISO(newCheckout));
-                                const isClashingRes = bookings.some(b => {
-                                  if (String(b._id) === String(booking._id) || b.status === 'cancelled' || b.status === 'checked-out') return false;
-                                  if (getBookingRoomId(b) !== getBookingRoomId(booking)) return false;
-                                  const bS = startOfDay(parseISO(b.checkin));
-                                  const bE = startOfDay(parseISO(b.checkout));
-                                  return startOfDay(parseISO(booking.checkin)) < bE && newCheckoutDate > bS;
-                                });
-
-                                 if (!isClashingRes) {
-                                   
-                                   const addedDaysTotal = differenceInDays(startOfDay(parseISO(newCheckout)), startOfDay(weekStart));
-                                   if (addedDaysTotal >= DAYS) {
-                                     setWeekStart(startOfDay(addDays(weekStart, addedDaysTotal - DAYS + 1)));
-                                   }
-                                   
-                                   setUseNewPrice(false); // Resizing usually keeps the same room price
-                                   setPendingUpdate({
-                                     booking,
-                                     updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout },
-                                     type: 'resize',
-                                     details: {
-                                       oldRoom: room.roomNumber,
-                                       newRoom: room.roomNumber, // Maintain same room
-                                       oldCheckin: booking.checkin,
-                                       newCheckin: booking.checkin,
-                                       oldCheckout: booking.checkout,
-                                       newCheckout: newCheckout,
-                                       changeText: daysDelta > 0 ? `Extend stay` : `Shorten stay`,
-                                       nightsDelta: daysDelta,
-                                       oldPrice: booking.roomPrice || 0,
-                                       newPrice: booking.roomPrice || 0
-                                     }
-                                   });
-                                 }
-                              }
-                              cleanup();
-                            };
-
-                            const cleanup = () => {
-                              try { handleEl.releasePointerCapture(e.pointerId); } catch (_) {}
-                              window.removeEventListener('pointermove', onMove);
-                              window.removeEventListener('pointerup',   onUp);
-                              window.removeEventListener('pointercancel', cleanup);
-                              if (moved) {
-                                // KEY FIX: restore to original width explicitly so React's
-                                // virtual-DOM diff doesn't skip re-applying the style.
-                                // (Setting '' can leave card collapsed if React skips the update)
-                                cardEl.style.width = `${originalWidth}px`;
-                                cardEl.style.zIndex     = '';
-                                cardEl.style.transition = '';
-                              }
-                              setResizingId(null);
-                              setTimeout(() => { isResizingRef.current = false; }, 100);
-                            };
-
-                            window.addEventListener('pointermove', onMove);
-                            window.addEventListener('pointerup',   onUp);
-                            window.addEventListener('pointercancel', cleanup);
-                          };
-
                           return (
-                            <motion.div
-                              layout
-                              layoutId={booking._id}
-                              key={booking._id}
-                              data-booking-card=""
+                            <div key={day.toISOString()}
                               className={cn(
-                                "absolute overflow-hidden shadow-sm group/card border rounded-[12px] transition-shadow",
-                                getStatusColor(booking.status),
-                                isEditable ? "hover:shadow-md hover:z-20" : "opacity-80"
+                                "border-r transition-colors flex-shrink-0 relative z-10",
+                                isSameDay(day, new Date()) && "bg-primary/[0.02]",
+                                isDayBooked ? "bg-slate-50/30 cursor-not-allowed" : "cursor-pointer hover:bg-primary/[0.04]"
                               )}
-                              style={{
-                                left:   cardLeft,
-                                top:    6,
-                                width:  cardWidth,
-                                height: heightTotal,
-                                zIndex: booking.status === 'checked-in' ? 14 : booking.status === 'reserved' ? 12 : 10,
-                                cursor: isEditable ? 'grab' : 'pointer',
-                                touchAction: isEditable && isMobile ? 'none' : undefined,
-                                transition: 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease',
-                                transformOrigin: 'center left'
+                              style={{ width: COLUMN_WIDTH, minWidth: COLUMN_WIDTH }}
+                              title={isDayBooked ? "Occupied" : "Click to add"}
+                              onClick={() => {
+                                if (!isDayBooked) handleCellClick(room._id, day);
                               }}
-                              onPointerDown={isEditable ? (e) => handleCardDragStart(e as any) : undefined}
-                              onClick={(e) => {
-                                if (isDraggingRef.current || isResizingRef.current) return;
-                                if (booking.status !== 'cancelled' && booking.status !== 'checked-out') e.stopPropagation();
-                                setSelectedBooking(booking);
-                              }}
-                            >
-                                <div className="flex flex-col h-full justify-between p-1.5 md:p-2 text-white" data-card-content="">
-                                  <div className="flex justify-between items-start gap-1">
-                                    <button
-                                      className="font-bold truncate text-left hover:underline leading-tight z-10 relative outline-none text-[9px] md:text-[10px]"
-                                      onClick={(e) => {
-                                        if (isDraggingRef.current || isResizingRef.current) return;
-                                        e.stopPropagation();
-                                        if (guest?._id) setSelectedGuestId(guest._id);
-                                        else setSelectedBooking(booking);
-                                      }}
-                                    >
-                                      {guest?.name || 'Guest'}
-                                    </button>
+                            />
+                          );
+                        })}
 
-                                    {others.length > 0 && (
-                                       <div className="z-20 ml-auto" onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
-                                         <Popover>
+                        {/* Booking cards overlay */}
+                        {(() => {
+                           const activeBookings = roomBookings.filter(b => b.status !== 'cancelled');
+                           const cancelledBookings = roomBookings.filter(b => b.status === 'cancelled');
+                           const statusPriority: Record<string, number> = { 'checked-in': 5, 'confirmed': 4, 'reserved': 3, 'checked-out': 2 };
+
+                           const sorted = [...activeBookings].sort((a, b) => {
+                             const pA = statusPriority[a.status] || 0;
+                             const pB = statusPriority[b.status] || 0;
+                             if (pA !== pB) return pB - pA;
+                             const durA = differenceInDays(parseISO(a.checkout), parseISO(a.checkin));
+                             const durB = differenceInDays(parseISO(b.checkout), parseISO(b.checkin));
+                             if (durA !== durB) return durB - durA;
+                             return parseISO(a.checkin).getTime() - parseISO(b.checkin).getTime();
+                           });
+
+                           const visibleCards: { primary: Booking, others: Booking[] }[] = [];
+                           sorted.forEach(b => {
+                             const bS = parseISO(b.checkin);
+                             const bE = parseISO(b.checkout);
+                             const group = visibleCards.find(g => [g.primary, ...g.others].some(m => bS < parseISO(m.checkout) && bE > parseISO(m.checkin)));
+                             if (group) group.others.push(b); else visibleCards.push({ primary: b, others: [] });
+                           });
+
+                           const cancelledByDay: Record<string, number> = {};
+                           cancelledBookings.forEach(b => {
+                              const cIn = startOfDay(parseISO(b.checkin));
+                              const cOut = startOfDay(parseISO(b.checkout));
+                              timeline.forEach(d => { if (d >= cIn && d < cOut) cancelledByDay[d.toISOString()] = (cancelledByDay[d.toISOString()] || 0) + 1; });
+                           });
+
+                           const heightTotal = ROW_HEIGHT - 12;
+
+                           const cardsJsx = visibleCards.map(({ primary: booking, others }) => {
+                             const cIn = startOfDay(parseISO(booking.checkin));
+                             const cOut = startOfDay(parseISO(booking.checkout));
+                             const wS = startOfDay(weekStart);
+                             const pE = addDays(wS, DAYS);
+                             if (cOut < wS || cIn >= pE) return null;
+
+                             const os = differenceInDays(cIn, wS);
+                             const dur = differenceInDays(cOut, cIn);
+                             const cOs = Math.max(0, os);
+                             const cDur = Math.min(os + dur, DAYS) - cOs;
+                             if (cDur < 0) return null;
+
+                             const cL = ROOM_COL + (cOs * COLUMN_WIDTH) + 1;
+                             const cW = Math.max(12, (cDur * COLUMN_WIDTH) - 2);
+                             const guest = getGuest(booking);
+                             const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
+
+                             return (
+                               <motion.div
+                                 layout
+                                 layoutId={booking._id}
+                                 key={booking._id}
+                                 data-booking-card=""
+                                 className={cn("absolute overflow-hidden shadow-sm group/card border rounded-[12px] transition-shadow", getStatusColor(booking.status), isEditable ? "hover:shadow-md hover:z-20" : "opacity-80")}
+                                 style={{ left: cL, top: 6, width: cW, height: heightTotal, zIndex: booking.status === 'checked-in' ? 14 : 12, cursor: isEditable ? 'grab' : 'pointer', transition: 'transform 0.2s cubic-bezier(0.175,0.885,0.32,1.275), box-shadow 0.2s' }}
+                                 onPointerDown={isEditable ? (e) => handleCardDragStart(e as any, booking) : undefined}
+                                 onClick={() => { if (!isDraggingRef.current && !isResizingRef.current) setSelectedBooking(booking); }}
+                               >
+                                 <div className="flex flex-col h-full justify-between p-1.5 md:p-2 text-white">
+                                   <div className="flex justify-between items-start gap-1">
+                                      <button className="font-bold truncate text-left hover:underline leading-tight text-[9px] md:text-[10px]" onClick={e => { e.stopPropagation(); if (guest?._id) setSelectedGuestId(guest._id); else setSelectedBooking(booking); }}>
+                                        {guest?.name || 'Guest'}
+                                      </button>
+                                      {others.length > 0 && (
+                                        <div className="z-20 ml-auto" onClick={e => e.stopPropagation()}>
+                                          <Popover>
                                             <PopoverTrigger asChild>
-                                               <button className="bg-white/30 hover:bg-white/40 text-[8px] md:text-[9px] px-1.5 py-0.5 rounded-md font-bold flex-shrink-0 shadow-sm border border-white/20 transition-transform active:scale-95">
-                                                  +{others.length}
-                                                </button>
+                                              <button className="bg-white/30 hover:bg-white/40 text-[8px] md:text-[9px] px-1.5 py-0.5 rounded-md font-bold shadow-sm active:scale-95">+{others.length}</button>
                                             </PopoverTrigger>
                                             <PopoverContent className="w-64 p-2 rounded-xl shadow-xl border z-[300]">
-                                                <div className="p-2 border-b mb-1 flex items-center justify-between">
-                                                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Other Stays</p>
-                                                  <span className="bg-slate-100 text-slate-500 text-[8px] px-1.5 py-0.5 rounded-full font-black">+{others.length}</span>
-                                                </div>
-                                                <div className="space-y-1">
-                                                  {others.map(o => {
-                                                      const dotColorMap: Record<string, string> = {
-                                                        'reserved': 'bg-emerald-500',
-                                                        'checked-in': 'bg-blue-500',
-                                                        'checked-out': 'bg-orange-500',
-                                                        'cancelled': 'bg-slate-400',
-                                                       };
-                                                      return (
-                                                        <button key={o._id} className="w-full p-2 hover:bg-slate-50 rounded-lg text-left flex items-center justify-between group/o" onClick={(e) => { e.stopPropagation(); setSelectedBooking(o); }}>
-                                                           <div className="flex flex-col">
-                                                              <span className="text-[10px] font-bold text-slate-900 group-hover/o:text-primary">{getGuest(o)?.name || 'Guest'}</span>
-                                                              <span className="text-[8px] font-bold text-slate-400 capitalize tracking-tighter">{o.status}</span>
-                                                           </div>
-                                                           <div className={cn("w-2 h-2 rounded-full", dotColorMap[o.status] || 'bg-slate-300')} />
-                                                        </button>
-                                                      );
-                                                  })}
-                                                </div>
+                                              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 p-2 border-b">Others {others.length}</p>
+                                              <div className="space-y-1 mt-1">
+                                                {others.map(o => (
+                                                  <button key={o._id} className="w-full p-2 hover:bg-slate-50 rounded-lg text-left flex items-center justify-between group/o" onClick={() => setSelectedBooking(o)}>
+                                                    <span className="text-[10px] font-bold text-slate-900">{getGuest(o)?.name || 'Guest'}</span>
+                                                    <div className={cn("w-2 h-2 rounded-full", o.status === 'reserved' ? 'bg-emerald-500' : 'bg-blue-500')} />
+                                                  </button>
+                                                ))}
+                                              </div>
                                             </PopoverContent>
-                                         </Popover>
-                                       </div>
-                                     )}
-                                  </div>
-                                   <span className="text-[7px] md:text-[8px] bg-black/10 px-1 py-0.5 rounded-sm font-semibold capitalize tracking-wide w-fit opacity-90 border border-white/10">
-                                     {booking.status}
-                                   </span>
+                                          </Popover>
+                                        </div>
+                                      )}
+                                   </div>
+                                   <span className="text-[7px] md:text-[8px] bg-black/10 px-1 py-0.5 rounded-sm font-semibold capitalize tracking-wide w-fit border border-white/10">{booking.status}</span>
                                  </div>
-
                                  {isEditable && (
-                                   <div 
-                                     className={cn(
-                                       "absolute right-0 top-0 bottom-0 cursor-ew-resize z-50 flex items-center justify-center pointer-events-auto transition-all",
-                                       "w-4 opacity-0 group-hover/card:opacity-100 hover:bg-black/5 active:opacity-100",
-                                       !isMobile && "w-3 opacity-0"
-                                     )}
-                                     style={{ touchAction: 'none' }}
-                                     onPointerDown={(e) => handleResizeDragStart(e as any)}
-                                     onClick={e => e.stopPropagation()}
-                                   >
-                                     <div className={cn("rounded-full bg-white/60", isMobile ? "h-6 w-1.5 shadow-sm" : "h-4 w-1")} />
+                                   <div className={cn("absolute right-0 top-0 bottom-0 cursor-ew-resize z-50 flex items-center justify-center w-3 opacity-0 group-hover/card:opacity-100 hover:bg-black/5")} onPointerDown={e => handleResizeDragStart(e as any, booking, room)}>
+                                     <div className="h-4 w-1 rounded-full bg-white/60" />
                                    </div>
                                  )}
-                             </motion.div>
-                           );
-                         });
-
-                         // Return cancelled mini-badges alongside active card JSX.
-                         const cancelledBadgeEls = Object.entries(cancelledByDay).map(([dayIso, count]) => {
-                           const dayDate  = new Date(dayIso);
-
-                           // Prevent badge from rendering under semi-transparent active cards causing an overlapping, dirty look
-                           const isOverlayedByCard = visibleCards.some(vc => {
-                             const vcStart = startOfDay(parseISO(vc.primary.checkin));
-                             const vcEnd = startOfDay(parseISO(vc.primary.checkout));
-                             return dayDate >= vcStart && dayDate < vcEnd;
-                           });
-                           if (isOverlayedByCard) return null;
-
-                           const dayOffset = differenceInDays(startOfDay(dayDate), startOfDay(weekStart));
-                           if (dayOffset < 0 || dayOffset >= DAYS) return null;
-                           const badgeLeft = ROOM_COL + dayOffset * COLUMN_WIDTH + COLUMN_WIDTH - 24;
-
-                           const cancelledOnDayList = cancelledBookings.filter(b => {
-                             const cIn = startOfDay(parseISO(b.checkin));
-                             const cOut = startOfDay(parseISO(b.checkout));
-                             return dayDate >= cIn && dayDate < cOut;
+                               </motion.div>
+                             );
                            });
 
-                           return (
-                             <div 
-                               key={`cnl-badge-${dayIso}`} 
-                               className="absolute top-1.5 z-30 pointer-events-auto" 
-                               style={{ left: badgeLeft }}
-                             >
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                      <button className="bg-slate-100 ring-1 ring-slate-200 hover:bg-slate-200 text-slate-500 text-[8px] md:text-[9px] px-1.5 py-0.5 rounded-md font-bold shadow-sm transition-colors z-20">
-                                        +{count}
-                                      </button>
-                                    </PopoverTrigger>
-                                <PopoverContent className="w-64 p-2 rounded-xl shadow-xl border z-[300]">
-                                        <div className="p-2 border-b mb-1 flex items-center justify-between">
-                                          <div className="flex items-center gap-2">
-                                            <div className="w-2 h-2 rounded-full bg-slate-400" />
-                                            <p className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Cancelled</p>
-                                          </div>
-                                          <span className="bg-slate-100 text-slate-600 text-[8px] px-1.5 py-0.5 rounded-full font-black">+{count}</span>
-                                        </div>
-                                        <div className="space-y-1">
-                                          {cancelledOnDayList.map(o => (
-                                              <button key={o._id} className="w-full p-2 hover:bg-slate-50 rounded-lg text-left flex items-center justify-between group/o" onClick={(e) => { e.stopPropagation(); setSelectedBooking(o); }}>
-                                                 <div className="flex flex-col">
-                                                    <span className="text-[10px] font-bold text-slate-900 group-hover/o:text-primary line-through decoration-slate-300">{getGuest(o)?.name || 'Guest'}</span>
-                                                    <span className="text-[8px] font-bold text-slate-400 capitalize tracking-tighter">{o.status}</span>
-                                                 </div>
-                                                 <div className="w-2 h-2 rounded-full bg-slate-300" />
-                                              </button>
-                                          ))}
-                                        </div>
-                                    </PopoverContent>
-                                </Popover>
-                             </div>
-                           );
-                         });
-                         return [...cardJsx, ...cancelledBadgeEls];
-                       })()}
-                  </motion.div>
-                );
-              })}
+                           const badgesJsx = Object.entries(cancelledByDay).map(([iso, count]) => {
+                             const dD = new Date(iso);
+                             if (visibleCards.some(vc => dD >= parseISO(vc.primary.checkin) && dD < parseISO(vc.primary.checkout))) return null;
+                             const off = differenceInDays(startOfDay(dD), startOfDay(weekStart));
+                             if (off<0 || off>=DAYS) return null;
+                             const cLs = roomBookings.filter(b => b.status === 'cancelled' && dD >= parseISO(b.checkin) && dD < parseISO(b.checkout));
+                             return (
+                               <div key={`badge-${iso}`} className="absolute top-1.5 z-30" style={{ left: ROOM_COL + off * COLUMN_WIDTH + COLUMN_WIDTH - 24 }}>
+                                 <Popover>
+                                   <PopoverTrigger asChild>
+                                      <button className="bg-slate-100 ring-1 ring-slate-200 text-slate-500 text-[8px] px-1.5 py-0.5 rounded-md font-bold shadow-sm">+{count}</button>
+                                   </PopoverTrigger>
+                                   <PopoverContent className="w-64 p-2 rounded-xl z-[300]">
+                                      <p className="text-[9px] font-bold text-slate-500 p-2 border-b uppercase">Cancelled</p>
+                                      {cLs.map(o => (
+                                        <button key={o._id} className="w-full p-2 hover:bg-slate-50 rounded-lg text-left flex justify-between items-center" onClick={() => setSelectedBooking(o)}>
+                                          <span className="text-[10px] font-bold line-through text-slate-400">{getGuest(o)?.name || 'Guest'}</span>
+                                          <div className="w-2 h-2 rounded-full bg-slate-300" />
+                                        </button>
+                                      ))}
+                                   </PopoverContent>
+                                 </Popover>
+                               </div>
+                             );
+                           });
+
+                           return [...cardsJsx, ...badgesJsx];
+                        })()}
+                      </div>
+                    );
+                  })}
+                </motion.div>
+              </AnimatePresence>
             </div>
-            {/* Small spacer at bottom to ensure the last room is visible */}
+            {/* Bottom spacer */}
             <div className="h-8 w-full pointer-events-none" />
           </div>
         </div>
