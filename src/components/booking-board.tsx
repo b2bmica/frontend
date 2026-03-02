@@ -217,10 +217,6 @@ export function BookingBoard() {
     const x = info.point.x - rect.left;
     const y = info.point.y - rect.top;
 
-    // Include scroll offset for accurate vertical positioning
-    const scrollTop = boardRef.current?.scrollTop || 0;
-    const adjustedY = y + scrollTop;
-
     // Determine target day and room
     const HOZ_OFFSET = ROOM_COL;
 
@@ -229,8 +225,9 @@ export function BookingBoard() {
     const dayAtMouse = (x - HOZ_OFFSET) / COLUMN_WIDTH;
     const dayIndexFinal = Math.round(dayAtMouse - dragGrabOffsetDaysRef.current);
     
-    // Use scroll-adjusted Y and subtract header height (48px) for accurate room index
-    const roomIndexRaw = Math.floor((adjustedY - 48) / ROW_HEIGHT);
+    // getBoundingClientRect().top on boardContentRef already accounts for scroll,
+    // so y is the correct absolute position within the content. Subtract header (48px).
+    const roomIndexRaw = Math.floor((y - 48) / ROW_HEIGHT);
     const roomIndexFinal = Math.max(0, Math.min(activeRooms.length - 1, roomIndexRaw));
 
     // Allow drop anywhere valid — including outside the visible window (next/prev week)
@@ -578,11 +575,11 @@ export function BookingBoard() {
                             const bStart = parseISO(b.checkin);
                             const bEnd = parseISO(b.checkout);
                             
-                            // Only merge if the booking is fully contained within an existing primary's span
+                            // Merge if there's ANY date overlap with an existing primary card
                             const overlapCard = visibleCards.find(card => {
                               const cS = parseISO(card.primary.checkin);
                               const cE = parseISO(card.primary.checkout);
-                              return bStart >= cS && bEnd <= cE;
+                              return bStart < cE && bEnd > cS;
                             });
 
                             if (overlapCard) {
@@ -659,6 +656,7 @@ export function BookingBoard() {
                             let longPressReady   = false;   // long press timer fired
                             let cancelled        = false;
                             let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+                            let weekSwapTimer: ReturnType<typeof setTimeout> | null = null;
 
                             // For mobile, we will still use a tiny 250ms press to lift the card,
                             // but we MUST have set touch-action: none on the card natively, so the browser doesn't steal it for scrolling.
@@ -726,36 +724,38 @@ export function BookingBoard() {
                                    isDraggingRef.current = true; // Ensure it stays true to prevent click-through
                                  }
 
-                                 // Auto-scroll logic
+                                 // Auto-scroll logic (vertical only, since columns fill viewport)
                                  if (boardRef.current) {
                                    const rect = boardRef.current.getBoundingClientRect();
                                    const edgeSize = isMobile ? 60 : 45;
                                    
-                                   let scrollDX = 0;
+                                   // Vertical auto-scroll
                                    let scrollDY = 0;
-                                   
-                                   if (me.clientX < rect.left + edgeSize) scrollDX = -((rect.left + edgeSize) - me.clientX) * 0.8;
-                                   else if (me.clientX > rect.right - edgeSize) scrollDX = (me.clientX - (rect.right - edgeSize)) * 0.8;
-                                   
                                    if (me.clientY < rect.top + edgeSize) scrollDY = -((rect.top + edgeSize) - me.clientY) * 0.8;
                                    else if (me.clientY > rect.bottom - edgeSize) scrollDY = (me.clientY - (rect.bottom - edgeSize)) * 0.8;
+                                   
+                                   if (scrollDY !== 0) {
+                                     boardRef.current.scrollTop += scrollDY;
+                                     updateTransform();
+                                   }
 
-                                   if (scrollDX !== 0 || scrollDY !== 0) {
-                                      boardRef.current.scrollLeft += scrollDX;
-                                      boardRef.current.scrollTop += scrollDY;
-                                      
-                                      // INTERACTIVE WEEK SWAP: If we stay at horizontal edge, swap week
-                                      const scrollL = boardRef.current.scrollLeft;
-                                      const maxScroll = boardRef.current.scrollWidth - boardRef.current.clientWidth;
-                                      if (scrollL <= 0 && scrollDX < 0) {
-                                        setWeekStart(prev => addDays(prev, -7));
-                                        boardRef.current.scrollLeft = boardRef.current.scrollWidth / 2;
-                                      } else if (scrollL >= maxScroll && scrollDX > 0) {
-                                        setWeekStart(prev => addDays(prev, 7));
-                                        boardRef.current.scrollLeft = 50;
-                                      }
-
-                                      updateTransform(); // Keep card in sync after scroll
+                                   // WEEK SWAP: If cursor is near horizontal edge, swap week after a dwell
+                                   const atRightEdge = me.clientX > rect.right - edgeSize;
+                                   const atLeftEdge = me.clientX < rect.left + edgeSize + ROOM_COL;
+                                   
+                                   if (atRightEdge && !weekSwapTimer) {
+                                     weekSwapTimer = setTimeout(() => {
+                                       setWeekStart(prev => addDays(prev, 7));
+                                       weekSwapTimer = null;
+                                     }, 600);
+                                   } else if (atLeftEdge && !weekSwapTimer) {
+                                     weekSwapTimer = setTimeout(() => {
+                                       setWeekStart(prev => addDays(prev, -7));
+                                       weekSwapTimer = null;
+                                     }, 600);
+                                   } else if (!atRightEdge && !atLeftEdge && weekSwapTimer) {
+                                     clearTimeout(weekSwapTimer);
+                                     weekSwapTimer = null;
                                    }
                                  }
                                }
@@ -778,6 +778,8 @@ export function BookingBoard() {
                               window.removeEventListener('pointermove', onMove);
                               window.removeEventListener('pointerup',   onUp);
                               window.removeEventListener('pointercancel', cleanup);
+                              if (weekSwapTimer) { clearTimeout(weekSwapTimer); weekSwapTimer = null; }
+                              if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
                               if (dragging || longPressReady) {
                                 cardEl.style.transform  = '';
                                 cardEl.style.opacity    = '';
@@ -941,7 +943,7 @@ export function BookingBoard() {
                               key={booking._id}
                               data-booking-card=""
                               className={cn(
-                                "absolute overflow-hidden shadow-sm group/card border rounded-[12px] z-10 transition-shadow",
+                                "absolute overflow-hidden shadow-sm group/card border rounded-[12px] transition-shadow",
                                 getStatusColor(booking.status),
                                 isEditable ? "hover:shadow-md hover:z-20" : "opacity-80"
                               )}
@@ -950,7 +952,7 @@ export function BookingBoard() {
                                 top:    6,
                                 width:  cardWidth,
                                 height: heightTotal,
-                                opacity: 1, // Solid cards as requested
+                                zIndex: booking.status === 'checked-in' ? 14 : booking.status === 'reserved' ? 12 : 10,
                                 cursor: isEditable ? 'grab' : 'pointer',
                                 touchAction: isEditable && isMobile ? 'none' : undefined,
                                 transition: 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease',
