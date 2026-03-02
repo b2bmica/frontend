@@ -123,7 +123,7 @@ export function BookingBoard() {
   // Ensure COLUMN_WIDTH fills exactly the available horizontal space, but doesn't shrink awkwardly on tiny devices
   const COLUMN_WIDTH = isMobile 
     ? Math.max(76, Math.floor((boardWidth - ROOM_COL) / DAYS)) 
-    : Math.max(100, Math.min(200, Math.floor((boardWidth - ROOM_COL) / DAYS)));
+    : Math.max(100, Math.min(350, Math.floor((boardWidth - ROOM_COL) / DAYS)));
   const ROW_HEIGHT = isMobile ? 64 : 72;
 
   const timeline = useMemo(() =>
@@ -230,7 +230,7 @@ export function BookingBoard() {
 
     // Allow drop anywhere valid — including outside the visible window (next/prev week)
     const isValidDay = dayIndexFinal >= -(DAYS * 2) && dayIndexFinal < DAYS * 3;
-    const isValidRoom = roomIndexFinal >= 0 && roomIndexFinal < activeRooms.length;
+    const isValidRoom = true; // Always true now due to clamping above
 
     if (isValidDay && isValidRoom) {
       // No clamping — let the booking move to future/past weeks freely
@@ -459,8 +459,8 @@ export function BookingBoard() {
             {/* Column headers */}
             <div className="flex sticky top-0 z-[40] bg-card/80 backdrop-blur-md border-b shadow-sm w-max">
               <div 
-                className="bg-slate-50 border-r flex items-center font-black text-slate-400 uppercase tracking-[0.15em] sticky left-0 z-30"
-                style={{ width: ROOM_COL, height: 48, minWidth: ROOM_COL, fontSize: isMobile ? 8 : 10, paddingLeft: isMobile ? 6 : 16 }}
+                className="bg-slate-50 border-r flex items-center font-black text-slate-400 uppercase tracking-[0.15em] sticky left-0 z-30 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.1)]"
+                style={{ width: ROOM_COL, height: 48, minWidth: ROOM_COL, fontSize: isMobile ? 9 : 10, paddingLeft: isMobile ? 12 : 16 }}
               >
                 Rooms
               </div>
@@ -503,10 +503,10 @@ export function BookingBoard() {
                   >
                     {/* Room label */}
                     <div 
-                      className="bg-white border-r flex flex-col justify-center flex-shrink-0 sticky left-0 z-20"
-                      style={{ width: ROOM_COL, minWidth: ROOM_COL, paddingLeft: isMobile ? 6 : 16, paddingRight: isMobile ? 4 : 12 }}
+                      className="bg-white border-r flex flex-col justify-center flex-shrink-0 sticky left-0 z-20 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.05)]"
+                      style={{ width: ROOM_COL, minWidth: ROOM_COL, paddingLeft: isMobile ? 12 : 16, paddingRight: isMobile ? 8 : 12 }}
                     >
-                      <div className="font-black flex items-center gap-1.5 text-slate-800" style={{ fontSize: isMobile ? 10 : 13 }}>
+                      <div className="font-black flex items-center gap-1.5 text-slate-800" style={{ fontSize: isMobile ? 11 : 13 }}>
                         <span className="truncate">{room.roomNumber}</span>
                         {/* Always show clean/dirty status indicator */}
                         {room.status === 'clean' ? (
@@ -518,7 +518,7 @@ export function BookingBoard() {
                         ) : null}
                       </div>
                       {!isMobile && <div className="text-[10px] font-black text-slate-400 truncate opacity-60 capitalize tracking-tighter leading-none mt-1">{room.roomType}</div>}
-                      <div className="font-bold text-primary/70 mt-0.5" style={{ fontSize: isMobile ? 9 : 10 }}>₹{room.price}</div>
+                      <div className="font-bold text-primary/70 mt-0.5" style={{ fontSize: isMobile ? 10 : 10 }}>₹{room.price}</div>
                     </div>
 
                     {/* Day cells */}
@@ -557,34 +557,35 @@ export function BookingBoard() {
                           'checked-out': 2,
                         };
 
-                        const roomSortedBookings = [...activeBookings].sort((a, b) => {
-                          const pA = statusPriority[a.status] || 0;
-                          const pB = statusPriority[b.status] || 0;
-                          if (pA !== pB) return pB - pA;
-                          return parseISO(a.checkin).getTime() - parseISO(b.checkin).getTime();
-                        });
-
-                        const visibleCards: { primary: Booking, others: Booking[] }[] = [];
-                        roomSortedBookings.forEach(b => {
-                          const bStart = parseISO(b.checkin);
-                          const bEnd = parseISO(b.checkout);
-                          
-                          const overlapCard = visibleCards.find(card => {
-                            const cS = parseISO(card.primary.checkin);
-                            const cE = parseISO(card.primary.checkout);
-                            return bStart < cE && bEnd > cS;
+                          const roomSortedBookings = [...activeBookings].sort((a, b) => {
+                            const pA = statusPriority[a.status] || 0;
+                            const pB = statusPriority[b.status] || 0;
+                            if (pA !== pB) return pB - pA;
+                            // Sort by duration (wider first) so they act as containers for others
+                            const durA = differenceInDays(parseISO(a.checkout), parseISO(a.checkin));
+                            const durB = differenceInDays(parseISO(b.checkout), parseISO(b.checkin));
+                            if (durA !== durB) return durB - durA;
+                            return parseISO(a.checkin).getTime() - parseISO(b.checkin).getTime();
                           });
 
-                          if (overlapCard) {
-                            overlapCard.others.push(b);
-                            // Ensure primary logic captures the widest span
-                            const curEnd = parseISO(overlapCard.primary.checkout);
-                            if (bEnd > curEnd) {
-                              overlapCard.primary = { ...overlapCard.primary, checkout: b.checkout };
+                          const visibleCards: { primary: Booking, others: Booking[] }[] = [];
+                          roomSortedBookings.forEach(b => {
+                            const bStart = parseISO(b.checkin);
+                            const bEnd = parseISO(b.checkout);
+                            
+                            // Only merge if the booking is fully contained within an existing primary's span
+                            // This ensures that if a booking extends beyond, it gets its own visual card
+                            const overlapCard = visibleCards.find(card => {
+                              const cS = parseISO(card.primary.checkin);
+                              const cE = parseISO(card.primary.checkout);
+                              return bStart >= cS && bEnd <= cE;
+                            });
+
+                            if (overlapCard) {
+                              overlapCard.others.push(b);
                             }
-                          }
-                          else visibleCards.push({ primary: b, others: [] });
-                        });
+                            else visibleCards.push({ primary: b, others: [] });
+                          });
 
                         // Build per-day cancelled badge map
                         const cancelledByDay: Record<string, number> = {};
@@ -883,6 +884,7 @@ export function BookingBoard() {
                                      type: 'resize',
                                      details: {
                                        oldRoom: room.roomNumber,
+                                       newRoom: room.roomNumber, // Maintain same room
                                        oldCheckin: booking.checkin,
                                        newCheckin: booking.checkin,
                                        oldCheckout: booking.checkout,
@@ -952,7 +954,7 @@ export function BookingBoard() {
                                 <div className="flex flex-col h-full justify-between p-1.5 md:p-2 text-white" data-card-content="">
                                   <div className="flex justify-between items-start gap-1">
                                     <button
-                                      className="font-bold truncate text-left hover:underline leading-tight z-10 relative outline-none text-[9px] md:text-[10px] pr-6"
+                                      className="font-bold truncate text-left hover:underline leading-tight z-10 relative outline-none text-[9px] md:text-[10px]"
                                       onClick={(e) => {
                                         if (isDraggingRef.current || isResizingRef.current) return;
                                         e.stopPropagation();
@@ -963,8 +965,8 @@ export function BookingBoard() {
                                       {guest?.name || 'Guest'}
                                     </button>
 
-                                     {others.length > 0 && (
-                                       <div className="absolute top-1.5 right-1.5 z-20" onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
+                                    {others.length > 0 && (
+                                       <div className="z-20 ml-auto" onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
                                          <Popover>
                                             <PopoverTrigger asChild>
                                                <button className="bg-white/30 hover:bg-white/40 text-[8px] md:text-[9px] px-1.5 py-0.5 rounded-md font-bold flex-shrink-0 shadow-sm border border-white/20 transition-transform active:scale-95">
@@ -1048,7 +1050,7 @@ export function BookingBoard() {
                            return (
                              <div 
                                key={`cnl-badge-${dayIso}`} 
-                               className="absolute top-1.5 z-[100] pointer-events-auto" 
+                               className="absolute top-1.5 z-30 pointer-events-auto" 
                                style={{ left: badgeLeft }}
                              >
                                 <Popover>
