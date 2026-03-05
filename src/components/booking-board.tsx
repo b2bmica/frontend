@@ -1,14 +1,13 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
-  format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay,
-  differenceInDays, startOfDay, isBefore, parseISO
+  format, addDays, eachDayOfInterval, isSameDay,
+  differenceInDays, startOfDay, parseISO, addHours
 } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Search, UserPlus, IndianRupee, Info, Printer, ChevronLeft, ChevronRight, ChevronDown, Plus, Minus, Bed, X, ShieldCheck, ArrowRight, ArrowRightLeft, Calendar } from 'lucide-react';
-import { useBookings, type Booking } from '../context/booking-context';
+import { Loader2, Search, ChevronLeft, ChevronRight, ChevronDown, Bed, X, ShieldCheck, ArrowRight, Lock } from 'lucide-react';
+import { useBookings, type Booking, type Room } from '../context/booking-context';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
 import { BookingModal } from '@/components/booking-modal';
 import { BookingDetailSheet } from '@/components/booking-detail-sheet';
 import { GuestProfileSheet } from '@/components/guest-profile-sheet';
@@ -25,7 +24,9 @@ const STATUS_FILTERS = [
   { key: 'cancelled', label: 'Cancelled', color: 'bg-slate-400' },
 ] as const;
 
-const getStatusColor = (status: string) => {
+const getStatusColor = (status: string, bookingType?: string) => {
+  if (bookingType === 'enquiry') return 'bg-amber-400/80 hover:bg-amber-500/80 shadow-amber-400/20 border-dashed border-amber-500';
+  if (bookingType === 'block')   return 'bg-slate-400/70 hover:bg-slate-500/70 shadow-slate-400/20';
   switch (status) {
     case 'checked-in':  return 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20';
     case 'reserved':
@@ -34,6 +35,16 @@ const getStatusColor = (status: string) => {
     case 'cancelled':   return 'bg-slate-400 hover:bg-slate-500 shadow-slate-400/20';
     default:            return 'bg-gray-400';
   }
+};
+
+// Format a remaining-time countdown string from an ISO expiry timestamp
+const formatCountdown = (expiresAt: string): string => {
+  const ms = new Date(expiresAt).getTime() - Date.now();
+  if (ms <= 0) return 'Expired';
+  const totalMins = Math.floor(ms / 60000);
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
 };
 
 const getBookingRoomId = (b: Booking): string => {
@@ -45,7 +56,7 @@ const getGuest = (b: Booking) =>
   typeof b.guestId === 'object' ? b.guestId : null;
 
 export function BookingBoard() {
-  const { bookings, rooms, loading, updateBooking } = useBookings();
+  const { bookings, rooms, loading, updateBooking, refreshBookings } = useBookings();
   const boardRef = useRef<HTMLDivElement>(null);
   const boardContentRef = useRef<HTMLDivElement>(null);
   const isResizingRef = useRef(false);
@@ -62,6 +73,7 @@ export function BookingBoard() {
   const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
   const [search, setSearch] = useState('');
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'today' | 'week' | 'month'>('week');
   const [resizingId, setResizingId] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [useNewPrice, setUseNewPrice] = useState(true);
@@ -84,7 +96,6 @@ export function BookingBoard() {
   } | null>(null);
 
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
-  const daysCount = 7;
   const [boardWidth, setBoardWidth] = useState(() => typeof window !== 'undefined' ? window.innerWidth - (window.innerWidth < 768 ? 20 : 300) : 1000);
 
   // Use a callback ref + ResizeObserver so we always get the correct width,
@@ -139,17 +150,46 @@ export function BookingBoard() {
     };
   }, []);
 
-  const DAYS = 7;
-  const ROOM_COL = isMobile ? 80 : 152;
-  // Ensure COLUMN_WIDTH fills exactly the available horizontal space, but doesn't shrink awkwardly on tiny devices
-  const COLUMN_WIDTH = isMobile 
-    ? Math.max(76, Math.floor((boardWidth - ROOM_COL) / DAYS)) 
-    : Math.max(100, Math.min(350, Math.floor((boardWidth - ROOM_COL) / DAYS)));
-  const ROW_HEIGHT = isMobile ? 64 : 72;
+  // Update countdowns / check for expired enquiries every minute
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTick(t => t + 1);
+      // We don't necessarily need to call refreshBookings() every minute unless
+      // the backend actually changes the status. But for UI countdowns, a re-render is enough.
+      // If any enquiry has expired, we might want to refresh from server.
+      const hasExpired = bookings.some(b => 
+        (b.bookingType === 'enquiry' || b.bookingType === 'block') && 
+        b.enquiryExpiresAt && new Date(b.enquiryExpiresAt) < new Date()
+      );
+      if (hasExpired) refreshBookings();
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [bookings, refreshBookings]);
 
-  const timeline = useMemo(() =>
-    eachDayOfInterval({ start: weekStart, end: addDays(weekStart, DAYS - 1) }),
-    [weekStart, DAYS]);
+  const DAYS = viewMode === 'month' ? 30 : viewMode === 'today' ? 1 : 7;
+  const ROOM_COL = isMobile ? 80 : 160;
+  
+  const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null);
+
+  // Column width calculations based on view mode
+  const COLUMN_WIDTH = useMemo(() => {
+    if (viewMode === 'today') return Math.max(80, (boardWidth - ROOM_COL) / 12); // Show 12h at once roughly
+    if (viewMode === 'month') return 40; // Thin columns for month
+    return isMobile 
+      ? Math.max(76, Math.floor((boardWidth - ROOM_COL) / 7)) 
+      : Math.max(100, Math.min(350, Math.floor((boardWidth - ROOM_COL) / 7)));
+  }, [viewMode, boardWidth, isMobile, ROOM_COL]);
+
+  const ROW_HEIGHT = viewMode === 'month' ? 48 : (isMobile ? 64 : 82);
+
+  const timeline = useMemo(() => {
+    if (viewMode === 'today') {
+      // 24 hour Date objects for today view
+      return Array.from({ length: 24 }, (_, i) => addHours(startOfDay(weekStart), i));
+    }
+    return eachDayOfInterval({ start: weekStart, end: addDays(weekStart, DAYS - 1) });
+  }, [weekStart, DAYS, viewMode]);
 
   const activeRooms = useMemo(() => 
     rooms.filter(r => statusFilter === 'maintenance' ? (r.status === 'maintenance' || r.status === 'under-maintenance') : true),
@@ -178,9 +218,8 @@ export function BookingBoard() {
   // Bookings specifically in the current calendar window
   const filteredBookings = useMemo(() => {
     const periodEnd = addDays(weekStart, DAYS);
-    // Include a 1-day buffer on each side for smoother transitions
-    const bufferStart = addDays(weekStart, -1);
-    const bufferEnd = addDays(periodEnd, 1);
+    const bufferStart = addDays(weekStart, -2);
+    const bufferEnd = addDays(periodEnd, 2);
     return globalMatches.filter(b => {
       const ci = startOfDay(new Date(b.checkin));
       const co = startOfDay(new Date(b.checkout));
@@ -188,11 +227,38 @@ export function BookingBoard() {
     });
   }, [globalMatches, weekStart, DAYS]);
 
-  const offScreenMatches = useMemo(() => {
-    return globalMatches.filter(m => !filteredBookings.find(fm => fm._id === m._id));
-  }, [globalMatches, filteredBookings]);
+  const isTodayView = viewMode === 'today';
 
-  const isTodayView = isSameDay(weekStart, startOfDay(new Date()));
+  // Real-time occupancy check helper
+  const getRoomOccupancy = useCallback((roomId: string) => {
+    const now = new Date();
+    return bookings.some(b => {
+      if (b.status !== 'checked-in') return false;
+      const bRoomId = typeof b.roomId === 'object' ? b.roomId._id : b.roomId;
+      if (bRoomId !== roomId) return false;
+      
+      const checkin = parseISO(toISO(format(parseISO(b.checkin), 'yyyy-MM-dd'), b.checkinTime || '00:00'));
+      const checkout = parseISO(toISO(format(parseISO(b.checkout), 'yyyy-MM-dd'), b.checkoutTime || '23:59'));
+      return now >= checkin && now <= checkout;
+    });
+  }, [bookings]);
+
+  // Red vertical line for current time in Today view
+  const [currentTimePos, setCurrentTimePos] = useState(0);
+  useEffect(() => {
+    if (viewMode !== 'today') return;
+    const update = () => {
+      const now = new Date();
+      const h = now.getHours();
+      const m = now.getMinutes();
+      setCurrentTimePos((h + m / 60) * COLUMN_WIDTH);
+    };
+    update();
+    const interval = setInterval(update, 60000);
+    return () => clearInterval(interval);
+  }, [viewMode, COLUMN_WIDTH]);
+
+  const toISO = (date: string, time: string) => `${date}T${time}:00`;
 
   // Status counts
   const counts = useMemo(() => {
@@ -234,7 +300,11 @@ export function BookingBoard() {
     setIsModalOpen(true);
   };
 
-  const handleDragEnd = async (event: any, info: any, booking: Booking) => {
+  interface DragInfo {
+    point: { x: number; y: number };
+  }
+
+  const handleDragEnd = async (event: React.PointerEvent | PointerEvent, info: DragInfo, booking: Booking) => {
     setTimeout(() => { isDraggingRef.current = false; }, 100);
     if (isResizingRef.current) return;
     if (booking.status === 'checked-out' || booking.status === 'cancelled') return;
@@ -317,18 +387,6 @@ export function BookingBoard() {
     }
   };
 
-  const handleQuickExtend = (e: React.MouseEvent, booking: Booking) => {
-    e.stopPropagation();
-    const newCheckout = format(addDays(new Date(booking.checkout), 1), 'yyyy-MM-dd');
-    updateBooking(booking._id, { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout });
-  };
-
-  const handleQuickReduce = (e: React.MouseEvent, booking: Booking) => {
-    e.stopPropagation();
-    const newCheckout = format(addDays(new Date(booking.checkout), -1), 'yyyy-MM-dd');
-    if (newCheckout <= booking.checkin) return;
-    updateBooking(booking._id, { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCheckout });
-  };
 
 
 
@@ -388,15 +446,15 @@ export function BookingBoard() {
     let weekShiftRefX = 0; // Local ref tracker for coordinate shift
 
     if (!isTouch) {
-      try { cardEl.setPointerCapture(e.pointerId); } catch (_) {}
+      try { cardEl.setPointerCapture(e.pointerId); } catch { /* ignore capture error */ }
     }
 
      const activateDrag = () => {
        if (cancelled) return;
        longPressReady = true;
        isDraggingRef.current = true;
-       try { cardEl.setPointerCapture(e.pointerId); } catch (_) {}
-       try { (navigator as any).vibrate?.([12, 40, 12]); } catch (_) {}
+      try { cardEl.setPointerCapture(e.pointerId); } catch { /* ignore capture error */ }
+      try { (navigator as Navigator & { vibrate?: (pattern: number[]) => void }).vibrate?.([12, 40, 12]); } catch { /* ignore vibrate error */ }
        
        cardEl.style.opacity    = '0.9';
        cardEl.style.zIndex     = '500';
@@ -499,7 +557,7 @@ export function BookingBoard() {
     };
 
     const cleanup = () => {
-      try { cardEl.releasePointerCapture(e.pointerId); } catch (_) {}
+      try { cardEl.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup',   onUp);
       window.removeEventListener('pointercancel', cleanup);
@@ -525,14 +583,14 @@ export function BookingBoard() {
   };
 
   // ── Pointer-based resize ───────────────────────────────────────
-  const handleResizeDragStart = (e: React.PointerEvent<HTMLDivElement>, booking: Booking, room: any) => {
+  const handleResizeDragStart = (e: React.PointerEvent<HTMLDivElement>, booking: Booking, room: Room) => {
     e.stopPropagation();
     const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
     if (!isEditable) return;
     const handleEl = e.currentTarget as HTMLDivElement;
     const cardEl   = handleEl.closest('[data-booking-card]') as HTMLDivElement;
     if (!cardEl) return;
-    try { handleEl.setPointerCapture(e.pointerId); } catch (_) {}
+    try { handleEl.setPointerCapture(e.pointerId); } catch { /* ignore */ }
 
     const startX        = e.clientX;
     const originalWidth = cardEl.offsetWidth;
@@ -588,7 +646,7 @@ export function BookingBoard() {
     };
 
     const cleanup = () => {
-      try { handleEl.releasePointerCapture(e.pointerId); } catch (_) {}
+      try { handleEl.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup',   onUp);
       window.removeEventListener('pointercancel', cleanup);
@@ -617,43 +675,64 @@ export function BookingBoard() {
 
         {/* ── Header ── */}
         <div className="flex flex-col gap-3 p-4 border-b bg-card/40 backdrop-blur-md">
-          {/* Top Row: Navigation & Today */}
-          <div className="flex items-center justify-between gap-2">
-            <Button variant="outline" size="sm" className="h-9 px-3 rounded-xl border-slate-200 bg-white shadow-sm font-bold text-xs transition-all active:scale-95"
-              onClick={() => setWeekStart(addDays(weekStart, -DAYS))}>
-              <ChevronLeft className="h-4 w-4 mr-1" /> {isMobile ? '' : 'Prev Week'}
-            </Button>
-            
-            <div className="flex flex-col items-center flex-1">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button className="flex flex-col items-center hover:bg-slate-100/50 p-1 px-4 rounded-xl transition-colors min-w-[140px] group">
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-primary transition-colors">Viewing Period</span>
-                    <span className="text-xs font-black uppercase tracking-tight text-slate-900 flex items-center gap-1 group-hover:scale-105 transition-transform">
-                      {periodLabel} <ChevronDown className="h-3 w-3 opacity-40 ml-0.5" />
-                    </span>
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-4 rounded-2xl shadow-2xl border-none">
-                  <div className="space-y-3">
-                    <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 text-slate-400">Jump to Date</Label>
-                    <Input 
-                      type="date" 
-                      className="h-10 rounded-xl font-bold border-slate-200" 
-                      value={format(weekStart, 'yyyy-MM-dd')}
-                      onChange={(e) => {
-                        if (e.target.value) setWeekStart(startOfWeek(new Date(e.target.value), { weekStartsOn: 1 }));
-                      }}
-                    />
-                  </div>
-                </PopoverContent>
-              </Popover>
+          {/* Top Row: Navigation & View Toggle */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="h-9 px-3 rounded-xl border-slate-200 bg-white shadow-sm font-bold text-xs"
+                onClick={() => setWeekStart(addDays(weekStart, viewMode === 'month' ? -30 : -DAYS))}>
+                <ChevronLeft className="h-4 w-4 mr-1" /> {isMobile ? '' : 'Prev'}
+              </Button>
+              
+              <div className="flex flex-col items-center">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="flex flex-col items-center hover:bg-slate-100/50 p-1 px-4 rounded-xl transition-colors min-w-[140px] group">
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-primary transition-colors">Viewing Period</span>
+                      <span className="text-xs font-black uppercase tracking-tight text-slate-900 flex items-center gap-1 group-hover:scale-105 transition-transform">
+                        {viewMode === 'today' ? format(weekStart, 'MMM dd, yyyy') : periodLabel} <ChevronDown className="h-3 w-3 opacity-40 ml-0.5" />
+                      </span>
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-4 rounded-2xl shadow-2xl border-none">
+                    <div className="space-y-3">
+                      <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 text-slate-400">Jump to Date</Label>
+                      <Input 
+                        type="date" 
+                        className="h-10 rounded-xl font-bold border-slate-200" 
+                        value={format(weekStart, 'yyyy-MM-dd')}
+                        onChange={(e) => {
+                          if (e.target.value) setWeekStart(startOfDay(new Date(e.target.value)));
+                        }}
+                      />
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <Button variant="outline" size="sm" className="h-9 px-3 rounded-xl border-slate-200 bg-white shadow-sm font-bold text-xs"
+                onClick={() => setWeekStart(addDays(weekStart, viewMode === 'month' ? 30 : DAYS))}>
+                {isMobile ? '' : 'Next'} <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
             </div>
 
-            <Button variant="outline" size="sm" className="h-9 px-3 rounded-xl border-slate-200 bg-white shadow-sm font-bold text-xs transition-all active:scale-95"
-              onClick={() => setWeekStart(addDays(weekStart, DAYS))}>
-              {isMobile ? '' : 'Next Week'} <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
+            {/* View Toggle Pill */}
+            <div className="flex bg-slate-100 p-1 rounded-2xl gap-1">
+              {(['today', 'week', 'month'] as const).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={cn(
+                    'relative px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all z-10',
+                    viewMode === mode ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'
+                  )}
+                >
+                  {viewMode === mode && (
+                    <motion.div layoutId="viewModeBg" className="absolute inset-0 bg-white rounded-xl shadow-sm z-[-1]" />
+                  )}
+                  {mode}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="flex flex-col gap-3">
@@ -686,9 +765,9 @@ export function BookingBoard() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {STATUS_FILTERS.map((f: any) => {
+            {STATUS_FILTERS.map((f) => {
               const key = f.key;
-              const color = f.color;
+              const color = 'color' in f ? f.color : undefined;
               const label = f.label;
               const count = key === 'all'
                 ? bookings.length
@@ -749,22 +828,27 @@ export function BookingBoard() {
               >
                 Rooms
               </div>
-              {timeline.map((day) => (
+              {viewMode === 'today' ? (
+                // Hour headers for Today View
+                timeline.map((hourDate: Date) => (
+                  <div key={hourDate.toISOString()} className="flex flex-col items-center justify-center border-r flex-shrink-0 bg-white/50" style={{ width: COLUMN_WIDTH, height: 48 }}>
+                    <span className="text-[10px] font-black tracking-widest opacity-40">{format(hourDate, 'HH:00')}</span>
+                  </div>
+                ))
+              ) : timeline.map((day: Date) => (
                 <div key={day.toISOString()}
                   className={cn(
                     "flex flex-col items-center justify-center border-r flex-shrink-0 transition-colors",
                     isSameDay(day, new Date()) ? "bg-primary/[0.04] text-primary" : "text-slate-500"
                   )}
                   style={{ width: COLUMN_WIDTH, height: 48, minWidth: COLUMN_WIDTH }}>
-                  <span style={{ fontSize: isMobile ? 7 : 9 }} className="font-black tracking-[0.1em] opacity-40 mb-0.5 leading-none">{format(day, 'EEE')}</span>
+                  <span style={{ fontSize: (isMobile || viewMode === 'month') ? 7 : 9 }} className="font-black tracking-[0.1em] opacity-40 mb-0.5 leading-none">{format(day, 'EEE')}</span>
                   <span className={cn(
                     "font-black tracking-tight leading-none",
-                    isSameDay(day, new Date())
-                      ? "bg-primary text-white rounded-full flex items-center justify-center shadow-lg shadow-primary/30"
-                      : "",
-                    isMobile ? "text-[10px]" : "text-xs"
+                    isSameDay(day, new Date()) ? "bg-primary text-white rounded-full flex items-center justify-center shadow-lg shadow-primary/30" : "",
+                    (isMobile || viewMode === 'month') ? "text-[10px]" : "text-xs"
                   )}
-                  style={isSameDay(day, new Date()) ? { width: isMobile ? 22 : 28, height: isMobile ? 22 : 28 } : {}}>
+                  style={isSameDay(day, new Date()) ? { width: (isMobile || viewMode === 'month') ? 22 : 28, height: (isMobile || viewMode === 'month') ? 22 : 28 } : {}}>
                     {format(day, 'dd')}
                   </span>
                 </div>
@@ -782,7 +866,7 @@ export function BookingBoard() {
                   transition={{ type: "spring", stiffness: 300, damping: 30 }}
                   className="w-full"
                 >
-                  {activeRooms.map((room, rowIndex) => {
+                  {activeRooms.map((room) => {
                     const roomBookings = filteredBookings.filter(b => getBookingRoomId(b) === room._id);
                     return (
                       <div 
@@ -790,43 +874,67 @@ export function BookingBoard() {
                         className="flex border-b group relative hover:bg-white transition-colors" 
                         style={{ height: ROW_HEIGHT }}
                       >
-                        {/* Room label */}
+                        {/* Room label: OCCUPIED STATUS Indicators */}
                         <div 
-                          className="bg-white border-r flex flex-col justify-center flex-shrink-0 sticky left-0 z-20 shadow-[4px_0_10px_-4px_rgba(0,0,0,0.05)]"
-                          style={{ width: ROOM_COL, minWidth: ROOM_COL, paddingLeft: isMobile ? 12 : 16, paddingRight: isMobile ? 8 : 12 }}
+                           className="bg-white border-r flex flex-col justify-center flex-shrink-0 sticky left-0 z-20 shadow-[6px_0_15px_-5px_rgba(0,0,0,0.06)]"
+                           style={{ width: ROOM_COL, minWidth: ROOM_COL, padding: '12px 14px' }}
                         >
-                          <div className="font-black flex items-center gap-1.5 text-slate-800" style={{ fontSize: isMobile ? 11 : 13 }}>
-                            <span className="truncate">{room.roomNumber}</span>
-                            {room.status === 'clean' ? (
-                              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.4)]" title="Clean" />
-                            ) : room.status === 'dirty' ? (
-                              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.4)]" title="Dirty" />
-                            ) : (room.status === 'maintenance' || room.status === 'under-maintenance') ? (
-                              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-red-500 animate-pulse" title="Maintenance" />
-                            ) : null}
-                          </div>
-                          {!isMobile && <div className="text-[10px] font-black text-slate-400 truncate opacity-60 capitalize tracking-tighter leading-none mt-1">{room.roomType}</div>}
-                          <div className="font-bold text-primary/70 mt-0.5" style={{ fontSize: isMobile ? 10 : 10 }}>₹{room.price}</div>
+                           {(() => {
+                              const isOccupied = getRoomOccupancy(room._id);
+                              return (
+                                 <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between w-full">
+                                       <div className="flex items-center gap-1.5">
+                                          <span className="font-black text-slate-800 text-[13px] tracking-tighter">#{room.roomNumber}</span>
+                                          {isOccupied && <Bed className="h-3 w-3 text-blue-500 fill-blue-50" />}
+                                       </div>
+                                       <div className={cn(
+                                          "flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-tight",
+                                          isOccupied ? "bg-blue-50 border-blue-200 text-blue-600" : "bg-slate-50 border-slate-200 text-slate-400"
+                                       )}>
+                                          <div className={cn("w-1 h-1 rounded-full", isOccupied ? "bg-blue-500" : "bg-slate-300")} />
+                                          {isOccupied ? 'Occupied' : 'Vacant'}
+                                       </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-1 text-[9px] font-bold">
+                                       <span className={cn(
+                                          "w-1.5 h-1.5 rounded-full",
+                                          room.status === 'clean' ? 'bg-emerald-500' : room.status === 'dirty' ? 'bg-amber-400' : 'bg-red-500'
+                                       )} />
+                                       <span className="text-slate-500 capitalize">{room.status}</span>
+                                       <span className="text-slate-300 mx-0.5">|</span>
+                                       <span className="text-slate-500 truncate w-16">{room.roomType}</span>
+                                    </div>
+                                    
+                                    <div className="text-[10px] font-black text-primary">₹{room.price}</div>
+                                 </div>
+                              );
+                           })()}
                         </div>
 
-                        {/* Day cells */}
-                        {timeline.map((day) => {
-                          const isDayBooked = roomBookings.some(b => {
+                        {/* Grid cells */}
+                        {viewMode === 'today' && <div className="absolute top-0 bottom-0 bg-red-500/10 w-px z-40 pointer-events-none" style={{ left: ROOM_COL + currentTimePos }}><div className="bg-red-500 text-[8px] text-white px-1 rounded-sm absolute -top-1 -translate-x-1/2">Now</div></div>}
+                        {timeline.map((item: Date) => {
+                          const isDayBooked = viewMode !== 'today' && roomBookings.some(b => {
                             const start = startOfDay(parseISO(b.checkin));
                             const end   = startOfDay(parseISO(b.checkout));
-                            return day >= start && day < end && b.status !== 'cancelled' && b.status !== 'checked-out';
+                            return item >= start && item < end && b.status !== 'cancelled' && b.status !== 'checked-out';
                           });
                           return (
-                            <div key={day.toISOString()}
+                            <div key={item.toISOString()}
                               className={cn(
                                 "border-r transition-colors flex-shrink-0 relative z-10",
-                                isSameDay(day, new Date()) && "bg-primary/[0.02]",
-                                isDayBooked ? "bg-slate-50/30 cursor-not-allowed" : "cursor-pointer hover:bg-primary/[0.04]"
+                                viewMode !== 'today' && isSameDay(item, new Date()) && "bg-primary/[0.02]",
+                                isDayBooked ? "bg-slate-50/10 cursor-not-allowed" : "cursor-pointer hover:bg-primary/[0.04]"
                               )}
-                              style={{ width: COLUMN_WIDTH, minWidth: COLUMN_WIDTH }}
-                              title={isDayBooked ? "Occupied" : "Click to add"}
+                              style={{ width: COLUMN_WIDTH }}
                               onClick={() => {
-                                if (!isDayBooked) handleCellClick(room._id, day);
+                                if (viewMode === 'today') {
+                                  setSelectedRoomId(room._id);
+                                  setSelectedDate(format(weekStart, 'yyyy-MM-dd'));
+                                  setIsModalOpen(true);
+                                } else if (!isDayBooked) handleCellClick(room._id, item);
                               }}
                             />
                           );
@@ -860,76 +968,166 @@ export function BookingBoard() {
                            cancelledBookings.forEach(b => {
                               const cIn = startOfDay(parseISO(b.checkin));
                               const cOut = startOfDay(parseISO(b.checkout));
-                              timeline.forEach(d => { if (d >= cIn && d < cOut) cancelledByDay[d.toISOString()] = (cancelledByDay[d.toISOString()] || 0) + 1; });
+                  timeline.forEach(d => { if (d >= cIn && d < cOut) cancelledByDay[d.toISOString()] = (cancelledByDay[d.toISOString()] || 0) + 1; });
                            });
 
                            const heightTotal = ROW_HEIGHT - 12;
 
-                           const cardsJsx = visibleCards.map(({ primary: booking, others }) => {
-                             const cIn = startOfDay(parseISO(booking.checkin));
-                             const cOut = startOfDay(parseISO(booking.checkout));
-                             const wS = startOfDay(weekStart);
-                             const pE = addDays(wS, DAYS);
-                             if (cOut < wS || cIn >= pE) return null;
+                            const getDayFraction = (t?: string) => {
+                              if (!t) return 0;
+                              const [h, m] = t.split(':').map(Number);
+                              return (h + (m || 0) / 60) / 24;
+                            };
 
-                             const os = differenceInDays(cIn, wS);
-                             const dur = differenceInDays(cOut, cIn);
-                             const cOs = Math.max(0, os);
-                             const cDur = Math.min(os + dur, DAYS) - cOs;
-                             if (cDur < 0) return null;
+                            const cardsJsx = visibleCards.map(({ primary: booking, others }) => {
+                              const cIn = startOfDay(parseISO(booking.checkin));
+                              const cOut = startOfDay(parseISO(booking.checkout));
+                              const wS = startOfDay(weekStart);
+                              const pE = addDays(wS, DAYS);
+                              if (cOut < wS || cIn >= pE) return null;
 
-                             const cL = ROOM_COL + (cOs * COLUMN_WIDTH) + 1;
-                             const cW = Math.max(12, (cDur * COLUMN_WIDTH) - 2);
-                             const guest = getGuest(booking);
-                             const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
+                              const isDayUse = booking.checkin === booking.checkout;
+                              // Position calculation helper
+                              const calculateLayout = () => {
+                                const bCI = parseISO(booking.checkin);
+                                const bCO = parseISO(booking.checkout);
+                                
+                                if (viewMode === 'today') {
+                                  // ONLY SHOW if booking overlaps with today
+                                  const todayStart = startOfDay(weekStart);
+                                  const todayEnd = addDays(todayStart, 1);
+                                  const startDT = parseISO(`${booking.checkin}T${booking.checkinTime || '14:00'}:00`);
+                                  const endDT = parseISO(`${booking.checkout}T${booking.checkoutTime || '11:00'}:00`);
+                                  
+                                  if (endDT < todayStart || startDT >= todayEnd) return null;
+                                  
+                                  const ciHours = Math.max(0, (startDT.getTime() - todayStart.getTime()) / 3600000);
+                                  const coHours = Math.min(24, (endDT.getTime() - todayStart.getTime()) / 3600000);
+                                  const dur = coHours - ciHours;
+                                  
+                                  return { 
+                                    left: ROOM_COL + (ciHours * COLUMN_WIDTH),
+                                    width: Math.max(20, dur * COLUMN_WIDTH)
+                                  };
+                                } else {
+                                  const wS = startOfDay(weekStart);
+                                  const pE = addDays(wS, DAYS);
+                                  if (bCO < wS || bCI >= pE) return null;
 
-                             return (
-                               <motion.div
-                                 layout
-                                 layoutId={booking._id}
-                                 key={booking._id}
-                                 data-booking-card=""
-                                 className={cn("absolute overflow-hidden shadow-sm group/card border rounded-[12px] transition-shadow", getStatusColor(booking.status), isEditable ? "hover:shadow-md hover:z-20" : "opacity-80")}
-                                 style={{ left: cL, top: 6, width: cW, height: heightTotal, zIndex: booking.status === 'checked-in' ? 14 : 12, cursor: isEditable ? 'grab' : 'pointer', transition: 'transform 0.2s cubic-bezier(0.175,0.885,0.32,1.275), box-shadow 0.2s' }}
-                                 onPointerDown={isEditable ? (e) => handleCardDragStart(e as any, booking) : undefined}
-                                 onClick={() => { if (!isDraggingRef.current && !isResizingRef.current) setSelectedBooking(booking); }}
-                               >
-                                 <div className="flex flex-col h-full justify-between p-1.5 md:p-2 text-white">
-                                   <div className="flex justify-between items-start gap-1">
-                                      <button className="font-bold truncate text-left hover:underline leading-tight text-[9px] md:text-[10px]" onClick={e => { e.stopPropagation(); if (guest?._id) setSelectedGuestId(guest._id); else setSelectedBooking(booking); }}>
-                                        {guest?.name || 'Guest'}
-                                      </button>
-                                      {others.length > 0 && (
-                                        <div className="z-20 ml-auto" onClick={e => e.stopPropagation()}>
-                                          <Popover>
-                                            <PopoverTrigger asChild>
-                                              <button className="bg-white/30 hover:bg-white/40 text-[8px] md:text-[9px] px-1.5 py-0.5 rounded-md font-bold shadow-sm active:scale-95">+{others.length}</button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-64 p-2 rounded-xl shadow-xl border z-[300]">
-                                              <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 p-2 border-b">Others {others.length}</p>
-                                              <div className="space-y-1 mt-1">
-                                                {others.map(o => (
-                                                  <button key={o._id} className="w-full p-2 hover:bg-slate-50 rounded-lg text-left flex items-center justify-between group/o" onClick={() => setSelectedBooking(o)}>
-                                                    <span className="text-[10px] font-bold text-slate-900">{getGuest(o)?.name || 'Guest'}</span>
-                                                    <div className={cn("w-2 h-2 rounded-full", o.status === 'reserved' ? 'bg-emerald-500' : 'bg-blue-500')} />
-                                                  </button>
-                                                ))}
+                                  const ciF = getDayFraction(booking.checkinTime);
+                                  const coF = getDayFraction(booking.checkoutTime);
+                                  const osRaw = differenceInDays(startOfDay(bCI), wS) + ciF;
+                                  const durRaw = differenceInDays(startOfDay(bCO), startOfDay(bCI)) + (coF - ciF);
+                                  const cOs = Math.max(0, osRaw);
+                                  const cDur = Math.min(osRaw + durRaw, DAYS) - cOs;
+                                  
+                                  return {
+                                    left: ROOM_COL + (cOs * COLUMN_WIDTH) + 1,
+                                    width: Math.max(4, (cDur * COLUMN_WIDTH) - 2)
+                                  };
+                                }
+                              };
+
+                              const layout = calculateLayout();
+                              if (!layout) return null;
+
+                              const isMonth = viewMode === 'month';
+                              const guest = getGuest(booking);
+                              const isBlock = booking.bookingType === 'block';
+                              const isEnquiry = booking.bookingType === 'enquiry';
+                              const isEditable = !isBlock && booking.status !== 'checked-out' && booking.status !== 'cancelled' && !isMonth;
+
+                              return (
+                                <motion.div
+                                  layout
+                                  layoutId={booking._id}
+                                  key={booking._id}
+                                  data-booking-card=""
+                                  className={cn(
+                                    'absolute overflow-hidden shadow-sm group/card border transition-all duration-300',
+                                    getStatusColor(booking.status, booking.bookingType),
+                                    isMonth ? 'rounded-md opacity-90' : 'rounded-[12px]',
+                                    isBlock ? 'border-2 border-dashed border-slate-500/40' : '',
+                                    isEnquiry ? 'border-2 border-dashed border-amber-500/60' : '',
+                                    isEditable ? 'hover:shadow-md hover:z-20' : 'opacity-80',
+                                    booking.groupId && hoveredGroupId === booking.groupId ? 'ring-2 ring-primary ring-offset-1 z-30 scale-[1.02] shadow-xl' : '',
+                                    hoveredGroupId && booking.groupId !== hoveredGroupId ? 'opacity-30 grayscale-[0.5]' : ''
+                                  )}
+                                  style={{ 
+                                    left: layout.left, 
+                                    top: isMonth ? 10 : 6, 
+                                    width: layout.width, 
+                                    height: isMonth ? ROW_HEIGHT - 20 : heightTotal, 
+                                    zIndex: booking.status === 'checked-in' ? 14 : (booking.groupId && hoveredGroupId === booking.groupId ? 40 : 12), 
+                                    cursor: isEditable ? 'grab' : 'pointer'
+                                  }}
+                                  onMouseEnter={() => booking.isGroup && booking.groupId && setHoveredGroupId(booking.groupId)}
+                                  onMouseLeave={() => setHoveredGroupId(null)}
+                                  onPointerDown={isEditable ? (e) => handleCardDragStart(e, booking) : undefined}
+                                  onClick={() => { if (!isDraggingRef.current && !isResizingRef.current) setSelectedBooking(booking); }}
+                                >
+                                  {!isMonth && (
+                                    <div className="flex flex-col h-full justify-between p-1.5 md:p-2 text-white">
+                                      <div className="flex justify-between items-start gap-1">
+                                         <div className="flex flex-col min-w-0">
+                                            {isBlock ? (
+                                              <div className="flex items-center gap-1">
+                                                <Lock className="h-2.5 w-2.5 opacity-80" />
+                                                <span className="font-bold leading-tight text-[8px] md:text-[9px] opacity-90 truncate">{booking.blockReason || 'Blocked'}</span>
                                               </div>
-                                            </PopoverContent>
-                                          </Popover>
-                                        </div>
-                                      )}
-                                   </div>
-                                   <span className="text-[7px] md:text-[8px] bg-black/10 px-1 py-0.5 rounded-sm font-semibold capitalize tracking-wide w-fit border border-white/10">{booking.status}</span>
-                                 </div>
-                                 {isEditable && (
-                                   <div className={cn("absolute right-0 top-0 bottom-0 cursor-ew-resize z-50 flex items-center justify-center w-3 opacity-0 group-hover/card:opacity-100 hover:bg-black/5")} onPointerDown={e => handleResizeDragStart(e as any, booking, room)}>
-                                     <div className="h-4 w-1 rounded-full bg-white/60" />
-                                   </div>
-                                 )}
-                               </motion.div>
-                             );
-                           });
+                                            ) : (
+                                              <div className="flex items-center gap-1.5">
+                                                {booking.isGroup && <span className="text-[10px]" title={`Group: ${booking.groupName}`}>🔗</span>}
+                                                <button className="font-black truncate text-left hover:underline leading-tight text-[10px] md:text-[11px]" onClick={e => { e.stopPropagation(); if (guest?._id) setSelectedGuestId(guest._id); else setSelectedBooking(booking); }}>
+                                                  {guest?.name || 'Guest'}
+                                                </button>
+                                              </div>
+                                            )}
+                                         </div>
+                                         {others.length > 0 && (
+                                           <div className="z-20 ml-auto" onClick={e => e.stopPropagation()}>
+                                             <Popover>
+                                               <PopoverTrigger asChild>
+                                                 <button className="bg-white/30 hover:bg-white/40 text-[8px] md:text-[9px] px-1.5 py-0.5 rounded-md font-bold shadow-sm active:scale-95">+{others.length}</button>
+                                               </PopoverTrigger>
+                                               <PopoverContent className="w-64 p-2 rounded-xl shadow-xl border z-[300]">
+                                                 <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 p-2 border-b">Others {others.length}</p>
+                                                 <div className="space-y-1 mt-1">
+                                                   {others.map(o => (
+                                                     <button key={o._id} className="w-full p-2 hover:bg-slate-50 rounded-lg text-left flex items-center justify-between group/o" onClick={() => setSelectedBooking(o)}>
+                                                       <span className="text-[10px] font-bold text-slate-900">{getGuest(o)?.name || 'Guest'}</span>
+                                                       <div className={cn("w-2 h-2 rounded-full", o.status === 'reserved' ? 'bg-emerald-500' : 'bg-blue-500')} />
+                                                     </button>
+                                                   ))}
+                                                 </div>
+                                               </PopoverContent>
+                                             </Popover>
+                                           </div>
+                                         )}
+                                      </div>
+                                      <div className="flex items-end justify-between gap-1">
+                                        {isEnquiry && booking.enquiryExpiresAt ? (
+                                          <span className="text-[7px] md:text-[8px] bg-amber-900/30 px-1.5 py-0.5 rounded-sm font-black w-fit border border-amber-200/20">
+                                            ⏱ {formatCountdown(booking.enquiryExpiresAt)}
+                                          </span>
+                                        ) : isDayUse ? (
+                                          <span className="text-[6px] md:text-[7px] bg-white/20 px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter">Day Use</span>
+                                        ) : (
+                                          <span className="text-[7px] md:text-[8px] bg-black/10 px-1 py-0.5 rounded-sm font-semibold capitalize tracking-wide w-fit border border-white/10 opacity-70">
+                                            {viewMode === 'today' ? `${booking.checkinTime} - ${booking.checkoutTime}` : (isBlock ? 'Blocked' : booking.status)}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                  {isEditable && (
+                                    <div className={cn("absolute right-0 top-0 bottom-0 cursor-ew-resize z-50 flex items-center justify-center w-3 opacity-0 group-hover/card:opacity-100 hover:bg-black/5")} onPointerDown={e => handleResizeDragStart(e, booking, room)}>
+                                      <div className="h-4 w-1 rounded-full bg-white/60" />
+                                    </div>
+                                  )}
+                                </motion.div>
+                              );
+                            });
 
                            const badgesJsx = Object.entries(cancelledByDay).map(([iso, count]) => {
                              const dD = new Date(iso);
@@ -972,7 +1170,7 @@ export function BookingBoard() {
       </div>
 
       <BookingModal isOpen={isModalOpen || !!editingBooking} onClose={() => { setIsModalOpen(false); setEditingBooking(null); }}
-        selectedRoomId={selectedRoomId} selectedDate={selectedDate} initialBooking={editingBooking} />
+        selectedRoomId={selectedRoomId} selectedDate={selectedDate} initialBooking={editingBooking || undefined} />
       <BookingDetailSheet booking={selectedBooking} onClose={() => setSelectedBooking(null)} onOpenGuest={(id) => setSelectedGuestId(id)} />
       <GuestProfileSheet 
         guestId={selectedGuestId} 

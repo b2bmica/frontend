@@ -13,6 +13,8 @@ export interface Room {
   baseOccupancy: number;
   maxOccupancy: number;
   extraPersonPrice: number;
+  defaultCheckinTime?: string;   // "HH:mm"
+  defaultCheckoutTime?: string;  // "HH:mm"
 }
 
 export interface Booking {
@@ -21,6 +23,8 @@ export interface Booking {
   guestId: any; // populated with guest data  
   checkin: string;
   checkout: string;
+  checkinTime?: string;   // "HH:mm"
+  checkoutTime?: string;  // "HH:mm"
   adults: number;
   children: number;
   roomPrice: number;
@@ -30,7 +34,16 @@ export interface Booking {
   bookingSource: string;
   paymentMethod?: string;
   paymentLogs?: Array<{ _id?: string; amount: number; method: string; date: string; note?: string }>;
-  status: 'reserved' | 'checked-in' | 'checked-out' | 'cancelled';
+  status: 'reserved' | 'checked-in' | 'checked-out' | 'cancelled' | 'blocked';
+  bookingType?: 'booking' | 'enquiry' | 'block';
+  enquiryExpiresAt?: string;  // ISO timestamp for auto-release
+  planType?: 'EP' | 'CP' | 'MAP' | 'AP' | 'Custom';
+  planCustomText?: string;
+  specialRequests?: string;
+  blockReason?: string;
+  isGroup?: boolean;
+  groupId?: string;
+  groupName?: string;
   createdAt?: string;
   updatedAt?: string;
   createdBy?: { name: string; email: string };

@@ -1,67 +1,97 @@
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
+import { Sheet, SheetContent } from './ui/sheet';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Separator } from './ui/separator';
-import { format, differenceInDays, isBefore, startOfDay } from 'date-fns';
+import { format, differenceInDays, isBefore } from 'date-fns';
 import { 
-  CalendarDays, 
   User, 
-  MapPin, 
   IndianRupee, 
   Clock, 
   ShieldCheck, 
-  Briefcase, 
   Users,
-  CreditCard,
-  Receipt,
   Printer,
   Trash2,
   CheckCircle2,
   ChevronRight,
-  Info,
   Loader2,
   X,
-  Pencil
+  Pencil,
+  Link as LinkIcon,
+  Timer
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/auth-context';
-import { useBookings } from '../context/booking-context';
-import { useState, useMemo } from 'react';
+import { useBookings, type Booking } from '../context/booking-context';
+import { useState, useMemo, useEffect } from 'react';
 import { BookingModal } from './booking-modal';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from './ui/dialog';
 
 interface BookingDetailSheetProps {
-  booking: any;
+  booking: Booking | null;
   onClose: () => void;
   onOpenGuest?: (id: string) => void;
 }
 
 export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDetailSheetProps) {
   const { hotel } = useAuth();
-  const { cancelBooking, checkIn, checkOut, updateBooking, rooms, updateRoomStatus } = useBookings();
+  const { cancelBooking, checkIn, checkOut, updateBooking, rooms, updateRoomStatus, bookings } = useBookings();
+  
   const [isActioning, setIsActioning] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPaymentSelection, setShowPaymentSelection] = useState(false);
   const [showBalanceSettle, setShowBalanceSettle] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi'>('cash');
   const [isSettled, setIsSettled] = useState(false);
   const [showDirtyRoomPrompt, setShowDirtyRoomPrompt] = useState(false);
+  const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi'>('cash');
+  const [groupActionLoading, setGroupActionLoading] = useState(false);
 
-  const bookingRoom = booking ? (typeof booking.roomId === 'object' ? booking.roomId : null) : null;
-  // Use live room from context for fresh status (dirty/clean/etc)
-  const liveRoom = bookingRoom ? rooms.find(r => r._id === bookingRoom._id) : null;
-  const room = liveRoom || bookingRoom; // prefer live, fallback to embedded
-  const guest = booking ? (typeof booking.guestId === 'object' ? booking.guestId : null) : null;
+  // Allow internal navigation for groups
+  // ─── Hooks (Must be above early return) ───────────────────────────────────
+  const currentBooking = activeBookingId ? bookings.find(b => b._id === activeBookingId) : booking;
+  const [now, setNow] = useState(Date.now());
 
-  // Tax Logic — useMemo so it recomputes when hotel data loads asynchronously
-  const { taxAmount, taxConfig, totalAmount, balance, subtotal, nights, roomPrice, baseSubtotal, extraAdults, extraPersonCharge } = useMemo(() => {
-    if (!booking) return { taxAmount: 0, taxConfig: undefined, totalAmount: 0, balance: 0, subtotal: 0, nights: 1, roomPrice: 0, baseSubtotal: 0, extraAdults: 0, extraPersonCharge: 0 };
-    const n = Math.max(1, differenceInDays(new Date(booking.checkout), new Date(booking.checkin)));
-    const rp = booking.roomPrice || room?.price || 0;
+  // Live countdown update
+  useEffect(() => {
+    if (!currentBooking?.enquiryExpiresAt) return;
+    const timer = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(timer);
+  }, [currentBooking?.enquiryExpiresAt]);
+
+  const bookingRoom = useMemo(() => {
+    if (!currentBooking) return null;
+    return typeof currentBooking.roomId === 'object' ? currentBooking.roomId : rooms.find(r => r._id === currentBooking.roomId);
+  }, [currentBooking, rooms]);
+
+  const liveRoom = useMemo(() => bookingRoom ? rooms.find(r => r._id === bookingRoom._id) : null, [bookingRoom, rooms]);
+  const room = liveRoom || bookingRoom; 
+  const guest = useMemo(() => {
+    if (!currentBooking) return null;
+    return typeof currentBooking.guestId === 'object' ? currentBooking.guestId : null;
+  }, [currentBooking]);
+
+  const sortedGroupRooms = useMemo(() => {
+    if (!currentBooking?.isGroup || !currentBooking.groupId) return [];
+    return bookings
+      .filter(b => b.groupId === currentBooking.groupId)
+      .sort((a, b) => {
+        const rA = typeof a.roomId === 'object' ? a.roomId.roomNumber : rooms.find(r => r._id === a.roomId)?.roomNumber || '';
+        const rB = typeof b.roomId === 'object' ? b.roomId.roomNumber : rooms.find(r => r._id === b.roomId)?.roomNumber || '';
+        return rA.localeCompare(rB, undefined, { numeric: true });
+      });
+  }, [currentBooking, bookings, rooms]);
+
+  const expiryTime = currentBooking?.enquiryExpiresAt ? new Date(currentBooking.enquiryExpiresAt) : null;
+  const isEnquiryExpired = expiryTime ? isBefore(expiryTime, now) : false;
+
+  const priceStats = useMemo(() => {
+    if (!currentBooking) return { taxAmount: 0, totalAmount: 0, balance: 0, subtotal: 0, nights: 0, roomPrice: 0, baseSubtotal: 0, extraAdults: 0, extraPersonCharge: 0 };
+    const n = Math.max(1, differenceInDays(new Date(currentBooking.checkout), new Date(currentBooking.checkin)));
+    const rp = currentBooking.roomPrice || room?.price || 0;
     const bs = rp * n;
-    const ea = Math.max(0, (booking.adults || 0) - (booking.baseOccupancy || 2));
-    const ep = ea * (booking.extraPersonPrice || 0) * n;
+    const ea = Math.max(0, (currentBooking.adults || 0) - (currentBooking.baseOccupancy || 2));
+    const ep = ea * (currentBooking.extraPersonPrice || 0) * n;
     const sub = bs + ep;
     const tc = hotel?.settings?.taxConfig;
     let tax = 0;
@@ -69,39 +99,62 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
       tax = (sub * (tc.cgst || 0) / 100) + (sub * (tc.sgst || 0) / 100);
     }
     const total = sub + tax;
-    return { taxAmount: tax, taxConfig: tc, totalAmount: total, balance: total - (booking.advancePayment || 0), subtotal: sub, nights: n, roomPrice: rp, baseSubtotal: bs, extraAdults: ea, extraPersonCharge: ep };
-  }, [booking, hotel, room]);
+    return { 
+      taxAmount: tax, 
+      totalAmount: total, 
+      balance: total - (currentBooking.advancePayment || 0), 
+      subtotal: sub,
+      nights: n,
+      roomPrice: rp,
+      baseSubtotal: bs,
+      extraAdults: ea,
+      extraPersonCharge: ep
+    };
+  }, [currentBooking, room, hotel?.settings?.taxConfig]);
 
-  if (!booking) return null;
+  const { taxAmount, totalAmount, balance, nights, roomPrice, baseSubtotal, extraAdults, extraPersonCharge } = priceStats;
 
-  const statusConfig: Record<string, { color: string; bgColor: string; icon: any; label: string }> = {
+  const statusConfig: Record<string, { color: string; bgColor: string; icon: React.ElementType; label: string }> = {
     'reserved':    { color: 'text-emerald-600', bgColor: 'bg-emerald-500/10', icon: Clock, label: 'Reserved' },
     'checked-in':  { color: 'text-blue-600', bgColor: 'bg-blue-500/10', icon: ShieldCheck, label: 'Checked In' },
     'checked-out': { color: 'text-orange-600', bgColor: 'bg-orange-500/10', icon: CheckCircle2, label: 'Checked Out' },
     'cancelled':   { color: 'text-red-600', bgColor: 'bg-red-500/10', icon: Trash2, label: 'Cancelled' },
   };
 
-  const config = statusConfig[booking.status] || statusConfig.reserved;
-
-
+  const config = currentBooking ? (statusConfig[currentBooking.status] || statusConfig.reserved) : statusConfig.reserved;
 
   const handleAction = async (action: (id: string) => Promise<void>, isSettlement?: boolean) => {
+    if (!currentBooking) return;
     setIsActioning(true);
     try {
-      await action(booking._id);
+      await action(currentBooking._id);
       if (isSettlement) {
         setIsSettled(true);
         await new Promise(r => setTimeout(r, 1500));
       }
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
     }
     setIsActioning(false);
     setIsSettled(false);
   };
 
-  // updateRoomStatus already destructured from useBookings above
+  const bookingData = currentBooking;
+
+  if (!bookingData) return null;
+
+  const handleBulkAction = async (action: (id: string) => Promise<void>, targetBookings: Booking[]) => {
+    setGroupActionLoading(true);
+    try {
+      await Promise.all(targetBookings.map(b => action(b._id)));
+      onClose();
+    } catch (err: unknown) {
+      console.error(err);
+    } finally {
+      setGroupActionLoading(false);
+    }
+  };
 
   const handleInitialCheckIn = () => {
     if (room?.status === 'dirty') {
@@ -112,28 +165,102 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
   };
 
   const handleCheckInWithCleanup = async () => {
+    if (!currentBooking) return;
     setShowDirtyRoomPrompt(false);
     setIsActioning(true);
     try {
-      // Step 1: Clean the room
-      await updateRoomStatus(room._id, 'clean');
-      // Step 2: Check in
-      await checkIn(booking._id);
+      if (room?._id) await updateRoomStatus(room._id, 'clean');
+      await checkIn(bookingData._id);
       onClose();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
     }
     setIsActioning(false);
   };
 
+  const formatCountdownStr = (expiresAt: string): string => {
+    const ms = new Date(expiresAt).getTime() - now;
+    if (ms <= 0) return 'Expired';
+    const totalMins = Math.floor(ms / 60000);
+    const h = Math.floor(totalMins / 60);
+    const m = totalMins % 60;
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  };
+
+  const taxConfig = hotel?.settings?.taxConfig;
+
   return (
-    <Sheet open={!!booking} onOpenChange={() => onClose()}>
+    <Sheet open={!!booking} onOpenChange={() => { onClose(); setActiveBookingId(null); }}>
       <SheetContent className="w-full sm:max-w-md p-0 overflow-hidden flex flex-col border-none shadow-2xl">
         {/* Compact Header */}
         <div className="p-6 border-b bg-muted/20">
+          {bookingData.isGroup && (
+            <div className="mb-4 p-3 bg-primary/5 rounded-2xl border border-primary/10">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <LinkIcon className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Group Booking</span>
+                </div>
+                <div className="flex gap-1">
+                   {/* Group Bulk Actions Trigger */}
+                   {bookingData.status === 'reserved' && (
+                     <Button size="icon" variant="ghost" className="h-6 w-6 rounded-md hover:bg-emerald-100 hover:text-emerald-700" title="Check-in All" onClick={() => handleBulkAction(checkIn, sortedGroupRooms.filter(b => b.status === 'reserved'))}>
+                       <ShieldCheck className="h-3.5 w-3.5" />
+                     </Button>
+                   )}
+                   {bookingData.status === 'checked-in' && balance <= 0 && (
+                     <Button size="icon" variant="ghost" className="h-6 w-6 rounded-md hover:bg-blue-100 hover:text-blue-700" title="Checkout All" onClick={() => handleBulkAction(checkOut, sortedGroupRooms.filter(b => b.status === 'checked-in'))}>
+                       <CheckCircle2 className="h-3.5 w-3.5" />
+                     </Button>
+                   )}
+                </div>
+              </div>
+              <h3 className="text-sm font-black text-slate-800 mb-2 truncate" title={bookingData.groupName}>{bookingData.groupName}</h3>
+              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                {sortedGroupRooms.map(gb => {
+                  const rNum = typeof gb.roomId === 'object' ? gb.roomId.roomNumber : rooms.find(r => r._id === gb.roomId)?.roomNumber;
+                  const isActive = (activeBookingId === gb._id) || (!activeBookingId && gb._id === booking?._id);
+                  return (
+                    <button
+                      key={gb._id}
+                      onClick={() => setActiveBookingId(gb._id)}
+                      className={cn(
+                        "px-2 py-1 rounded-lg text-[10px] font-black border-2 transition-all shrink-0",
+                        isActive
+                          ? "bg-primary text-white border-primary shadow-sm"
+                          : "bg-white text-slate-400 border-slate-100 hover:border-primary/30 hover:text-primary"
+                      )}
+                    >
+                      Room {rNum}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {bookingData.bookingType === 'enquiry' && (
+            <div className={cn("mb-4 p-3 rounded-2xl border flex items-center justify-between", isEnquiryExpired ? "bg-red-50 border-red-100" : "bg-amber-50 border-amber-100")}>
+              <div className="flex items-center gap-2">
+                <Timer className={cn("h-4 w-4", isEnquiryExpired ? "text-red-500" : "text-amber-500")} />
+                <div>
+                  <p className={cn("text-[9px] font-black uppercase tracking-widest", isEnquiryExpired ? "text-red-600" : "text-amber-600")}>
+                    {isEnquiryExpired ? 'Expired Hold' : 'Tentative Hold'}
+                  </p>
+                  <p className="text-[10px] font-bold text-slate-500">
+                    Auto-release in: <span className="text-slate-900">{formatCountdownStr(bookingData.enquiryExpiresAt!)}</span>
+                  </p>
+                </div>
+              </div>
+              {!isEnquiryExpired && (
+                <Badge className="bg-amber-500 text-white font-black text-[9px] animate-pulse">LIVE</Badge>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-between mb-4">
             <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 border-primary/20 text-primary">
-              Ref: #{booking._id?.slice(-6).toUpperCase()}
+              Ref: #{bookingData._id?.slice(-6).toUpperCase()}
             </Badge>
             <div className={cn("px-2.5 py-0.5 rounded-full text-[10px] font-black capitalize tracking-tighter flex items-center gap-1.5", config.color, config.bgColor)}>
               <config.icon className="h-3 w-3" /> {config.label}
@@ -147,111 +274,22 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
             </div>
             <div className="flex flex-col gap-0.5">
               <p className="text-muted-foreground font-medium text-xs flex items-center gap-2">
-                Stay Duration: {nights} Night{nights > 1 ? 's' : ''} • {format(new Date(booking.checkin), 'MMM dd')} - {format(new Date(booking.checkout), 'MMM dd')}
+                Stay Duration: {nights} Night{nights > 1 ? 's' : ''} • {format(new Date(bookingData.checkin), 'MMM dd')} - {format(new Date(bookingData.checkout), 'MMM dd')}
               </p>
                 <div className="text-[10px] font-bold text-slate-300 uppercase tracking-widest flex items-center gap-x-4 gap-y-1 flex-wrap mt-2 pt-2 border-t border-slate-100">
-                  {booking.createdAt && (
+                  {bookingData.createdAt && (
                     <div className="flex items-center gap-1.5 opacity-80">
-                      <Clock className="h-2.5 w-2.5" /> Booked: {format(new Date(booking.createdAt), 'dd MMM, HH:mm')}
+                      <Clock className="h-2.5 w-2.5" /> Booked: {format(new Date(bookingData.createdAt), 'dd MMM, HH:mm')}
                     </div>
                   )}
-                  {booking.createdBy && (
+                  {bookingData.createdBy && (
                     <div className="flex items-center gap-1.5 text-slate-500 font-extrabold">
                       <ShieldCheck className="h-3 w-3 text-primary/60" /> 
-                      Staff: <span className="text-slate-900">{typeof booking.createdBy === 'object' ? booking.createdBy.name : 'System'}</span>
+                      Staff: <span className="text-slate-900">{typeof bookingData.createdBy === 'object' ? bookingData.createdBy.name : 'System'}</span>
                     </div>
                   )}
                 </div>
             </div>
-          </div>
-        </div>
-        
-        {/* Printable Receipt (Hidden in UI, Visible in Print) */}
-        <div className="hidden print:block p-8 text-black bg-white min-h-screen font-sans">
-          <div className="flex justify-between items-start mb-8 border-b-2 border-slate-900 pb-6">
-            <div>
-              <h1 className="text-3xl font-black uppercase tracking-tighter">{hotel?.name || 'Hotel Receipt'}</h1>
-              <p className="text-sm font-bold text-slate-500">{hotel?.address || 'Property Address'}</p>
-              <p className="text-[10px] font-black uppercase tracking-widest mt-1">GSTIN: {hotel?.gstin || 'N/A'}</p>
-            </div>
-            <div className="text-right">
-              <div className="inline-block bg-slate-900 text-white px-3 py-1 text-[10px] font-black uppercase tracking-widest mb-2">Invoice</div>
-              <p className="text-xs font-bold text-slate-500">#{booking._id?.slice(-8).toUpperCase()}</p>
-              <p className="text-[10px] font-black uppercase text-slate-400 mt-1">{format(new Date(), 'PPPP')}</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-12 mb-10">
-            <div className="space-y-2">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 border-b border-slate-100 pb-1">Client Details</p>
-              <p className="text-lg font-black tracking-tight">{guest?.name}</p>
-              <p className="text-xs font-bold text-slate-600">{guest?.phone}</p>
-              <p className="text-xs font-bold text-slate-600">{guest?.email}</p>
-            </div>
-            <div className="space-y-2">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 border-b border-slate-100 pb-1">Stay Period</p>
-              <p className="text-lg font-black tracking-tight truncate">Room {room?.roomNumber} ({room?.roomType})</p>
-              <p className="text-xs font-bold text-slate-600">{format(new Date(booking.checkin), 'MMM dd, yyyy')} — {format(new Date(booking.checkout), 'MMM dd, yyyy')}</p>
-              <p className="text-xs font-bold text-slate-600">{nights} Night{nights > 1 ? 's' : ''} Stay</p>
-            </div>
-          </div>
-
-          <table className="w-full mb-10">
-            <thead>
-              <tr className="border-b-2 border-slate-900 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                <th className="text-left py-3">Description</th>
-                <th className="text-right py-3">Rate</th>
-                <th className="text-right py-3">Qty</th>
-                <th className="text-right py-3">Total</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              <tr className="text-sm font-bold">
-                <td className="py-4">Room Accommodation ({room?.roomType})</td>
-                <td className="text-right py-4">₹{roomPrice.toLocaleString()}</td>
-                <td className="text-right py-4">{nights}</td>
-                <td className="text-right py-4">₹{baseSubtotal.toLocaleString()}</td>
-              </tr>
-              {extraAdults > 0 && (
-                <tr className="text-sm font-bold">
-                  <td className="py-4">Extra Adult Charges</td>
-                  <td className="text-right py-4">₹{booking.extraPersonPrice?.toLocaleString()}</td>
-                  <td className="text-right py-4">{extraAdults * nights}</td>
-                  <td className="text-right py-4">₹{extraPersonCharge.toLocaleString()}</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-
-          <div className="flex justify-end">
-            <div className="w-64 space-y-3">
-              <div className="flex justify-between text-xs font-bold text-slate-500 uppercase">
-                <span>Subtotal</span>
-                <span>₹{subtotal.toLocaleString()}</span>
-              </div>
-              {taxConfig?.enabled && taxConfig.cgst !== undefined && taxConfig.sgst !== undefined && (
-                <div className="flex justify-between text-xs font-bold text-slate-500 uppercase">
-                  <span>GST ({taxConfig.cgst + taxConfig.sgst}%)</span>
-                  <span>₹{taxAmount.toLocaleString()}</span>
-                </div>
-              )}
-              <div className="flex justify-between text-lg font-black border-t-2 border-slate-900 pt-3">
-                <span>Total</span>
-                <span>₹{totalAmount.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-xs font-bold text-emerald-600 pt-1">
-                <span className="uppercase tracking-widest">Amount Paid</span>
-                <span>- ₹{(booking.advancePayment || 0).toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-base font-black border-t border-slate-100 pt-2 text-primary">
-                <span>Balance Due</span>
-                <span>₹{balance.toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-20 pt-10 border-t border-slate-100 text-[9px] font-bold text-slate-400 text-center uppercase tracking-[0.3em]">
-            Thank you for staying at {hotel?.name}
           </div>
         </div>
 
@@ -289,20 +327,20 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                 </div>
                 {extraAdults > 0 && (
                   <div className="flex justify-between text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                    <span>Extra Person ({extraAdults} × ₹{booking.extraPersonPrice})</span>
+                    <span>Extra Person ({extraAdults} × ₹{bookingData.extraPersonPrice})</span>
                     <span className="text-foreground">+ ₹{extraPersonCharge.toLocaleString()}</span>
                   </div>
                 )}
-                {taxConfig?.enabled && taxConfig.cgst !== undefined && taxConfig.sgst !== undefined && (
+                {taxConfig?.enabled && (
                   <div className="flex justify-between text-[11px] font-bold text-orange-600 uppercase tracking-wider">
                     <span>GST (CGST {taxConfig.cgst}% + SGST {taxConfig.sgst}%)</span>
                     <span>+ ₹{taxAmount.toLocaleString()}</span>
                   </div>
                 )}
-                {booking.advancePayment > 0 && (
+                {bookingData.advancePayment > 0 && (
                   <div className="flex justify-between text-[11px] font-bold text-emerald-600 uppercase tracking-wider">
                     <span>Advance Payment</span>
-                    <span>- ₹{booking.advancePayment.toLocaleString()}</span>
+                    <span>- ₹{bookingData.advancePayment.toLocaleString()}</span>
                   </div>
                 )}
               </div>
@@ -337,7 +375,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                         ) : isActioning ? (
                           <div className="flex items-center gap-3 px-3 py-1 text-white pr-4">
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            <span className="text-[9px] font-black uppercase tracking-widest opacity-80 whitespace-nowrap">Processing Payment...</span>
+                            <span className="text-[9px] font-black uppercase tracking-widest opacity-80 whitespace-nowrap">Processing...</span>
                           </div>
                         ) : (
                           <>
@@ -346,10 +384,10 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                                 <button
                                   key={m}
                                   onClick={() => {
-                                    setPaymentMethod(m as any);
+                                    setPaymentMethod(m as 'cash' | 'card' | 'upi');
                                     handleAction((id) => updateBooking(id, { 
-                                      advancePayment: (booking.advancePayment || 0) + balance,
-                                      paymentMethod: m
+                                      advancePayment: (bookingData.advancePayment || 0) + balance,
+                                      paymentMethod: m as 'cash' | 'card' | 'upi'
                                     }), true);
                                   }}
                                   className="h-6 px-3 text-[8px] font-black uppercase rounded-md transition-all active:scale-95 bg-white text-emerald-600 shadow-sm hover:bg-white/90"
@@ -378,49 +416,43 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
             </div>
           </div>
 
-          {/* Quick Metrics */}
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3 rounded-2xl bg-muted/30 border border-primary/5 flex items-center gap-3">
               <div className="p-2 rounded-lg bg-background text-primary"><Users className="h-4 w-4" /></div>
-              <div><p className="text-[8px] font-black uppercase text-muted-foreground">Occupancy</p><p className="text-xs font-black">{booking.adults} Ad / {booking.children} Ch</p></div>
+              <div><p className="text-[8px] font-black uppercase text-muted-foreground">Occupancy</p><p className="text-xs font-black">{bookingData.adults} Ad / {bookingData.children} Ch</p></div>
             </div>
             <div className="p-3 rounded-2xl bg-muted/30 border border-primary/5 flex items-center gap-3">
               <div className="p-2 rounded-lg bg-background text-primary"><IndianRupee className="h-4 w-4" /></div>
-              <div><p className="text-[8px] font-black uppercase text-muted-foreground">Source</p><p className="text-xs font-black capitalize">{booking.bookingSource}</p></div>
+              <div><p className="text-[8px] font-black uppercase text-muted-foreground">Source</p><p className="text-xs font-black capitalize">{bookingData.bookingSource}</p></div>
             </div>
           </div>
         </div>
 
-        {/* Action Panel - Optimized Layout */}
+        {/* Action Panel */}
         <div className="p-4 bg-white border-t flex flex-col gap-2 relative z-10 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.03)]">
           <div className="flex items-stretch gap-2 w-full h-11">
-            {/* Edit Button - Always visible for active bookings */}
-            {(booking.status === 'reserved' || booking.status === 'checked-in') && (
+            {(bookingData.status === 'reserved' || bookingData.status === 'checked-in') && (
               <Button 
                 variant="outline"
                 className="w-11 h-11 p-0 rounded-xl border-2 text-slate-400 border-slate-100 hover:border-slate-300 hover:text-slate-600 transition-all active:scale-95 shrink-0"
                 onClick={() => setShowEditModal(true)}
-                title="Edit Booking"
               >
                 <Pencil className="h-4 w-4" />
               </Button>
             )}
             
-            {/* Check-in Action */}
-            {booking.status === 'reserved' && (
+            {bookingData.status === 'reserved' && (
               <Button 
                 className="flex-1 h-full rounded-xl font-black bg-blue-600 hover:bg-blue-700 text-[11px] uppercase tracking-wider shadow-lg shadow-blue-500/20 transition-all active:scale-95"
                 onClick={handleInitialCheckIn}
-                disabled={isActioning || isBefore(new Date(), startOfDay(new Date(booking.checkin)))}
-                title={isBefore(new Date(), startOfDay(new Date(booking.checkin))) ? `Check-in will be enabled on ${format(new Date(booking.checkin), 'MMM dd, yyyy')}` : undefined}
+                disabled={isActioning}
               >
                 {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                {isBefore(new Date(), startOfDay(new Date(booking.checkin))) ? 'Check-in Locked' : 'Check-in Guest'}
+                Check-in Guest
               </Button>
             )}
 
-            {/* Settle & Checkout Action */}
-            {booking.status === 'checked-in' && (
+            {bookingData.status === 'checked-in' && (
               <div className="flex-1 flex gap-2 min-w-0">
                 {!showPaymentSelection ? (
                     <Button 
@@ -439,12 +471,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                         }
                       }}
                     >
-                      {balance <= 0 ? (
-                        <div className="flex items-center gap-2">
-                           <CheckCircle2 className="h-4 w-4 shrink-0" />
-                           Checkout
-                        </div>
-                      ) : 'Settle & Checkout'}
+                      {balance <= 0 ? 'Checkout Now' : 'Settle & Checkout'}
                     </Button>
                 ) : (
                   <div className={cn(
@@ -453,26 +480,24 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                   )}>
                     {isSettled ? (
                       <div className="flex items-center gap-3 text-xs font-black uppercase tracking-widest py-2">
-                        <CheckCircle2 className="h-5 w-5" /> Settled & Checked Out
+                        <CheckCircle2 className="h-5 w-5" /> Account Settled
                       </div>
                     ) : isActioning ? (
                       <div className="flex items-center gap-3 px-4 py-2 text-white">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Syncing Records...</span>
+                        <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Processing...</span>
                       </div>
                     ) : (
                       <>
-                        <span className="text-[10px] font-black text-white uppercase tracking-tighter whitespace-nowrap ml-3">Mode:</span>
-                        <div className="flex bg-white/20 rounded-lg p-0.5 gap-0.5 shrink-0 relative overflow-hidden">
+                        <div className="flex bg-white/20 rounded-lg p-0.5 gap-0.5 shrink-0 relative overflow-hidden ml-3">
                           {['cash', 'card', 'upi'].map((m) => (
                             <button
                               key={m}
                               onClick={() => {
-                                setPaymentMethod(m as any);
                                 handleAction((id) => updateBooking(id, { 
                                   status: 'checked-out', 
                                   advancePayment: totalAmount,
-                                  paymentMethod: m 
+                                  paymentMethod: m as 'cash' | 'card' | 'upi'
                                 }), true);
                               }}
                               className="h-7 px-3 text-[9px] font-black uppercase rounded-md transition-all active:scale-95 bg-white text-orange-600 shadow-sm hover:bg-white/90"
@@ -481,12 +506,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                             </button>
                           ))}
                         </div>
-                        <button 
-                          onClick={() => setShowPaymentSelection(false)} 
-                          className="text-white/60 hover:text-white transition-colors ml-auto mr-3"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
+                        <button onClick={() => setShowPaymentSelection(false)} className="text-white/60 hover:text-white ml-auto mr-3"><X className="h-4 w-4" /></button>
                       </>
                     )}
                   </div>
@@ -494,84 +514,41 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
               </div>
             )}
 
-            {/* Print Button */}
-            <Button 
-              variant="outline" 
-              className={cn(
-                "h-full rounded-xl border-2 flex items-center justify-center gap-2 font-black transition-all shrink-0 active:scale-95",
-                booking.status === 'checked-out' ? "flex-1 bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-900/20 hover:bg-slate-800" : "w-11 p-0 text-slate-400 border-slate-100 hover:border-slate-300"
-              )}
-              onClick={() => window.print()}
-              title="Print Receipt"
-            >
-              <Printer className={cn("h-4 w-4", booking.status === 'checked-out' ? "text-white" : "text-slate-500")} />
-              {booking.status === 'checked-out' && <span className="text-[11px] uppercase tracking-widest">Print Receipt</span>}
+            <Button variant="outline" className="h-11 px-4 rounded-xl border-2 flex items-center justify-center gap-2 font-black active:scale-95" onClick={() => window.print()}>
+              <Printer className="h-4 w-4" />
             </Button>
 
-            {/* Cancel Booking Button */}
-            {booking.status !== 'cancelled' && booking.status !== 'checked-out' && !showPaymentSelection && (
+            {bookingData.status !== 'cancelled' && bookingData.status !== 'checked-out' && !showPaymentSelection && (
               <Button 
                 variant="outline" 
-                className="h-full px-4 rounded-xl border-2 border-red-50 text-red-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200 shrink-0 transition-all active:scale-95 text-[10px] font-black uppercase tracking-widest"
+                className="h-11 px-4 rounded-xl border-2 border-red-50 text-red-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200 shrink-0 transition-all active:scale-95 text-[10px] font-black uppercase"
                 onClick={() => setShowCancelConfirm(true)}
-                disabled={isActioning}
               >
                 Cancel
               </Button>
             )}
           </div>
         </div>
-        <BookingModal 
-          isOpen={showEditModal} 
-          onClose={() => setShowEditModal(false)} 
-          initialBooking={booking} 
-        />
 
-        {/* Cancel Confirmation Dialog */}
+        <BookingModal isOpen={showEditModal} onClose={() => setShowEditModal(false)} initialBooking={bookingData || undefined} />
+
+        {/* Dialogs */}
         <Dialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
-          <DialogContent className="sm:max-w-[360px] rounded-2xl border-none shadow-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-lg font-black tracking-tight">Cancel Booking?</DialogTitle>
-              <DialogDescription className="text-sm text-muted-foreground font-medium">
-                This will cancel the reservation for <span className="font-bold text-foreground">{typeof booking.guestId === 'object' ? booking.guestId?.name : 'this guest'}</span> in Room <span className="font-bold text-foreground">{typeof booking.roomId === 'object' ? booking.roomId?.roomNumber : ''}</span>. This action cannot be undone.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter className="gap-2 pt-2">
-              <Button variant="outline" className="rounded-xl font-bold flex-1" onClick={() => setShowCancelConfirm(false)} disabled={isActioning}>
-                Keep Booking
-              </Button>
-              <Button
-                className="rounded-xl font-bold flex-1 bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-500/20"
-                onClick={() => { setShowCancelConfirm(false); handleAction(cancelBooking); }}
-                disabled={isActioning}
-              >
-                {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Yes, Cancel'}
-              </Button>
+          <DialogContent className="sm:max-w-[360px] rounded-2xl">
+            <DialogHeader><DialogTitle className="font-black">Cancel Booking?</DialogTitle><DialogDescription>This action cannot be undone.</DialogDescription></DialogHeader>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setShowCancelConfirm(false)}>Keep It</Button>
+              <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={() => { setShowCancelConfirm(false); handleAction(cancelBooking); }}>Yes, Cancel</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        {/* Dirty Room Confirmation */}
+
         <Dialog open={showDirtyRoomPrompt} onOpenChange={setShowDirtyRoomPrompt}>
-          <DialogContent className="sm:max-w-[360px] rounded-2xl border-none shadow-2xl">
-            <DialogHeader>
-              <div className="mx-auto w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center mb-2">
-                <Info className="h-6 w-6 text-amber-600" />
-              </div>
-              <DialogTitle className="text-lg font-black tracking-tight text-center">Room is still Dirty</DialogTitle>
-              <DialogDescription className="text-sm text-muted-foreground font-medium text-center">
-                Room <span className="font-bold text-foreground">{room?.roomNumber}</span> is currently marked as dirty. Would you like to mark it as <span className="text-emerald-600 font-bold">Clean</span> and proceed with Check-in?
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-2">
-              <Button variant="ghost" className="rounded-xl font-bold flex-1 order-2 sm:order-1" onClick={() => setShowDirtyRoomPrompt(false)}>
-                Cancel
-              </Button>
-              <Button
-                className="rounded-xl font-bold flex-1 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20 order-1 sm:order-2"
-                onClick={handleCheckInWithCleanup}
-              >
-                Mark Clean & Check-in
-              </Button>
+          <DialogContent className="sm:max-w-[360px] rounded-2xl">
+            <DialogHeader><DialogTitle className="font-black text-center">Room is Dirty</DialogTitle><DialogDescription className="text-center">Would you like to mark it as clean and proceed?</DialogDescription></DialogHeader>
+            <DialogFooter className="gap-2">
+              <Button variant="ghost" onClick={() => setShowDirtyRoomPrompt(false)}>No</Button>
+              <Button className="bg-emerald-600 text-white" onClick={handleCheckInWithCleanup}>Mark Clean & Check-in</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

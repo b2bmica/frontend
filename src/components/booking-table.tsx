@@ -550,7 +550,7 @@ export function BookingTable() {
       <BookingModal 
         isOpen={!!editingBooking} 
         onClose={() => setEditingBooking(null)} 
-        initialBooking={editingBooking} 
+        initialBooking={editingBooking || undefined} 
       />
       <GuestProfileSheet 
         guestId={selectedGuestId} 

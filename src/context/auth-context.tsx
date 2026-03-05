@@ -27,6 +27,11 @@ interface Hotel {
       igst: number;
       hsnCode: string;
     };
+    mealRates?: {
+      CP?: number;
+      MAP?: number;
+      AP?: number;
+    };
   };
   status?: 'active' | 'deleted';
   deletedAt?: string;

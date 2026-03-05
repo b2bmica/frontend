@@ -43,6 +43,8 @@ const defaultForm = {
   maxOccupancy: 4,
   extraPersonPrice: 0,
   amenities: [] as string[],
+  defaultCheckinTime: '14:00',
+  defaultCheckoutTime: '11:00',
 };
 
 export function RoomInventory() {
@@ -102,6 +104,8 @@ export function RoomInventory() {
       maxOccupancy: room.maxOccupancy || 4,
       extraPersonPrice: room.extraPersonPrice || 0,
       amenities: room.amenities || [],
+      defaultCheckinTime: room.defaultCheckinTime || '14:00',
+      defaultCheckoutTime: room.defaultCheckoutTime || '11:00',
     });
     setError(null);
     setIsOpen(true);
@@ -303,6 +307,16 @@ export function RoomInventory() {
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-black text-sm">₹</span>
                   <Input type="number" className="h-11 rounded-xl pl-7 font-bold" value={form.extraPersonPrice} onChange={e => setForm({ ...form, extraPersonPrice: Number(e.target.value) })} />
                 </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 underline underline-offset-4">Default Check-in Time</Label>
+                <Input type="time" className="h-11 rounded-xl font-bold" value={form.defaultCheckinTime} onChange={e => setForm({ ...form, defaultCheckinTime: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 underline underline-offset-4">Default Check-out Time</Label>
+                <Input type="time" className="h-11 rounded-xl font-bold" value={form.defaultCheckoutTime} onChange={e => setForm({ ...form, defaultCheckoutTime: e.target.value })} />
               </div>
             </div>
             <div className="space-y-1.5">

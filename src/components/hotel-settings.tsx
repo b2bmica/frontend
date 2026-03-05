@@ -19,7 +19,8 @@ import {
   Loader2,
   CheckCircle2,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Utensils
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -47,6 +48,11 @@ export function HotelSettings() {
         sgst: hotel?.settings?.taxConfig?.sgst ?? 6,
         igst: hotel?.settings?.taxConfig?.igst ?? 12,
         hsnCode: hotel?.settings?.taxConfig?.hsnCode || '9963'
+      },
+      mealRates: {
+        CP: hotel?.settings?.mealRates?.CP || 350,
+        MAP: hotel?.settings?.mealRates?.MAP || 650,
+        AP: hotel?.settings?.mealRates?.AP || 950,
       }
     }
   });
@@ -249,6 +255,60 @@ export function HotelSettings() {
                 <div className="relative">
                   <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input className="pl-10" value={form.settings.currency} readOnly />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-md">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Utensils className="h-5 w-5 text-primary" />
+                <CardTitle>Meal Plan Rates</CardTitle>
+              </div>
+              <CardDescription>Daily rates per person for different stay plans.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label className="flex justify-between">
+                  CP <span className="text-[10px] text-muted-foreground">(Room + Breakfast)</span>
+                </Label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input 
+                    type="number" 
+                    className="pl-8" 
+                    value={form.settings.mealRates.CP} 
+                    onChange={e => setForm({...form, settings: {...form.settings, mealRates: {...form.settings.mealRates, CP: parseFloat(e.target.value) || 0}}})} 
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex justify-between">
+                  MAP <span className="text-[10px] text-muted-foreground">(B + Dinner)</span>
+                </Label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input 
+                    type="number" 
+                    className="pl-8" 
+                    value={form.settings.mealRates.MAP} 
+                    onChange={e => setForm({...form, settings: {...form.settings, mealRates: {...form.settings.mealRates, MAP: parseFloat(e.target.value) || 0}}})} 
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex justify-between">
+                  AP <span className="text-[10px] text-muted-foreground">(All Meals)</span>
+                </Label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input 
+                    type="number" 
+                    className="pl-8" 
+                    value={form.settings.mealRates.AP} 
+                    onChange={e => setForm({...form, settings: {...form.settings, mealRates: {...form.settings.mealRates, AP: parseFloat(e.target.value) || 0}}})} 
+                  />
                 </div>
               </div>
             </CardContent>
