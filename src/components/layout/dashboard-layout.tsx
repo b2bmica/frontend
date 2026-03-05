@@ -1,20 +1,34 @@
 import * as React from "react"
-import { Bell, LogOut, Settings, Wrench, Plus } from "lucide-react"
+import { Bell, LogOut, Settings, Plus, Building2, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { AppSidebar } from "@/components/app-sidebar"
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
 import { useAuth } from "@/context/auth-context"
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuLabel, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
+import { Link, useLocation } from "react-router-dom"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Bed, Calendar, LayoutDashboard, Wrench, Home,
+  BookOpen, BarChart3, Wallet, Users,
+} from "lucide-react"
+
+const navItems = [
+  { title: "Calendar", id: "board", icon: Calendar },
+  { title: "Bookings", id: "bookings", icon: BookOpen },
+  { title: "Guests", id: "guests", icon: Users },
+  { title: "Housekeeping", id: "housekeeping", icon: Home },
+  { title: "Maintenance", id: "maintenance", icon: Wrench },
+  { title: "Rooms", id: "rooms", icon: Bed },
+  { title: "Reports", id: "reports", icon: BarChart3 },
+  { title: "Overview", id: "overview", icon: LayoutDashboard },
+  { title: "Folio", id: "folio", icon: Wallet },
+]
 
 export default function DashboardLayout({
   children,
@@ -26,49 +40,70 @@ export default function DashboardLayout({
   onTabChange?: (tab: string) => void
 }) {
   const { user, hotel, logout } = useAuth()
+  const location = useLocation()
   const initials = user?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || 'U'
 
+  const pathSegments = location.pathname.split('/').filter(Boolean)
+  const dashboardIndex = pathSegments.indexOf('dashboard')
+  const currentTab = dashboardIndex !== -1 && pathSegments[dashboardIndex + 1]
+    ? pathSegments[dashboardIndex + 1]
+    : 'board'
+
   return (
-    <SidebarProvider style={{ "--sidebar-width": "18.5rem" } as React.CSSProperties}>
-      <AppSidebar activeTab={activeTab} onTabChange={onTabChange} />
-      <SidebarInset className="flex flex-col min-w-0 h-screen overflow-hidden">
-        <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between border-b bg-background/95 px-3 md:px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex items-center gap-4 min-w-0">
-            <SidebarTrigger className="flex-shrink-0" />
-            <Separator orientation="vertical" className="mr-1 h-4 flex-shrink-0" />
-            <div className="flex flex-col">
-              <h1 className="text-sm font-black text-slate-900 uppercase tracking-tight truncate leading-none mb-1">
-                {activeTab === 'board' ? 'Calendar View' : 
-                 activeTab === 'bookings' ? 'Registrations' :
-                 activeTab === 'overview' ? 'Stats Overview' :
-                 activeTab === 'rooms' ? 'Room List' :
-                 activeTab === 'housekeeping' ? 'Housekeeping' :
-                 activeTab === 'maintenance' ? 'Repair Control' :
-                 activeTab === 'guests' ? 'Guest History' :
-                 activeTab === 'folio' ? 'Payments & Folio' :
-                 activeTab === 'reports' ? 'Performance Report' :
-                 'Settings'}
-              </h1>
-              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest truncate opacity-50">
-                {hotel?.name || 'Hotel Management'}
-              </div>
+    <div className="flex flex-col min-h-screen bg-background overflow-hidden h-screen">
+
+      {/* ── Top Navigation Bar ── */}
+      <header className="sticky top-0 z-50 border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 shadow-sm flex-shrink-0">
+        <div className="flex items-center h-14 px-3 md:px-5 gap-3">
+
+          {/* Brand */}
+          <Link to="/dashboard/board" className="flex items-center gap-2.5 shrink-0 mr-2">
+            <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center text-primary-foreground shadow-sm">
+              <Building2 className="h-3.5 w-3.5" />
             </div>
-          </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-800 hidden sm:block truncate max-w-[120px]">
+              {hotel?.name || 'InnLogix'}
+            </span>
+          </Link>
+
+          {/* Divider */}
+          <div className="h-5 w-px bg-slate-200 hidden sm:block shrink-0" />
+
+          {/* Nav Items (scrollable on mobile) */}
+          <nav className="flex items-center gap-0.5 overflow-x-auto no-scrollbar flex-1 py-1">
+            {navItems.map((item) => {
+              const isActive = currentTab === item.id
+              return (
+                <Link
+                  key={item.id}
+                  to={`/dashboard/${item.id}`}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all duration-150 shrink-0",
+                    isActive
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                  )}
+                >
+                  <item.icon className="h-3.5 w-3.5 shrink-0" />
+                  <span className="hidden md:inline">{item.title}</span>
+                </Link>
+              )
+            })}
+          </nav>
+
+          {/* Right Actions */}
+          <div className="flex items-center gap-1.5 shrink-0">
             {['board', 'bookings'].includes(activeTab || '') && (
-              <Button 
-                size="sm" 
-                onClick={() => onTabChange?.('new-booking')} 
-                className="rounded-xl font-bold uppercase text-[10px] tracking-widest px-3 md:px-4 h-9 shadow-lg shadow-primary/10 transition-all active:scale-[0.95] mr-0.5 md:mr-2"
+              <Button
+                size="sm"
+                onClick={() => onTabChange?.('new-booking')}
+                className="rounded-lg font-bold uppercase text-[10px] tracking-widest px-3 h-8 shadow-sm transition-all active:scale-[0.95]"
               >
-                <Plus className="md:mr-1.5 h-3.5 w-3.5" /> 
-                <span className="hidden sm:inline">Book</span>
+                <Plus className="h-3.5 w-3.5 md:mr-1.5" />
+                <span className="hidden sm:inline">New Booking</span>
               </Button>
             )}
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary">
-              <Bell className="h-4 w-4" />
-            </Button>
-            
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full p-0">
@@ -77,8 +112,10 @@ export default function DashboardLayout({
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56 mt-2" align="end" sideOffset={8}>
-                <DropdownMenuLabel className="font-bold text-[10px] uppercase tracking-wider opacity-40">Command Center</DropdownMenuLabel>
+              <DropdownMenuContent className="w-52 mt-2" align="end" sideOffset={8}>
+                <DropdownMenuLabel className="font-bold text-[10px] uppercase tracking-wider opacity-40">
+                  {user?.name || 'Account'}
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="py-2.5 font-bold cursor-pointer" onClick={() => onTabChange?.('settings')}>
                   <Settings className="mr-2 h-4 w-4 opacity-50" /> Settings
@@ -90,13 +127,20 @@ export default function DashboardLayout({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        </header>
-        <main className="flex-1 overflow-auto p-3 md:p-6 min-h-0">
+        </div>
+      </header>
+
+      {/* ── Main Content ── */}
+      <main className="flex-1 overflow-auto min-h-0">
+        <div className={cn(
+          "h-full",
+          activeTab === 'board' ? "p-3 md:p-4" : "p-3 md:p-6"
+        )}>
           <div className={cn("mx-auto h-full", activeTab === 'board' ? "max-w-none" : "max-w-7xl")}>
             {children}
           </div>
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+        </div>
+      </main>
+    </div>
   )
 }

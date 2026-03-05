@@ -98,6 +98,15 @@
   }
 }
 
+/* Hide scrollbar but keep scrollability (used in top nav) */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 @media print {
   .no-print {
     display: none !important;
