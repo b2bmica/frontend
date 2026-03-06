@@ -3,14 +3,10 @@ import {
   IndianRupee, 
   TrendingUp, 
   Bed, 
-  Users, 
   ArrowUpRight, 
   ArrowDownRight, 
   Wallet, 
-  Building2,
   CalendarDays,
-  CheckCircle2,
-  AlertCircle,
   FileText
 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -19,7 +15,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { useBookings, type Booking } from '../context/booking-context';
 import { useAuth } from '../context/auth-context';
-import { format, isSameDay, startOfToday, differenceInDays } from 'date-fns';
+import { isSameDay, startOfToday, differenceInDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import { 
   Table, 
@@ -80,7 +76,7 @@ export function PerformanceReport() {
       inHouse: inHouse.length,
       recentTransactions: activeBookings.slice(0, 5)
     };
-  }, [bookings, rooms, today]);
+  }, [bookings, rooms, today, taxConfig]);
 
   return (
     <div className="space-y-8 pb-20">

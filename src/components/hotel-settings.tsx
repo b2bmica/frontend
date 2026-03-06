@@ -3,6 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { TimePicker } from './ui/time-picker';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/auth-context';
 import { api } from '../lib/api';
@@ -18,19 +21,17 @@ import {
   Save,
   Loader2,
   CheckCircle2,
-  Trash2,
-  AlertTriangle,
-  Utensils
+  Utensils,
+  Timer
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export function HotelSettings() {
-  const { hotel, refreshUser, logout, user } = useAuth();
+  const { hotel, refreshUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState('');
+
 
   const [form, setForm] = useState({
     name: hotel?.name || '',
@@ -39,8 +40,12 @@ export function HotelSettings() {
     email: hotel?.email || '',
     gstin: hotel?.gstin || '',
     settings: {
-      checkinTime: hotel?.settings?.checkinTime || '12:00 PM',
-      checkoutTime: hotel?.settings?.checkoutTime || '11:00 AM',
+      checkinTime: hotel?.settings?.checkinTime || '14:00',
+      checkoutTime: hotel?.settings?.checkoutTime || '11:00',
+      earlyCheckinBuffer: hotel?.settings?.earlyCheckinBuffer || 'None',
+      lateCheckoutBuffer: hotel?.settings?.lateCheckoutBuffer || 'None',
+      enquiryHoldTime: hotel?.settings?.enquiryHoldTime || '24hr',
+      blockDuration: hotel?.settings?.blockDuration || '1 day',
       currency: hotel?.settings?.currency || 'INR',
       taxConfig: {
         enabled: hotel?.settings?.taxConfig?.enabled ?? true,
@@ -66,31 +71,27 @@ export function HotelSettings() {
       await refreshUser();
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to update settings');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update settings');
     }
     setLoading(false);
   };
 
-  const handleDeleteProperty = async () => {
-    if (confirmDelete !== hotel?.name) return;
-    setLoading(true);
-    try {
-      await api.deleteHotel();
-      logout();
-    } catch (err: any) {
-      setError(err.message || 'Deletion failed');
-      setLoading(false);
-      setIsDeleting(false);
-    }
-  };
+
 
   return (
     <div className="space-y-6 pb-20">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Basic Info */}
+        {/* Main Panel with Tabs */}
         <div className="lg:col-span-2 space-y-6">
-          <Card className="border-none shadow-md">
+          <Tabs defaultValue="general" className="w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="general">General Information</TabsTrigger>
+              <TabsTrigger value="operations">Operations & Policies</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="general" className="space-y-6 mt-0">
+              <Card className="border-none shadow-md">
             <CardHeader>
               <div className="flex items-center gap-2">
                 <Building className="h-5 w-5 text-primary" />
@@ -230,31 +231,49 @@ export function HotelSettings() {
               </div>
             </CardContent>
           </Card>
-        </div>
+        </TabsContent>
 
-        {/* Side panels */}
-        <div className="space-y-6">
+        <TabsContent value="operations" className="space-y-6 mt-0">
           <Card className="border-none shadow-md">
             <CardHeader>
               <div className="flex items-center gap-2">
                 <Clock className="h-5 w-5 text-primary" />
-                <CardTitle>Stay Policy</CardTitle>
+                <CardTitle>Stay Policy & Timings</CardTitle>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Check-in Time</Label>
-                <Input value={form.settings.checkinTime} onChange={e => setForm({...form, settings: {...form.settings, checkinTime: e.target.value}})} />
-              </div>
-              <div className="space-y-2">
-                <Label>Check-out Time</Label>
-                <Input value={form.settings.checkoutTime} onChange={e => setForm({...form, settings: {...form.settings, checkoutTime: e.target.value}})} />
-              </div>
-              <div className="space-y-2">
-                <Label>Currency</Label>
-                <div className="relative">
-                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-10" value={form.settings.currency} readOnly />
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label>Default Check-in Time</Label>
+                  <TimePicker value={form.settings.checkinTime} onChange={v => setForm({...form, settings: {...form.settings, checkinTime: v}})} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Default Check-out Time</Label>
+                  <TimePicker value={form.settings.checkoutTime} onChange={v => setForm({...form, settings: {...form.settings, checkoutTime: v}})} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Early Check-in Buffer</Label>
+                  <Select value={form.settings.earlyCheckinBuffer} onValueChange={v => setForm({...form, settings: {...form.settings, earlyCheckinBuffer: v}})}>
+                    <SelectTrigger><SelectValue/></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="None">None</SelectItem>
+                      <SelectItem value="1hr">1 Hour</SelectItem>
+                      <SelectItem value="2hr">2 Hours</SelectItem>
+                      <SelectItem value="3hr">3 Hours</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Late Check-out Buffer</Label>
+                  <Select value={form.settings.lateCheckoutBuffer} onValueChange={v => setForm({...form, settings: {...form.settings, lateCheckoutBuffer: v}})}>
+                    <SelectTrigger><SelectValue/></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="None">None</SelectItem>
+                      <SelectItem value="1hr">1 Hour</SelectItem>
+                      <SelectItem value="2hr">2 Hours</SelectItem>
+                      <SelectItem value="3hr">3 Hours</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </CardContent>
@@ -266,53 +285,79 @@ export function HotelSettings() {
                 <Utensils className="h-5 w-5 text-primary" />
                 <CardTitle>Meal Plan Rates</CardTitle>
               </div>
-              <CardDescription>Daily rates per person for different stay plans.</CardDescription>
+              <CardDescription>Daily rates per person (excluding GST).</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label className="flex justify-between">
-                  CP <span className="text-[10px] text-muted-foreground">(Room + Breakfast)</span>
-                </Label>
-                <div className="relative">
-                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input 
-                    type="number" 
-                    className="pl-8" 
-                    value={form.settings.mealRates.CP} 
-                    onChange={e => setForm({...form, settings: {...form.settings, mealRates: {...form.settings.mealRates, CP: parseFloat(e.target.value) || 0}}})} 
-                  />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label className="flex justify-between">CP <span className="text-[10px] text-muted-foreground">Breakfast</span></Label>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input type="number" className="pl-8" value={form.settings.mealRates.CP} onChange={e => setForm({...form, settings: {...form.settings, mealRates: {...form.settings.mealRates, CP: parseFloat(e.target.value) || 0}}})} />
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="flex justify-between">
-                  MAP <span className="text-[10px] text-muted-foreground">(B + Dinner)</span>
-                </Label>
-                <div className="relative">
-                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input 
-                    type="number" 
-                    className="pl-8" 
-                    value={form.settings.mealRates.MAP} 
-                    onChange={e => setForm({...form, settings: {...form.settings, mealRates: {...form.settings.mealRates, MAP: parseFloat(e.target.value) || 0}}})} 
-                  />
+                <div className="space-y-2">
+                  <Label className="flex justify-between">MAP <span className="text-[10px] text-muted-foreground">B + Dinner</span></Label>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input type="number" className="pl-8" value={form.settings.mealRates.MAP} onChange={e => setForm({...form, settings: {...form.settings, mealRates: {...form.settings.mealRates, MAP: parseFloat(e.target.value) || 0}}})} />
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="flex justify-between">
-                  AP <span className="text-[10px] text-muted-foreground">(All Meals)</span>
-                </Label>
-                <div className="relative">
-                  <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input 
-                    type="number" 
-                    className="pl-8" 
-                    value={form.settings.mealRates.AP} 
-                    onChange={e => setForm({...form, settings: {...form.settings, mealRates: {...form.settings.mealRates, AP: parseFloat(e.target.value) || 0}}})} 
-                  />
+                <div className="space-y-2">
+                  <Label className="flex justify-between">AP <span className="text-[10px] text-muted-foreground">All Meals</span></Label>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input type="number" className="pl-8" value={form.settings.mealRates.AP} onChange={e => setForm({...form, settings: {...form.settings, mealRates: {...form.settings.mealRates, AP: parseFloat(e.target.value) || 0}}})} />
+                  </div>
                 </div>
               </div>
             </CardContent>
           </Card>
+
+          <Card className="border-none shadow-md">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Timer className="h-5 w-5 text-primary" />
+                <CardTitle>Enquiry / Block Auto-Release</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label>Default Enquiry Hold Time</Label>
+                  <Select value={form.settings.enquiryHoldTime} onValueChange={v => setForm({...form, settings: {...form.settings, enquiryHoldTime: v}})}>
+                    <SelectTrigger><SelectValue/></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1hr">1 Hour</SelectItem>
+                      <SelectItem value="2hr">2 Hours</SelectItem>
+                      <SelectItem value="4hr">4 Hours</SelectItem>
+                      <SelectItem value="8hr">8 Hours</SelectItem>
+                      <SelectItem value="12hr">12 Hours</SelectItem>
+                      <SelectItem value="24hr">24 Hours</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Default Block Duration</Label>
+                  <Select value={form.settings.blockDuration} onValueChange={v => setForm({...form, settings: {...form.settings, blockDuration: v}})}>
+                    <SelectTrigger><SelectValue/></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1 day">1 Day</SelectItem>
+                      <SelectItem value="3 days">3 Days</SelectItem>
+                      <SelectItem value="7 days">7 Days</SelectItem>
+                      <SelectItem value="Custom">Custom</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+      </div>
+
+      {/* Side panels */}
+      <div className="space-y-6">
 
           <Card className="bg-primary text-white shadow-xl border-none">
             <CardHeader>

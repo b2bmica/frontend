@@ -4,7 +4,7 @@ import {
   differenceInDays, startOfDay, parseISO, addHours
 } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Search, ChevronLeft, ChevronRight, ChevronDown, Bed, X, ShieldCheck, ArrowRight, Lock } from 'lucide-react';
+import { Loader2, Search, ChevronLeft, ChevronRight, ChevronDown, Bed, X, ShieldCheck, ArrowRight, Lock, Globe, User, Info } from 'lucide-react';
 import { useBookings, type Booking, type Room } from '../context/booking-context';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -25,15 +25,17 @@ const STATUS_FILTERS = [
 ] as const;
 
 const getStatusColor = (status: string, bookingType?: string) => {
-  if (bookingType === 'enquiry') return 'bg-amber-400/80 hover:bg-amber-500/80 shadow-amber-400/20 border-dashed border-amber-500';
-  if (bookingType === 'block')   return 'bg-slate-400/70 hover:bg-slate-500/70 shadow-slate-400/20';
+  if (bookingType === 'enquiry') return 'bg-white border-2 border-dashed border-amber-400 text-slate-800 shadow-sm shadow-amber-500/10 pointer-events-auto';
+  if (bookingType === 'block')   return 'bg-[repeating-linear-gradient(45deg,#f8fafc,#f8fafc_10px,#f1f5f9_10px,#f1f5f9_20px)] border border-slate-300 text-slate-700 shadow-[inset_0_2px_10px_rgba(0,0,0,0.02)]';
+  
+  const base = 'bg-white text-slate-800 shadow-sm border-y border-r border-slate-200 border-l-[4px] pointer-events-auto';
   switch (status) {
-    case 'checked-in':  return 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20';
+    case 'checked-in':  return cn(base, 'border-l-blue-500 hover:bg-slate-50 shadow-blue-500/10');
     case 'reserved':
-    case 'confirmed':   return 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20';
-    case 'checked-out': return 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/20';
-    case 'cancelled':   return 'bg-slate-400 hover:bg-slate-500 shadow-slate-400/20';
-    default:            return 'bg-gray-400';
+    case 'confirmed':   return cn(base, 'border-l-emerald-500 hover:bg-slate-50 shadow-emerald-500/10');
+    case 'checked-out': return cn(base, 'border-l-orange-500 hover:bg-slate-50 shadow-orange-500/10');
+    case 'cancelled':   return cn(base, 'border-l-slate-400 hover:bg-slate-50 opacity-70');
+    default:            return cn(base, 'border-l-gray-400 hover:bg-slate-50');
   }
 };
 
@@ -857,6 +859,22 @@ export function BookingBoard() {
 
             {/* Grid Area with smooth week-swap animation */}
             <div className="relative w-max h-full">
+              {(() => {
+                if (viewMode !== 'today') return null;
+                const todayHasConfirmed = filteredBookings.some(b => {
+                  if (b.status === 'cancelled' || b.bookingType === 'block' || b.bookingType === 'enquiry') return false;
+                  return startOfDay(parseISO(b.checkin)) <= startOfDay(weekStart) && startOfDay(parseISO(b.checkout)) >= startOfDay(weekStart);
+                });
+                if (todayHasConfirmed) return null;
+                return (
+                  <div className="absolute top-4 z-[45] pointer-events-none" style={{ left: ROOM_COL + 20 }}>
+                     <div className="bg-slate-50/90 backdrop-blur-sm border border-slate-200 text-slate-500 text-[11px] font-bold py-2 px-4 rounded-xl shadow-sm flex items-center gap-2 pointer-events-auto">
+                       <Info className="w-4 h-4" /> No confirmed bookings today
+                     </div>
+                  </div>
+                );
+              })()}
+
               <AnimatePresence mode="popLayout" initial={false}>
                 <motion.div
                   key={weekStart.toISOString()}
@@ -1036,28 +1054,36 @@ export function BookingBoard() {
                               const isBlock = booking.bookingType === 'block';
                               const isEnquiry = booking.bookingType === 'enquiry';
                               const isEditable = !isBlock && booking.status !== 'checked-out' && booking.status !== 'cancelled' && !isMonth;
-
+                              
+                              const sourceChar = booking.bookingSource?.toLowerCase();
+                              const isWalkin = sourceChar?.includes('walk');
+                              const isExpired = booking.enquiryExpiresAt && new Date(booking.enquiryExpiresAt) < new Date();
+                              
+                              if (isExpired) return null; // Or optionally add fading instead if the requirement prefers it fading out completely, wait, the prompt says "visual fading, then is removed from the grid". Actually returning null directly removes it from the grid!
+                              
                               return (
                                 <motion.div
                                   layout
                                   layoutId={booking._id}
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 1 }}
+                                  exit={{ opacity: 0, scale: 0.95 }}
                                   key={booking._id}
                                   data-booking-card=""
                                   className={cn(
                                     'absolute overflow-hidden shadow-sm group/card border transition-all duration-300',
                                     getStatusColor(booking.status, booking.bookingType),
                                     isMonth ? 'rounded-md opacity-90' : 'rounded-[12px]',
-                                    isBlock ? 'border-2 border-dashed border-slate-500/40' : '',
-                                    isEnquiry ? 'border-2 border-dashed border-amber-500/60' : '',
                                     isEditable ? 'hover:shadow-md hover:z-20' : 'opacity-80',
                                     booking.groupId && hoveredGroupId === booking.groupId ? 'ring-2 ring-primary ring-offset-1 z-30 scale-[1.02] shadow-xl' : '',
                                     hoveredGroupId && booking.groupId !== hoveredGroupId ? 'opacity-30 grayscale-[0.5]' : ''
                                   )}
+                                  // Update the fading logic for expired inquiries via framer-motion opacity below (already using presence where parent remounts if bookings change)
                                   style={{ 
                                     left: layout.left, 
-                                    top: isMonth ? 10 : 6, 
+                                    top: isMonth ? 10 : (isDayUse ? (heightTotal - 36) / 2 + 6 : 6), 
                                     width: layout.width, 
-                                    height: isMonth ? ROW_HEIGHT - 20 : heightTotal, 
+                                    height: isMonth ? ROW_HEIGHT - 20 : (isDayUse ? 36 : heightTotal), 
                                     zIndex: booking.status === 'checked-in' ? 14 : (booking.groupId && hoveredGroupId === booking.groupId ? 40 : 12), 
                                     cursor: isEditable ? 'grab' : 'pointer'
                                   }}
@@ -1067,28 +1093,48 @@ export function BookingBoard() {
                                   onClick={() => { if (!isDraggingRef.current && !isResizingRef.current) setSelectedBooking(booking); }}
                                 >
                                   {!isMonth && (
-                                    <div className="flex flex-col h-full justify-between p-1.5 md:p-2 text-white">
-                                      <div className="flex justify-between items-start gap-1">
-                                         <div className="flex flex-col min-w-0">
+                                    <div className="flex flex-col h-full justify-between p-1.5 md:p-2 text-slate-800 pointer-events-none">
+                                      {/* Top Row */}
+                                      <div className="flex justify-between items-start gap-1 pb-1">
+                                         <div className="flex flex-col min-w-0 flex-1">
                                             {isBlock ? (
-                                              <div className="flex items-center gap-1">
-                                                <Lock className="h-2.5 w-2.5 opacity-80" />
-                                                <span className="font-bold leading-tight text-[8px] md:text-[9px] opacity-90 truncate">{booking.blockReason || 'Blocked'}</span>
+                                              <div className="flex items-center gap-1 text-slate-600">
+                                                <Lock className="h-3 w-3" />
+                                                <span className="font-bold tracking-tight text-[10px] md:text-[11px] truncate uppercase">{booking.blockReason || 'BLOCKED'}</span>
+                                              </div>
+                                            ) : isEnquiry ? (
+                                              <div className="flex items-center gap-1.5 text-amber-900 pointer-events-auto">
+                                                <span className="font-bold text-[9px] md:text-[10px] tracking-widest uppercase truncate leading-none pt-0.5">ENQUIRY</span>
                                               </div>
                                             ) : (
-                                              <div className="flex items-center gap-1.5">
+                                              <div className="flex items-center gap-1.5 pointer-events-auto">
                                                 {booking.isGroup && <span className="text-[10px]" title={`Group: ${booking.groupName}`}>🔗</span>}
-                                                <button className="font-black truncate text-left hover:underline leading-tight text-[10px] md:text-[11px]" onClick={e => { e.stopPropagation(); if (guest?._id) setSelectedGuestId(guest._id); else setSelectedBooking(booking); }}>
+                                                <button className="font-bold border-b border-transparent hover:border-slate-800 truncate text-left leading-tight text-[10px] md:text-[11px] text-slate-900" onClick={e => { e.stopPropagation(); if (guest?._id) setSelectedGuestId(guest._id); else setSelectedBooking(booking); }}>
                                                   {guest?.name || 'Guest'}
                                                 </button>
                                               </div>
                                             )}
+                                            
+                                            {/* Line 2: Room Type and Plan */}
+                                            {(!isBlock && !isEnquiry && !isDayUse) && (
+                                              <div className="flex items-center gap-1 mt-0.5 opacity-80 pointer-events-auto">
+                                                <span className="text-[8px] md:text-[9px] font-semibold truncate max-w-[60px] text-slate-600">{room?.roomType}</span>
+                                                {booking.planType && booking.planType !== 'EP' && (
+                                                  <>
+                                                    <span className="text-[8px] text-slate-400">•</span>
+                                                    <span className="text-[7px] md:text-[8px] font-black bg-slate-100/80 text-slate-600 px-1 rounded-sm border">{booking.planType}</span>
+                                                  </>
+                                                )}
+                                              </div>
+                                            )}
                                          </div>
-                                         {others.length > 0 && (
-                                           <div className="z-20 ml-auto" onClick={e => e.stopPropagation()}>
+
+                                         {/* Top Right Components */}
+                                         {others.length > 0 ? (
+                                           <div className="z-20 shrink-0 pointer-events-auto" onClick={e => e.stopPropagation()}>
                                              <Popover>
                                                <PopoverTrigger asChild>
-                                                 <button className="bg-white/30 hover:bg-white/40 text-[8px] md:text-[9px] px-1.5 py-0.5 rounded-md font-bold shadow-sm active:scale-95">+{others.length}</button>
+                                                 <button className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-[8px] md:text-[9px] px-1.5 py-0.5 rounded-md font-bold shadow-sm active:scale-95 border">+{others.length}</button>
                                                </PopoverTrigger>
                                                <PopoverContent className="w-64 p-2 rounded-xl shadow-xl border z-[300]">
                                                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 p-2 border-b">Others {others.length}</p>
@@ -1103,19 +1149,32 @@ export function BookingBoard() {
                                                </PopoverContent>
                                              </Popover>
                                            </div>
-                                         )}
+                                         ) : (isEnquiry || isBlock) && booking.enquiryExpiresAt ? (
+                                           <div className="shrink-0 flex justify-center items-center h-4 bg-amber-100/50 border border-amber-200/50 text-amber-700 px-1 rounded text-[8px] font-bold pointer-events-auto">
+                                              ⏱ {formatCountdown(booking.enquiryExpiresAt)}
+                                           </div>
+                                         ) : isDayUse ? (
+                                           <div className="shrink-0 bg-white border shadow-sm text-slate-700 font-black text-[7px] md:text-[8px] uppercase tracking-tighter px-1.5 py-0.5 rounded-sm pointer-events-auto">
+                                              DAY USE
+                                           </div>
+                                         ) : null}
                                       </div>
-                                      <div className="flex items-end justify-between gap-1">
-                                        {isEnquiry && booking.enquiryExpiresAt ? (
-                                          <span className="text-[7px] md:text-[8px] bg-amber-900/30 px-1.5 py-0.5 rounded-sm font-black w-fit border border-amber-200/20">
-                                            ⏱ {formatCountdown(booking.enquiryExpiresAt)}
-                                          </span>
-                                        ) : isDayUse ? (
-                                          <span className="text-[6px] md:text-[7px] bg-white/20 px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter">Day Use</span>
-                                        ) : (
-                                          <span className="text-[7px] md:text-[8px] bg-black/10 px-1 py-0.5 rounded-sm font-semibold capitalize tracking-wide w-fit border border-white/10 opacity-70">
-                                            {viewMode === 'today' ? `${booking.checkinTime} - ${booking.checkoutTime}` : (isBlock ? 'Blocked' : booking.status)}
-                                          </span>
+                                      
+                                      {/* Bottom Row */}
+                                      <div className="flex items-end justify-between gap-1 overflow-visible">
+                                        <div className="flex gap-1 items-center min-w-0 flex-1">
+                                          {(!isBlock && !isEnquiry && !isDayUse) && layout.width > 80 && (
+                                            <span className="text-[8px] md:text-[9px] font-medium text-slate-500 truncate pointer-events-auto">
+                                               {booking.checkinTime} → {booking.checkoutTime}
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {/* Bottom Right Source Icon */}
+                                        {!isBlock && !isEnquiry && (
+                                          <div className="shrink-0 rounded bg-slate-100 flex items-center justify-center p-[2px] w-4 h-4 text-slate-400 pointer-events-auto" title={booking.bookingSource}>
+                                            {isWalkin ? <User className="h-[10px] w-[10px]" /> : <Globe className="h-[10px] w-[10px]" />}
+                                          </div>
                                         )}
                                       </div>
                                     </div>

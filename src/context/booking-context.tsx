@@ -19,8 +19,8 @@ export interface Room {
 
 export interface Booking {
   _id: string;
-  roomId: any; // populated with room data
-  guestId: any; // populated with guest data  
+  roomId: string | Room; // populated with room data or ID
+  guestId: string | Guest; // populated with guest data or ID  
   checkin: string;
   checkout: string;
   checkinTime?: string;   // "HH:mm"
@@ -70,17 +70,17 @@ interface BookingContextType {
   refreshBookings: () => Promise<void>;
   refreshRooms: () => Promise<void>;
   refreshGuests: () => Promise<void>;
-  createBooking: (data: any) => Promise<any>;
-  updateBooking: (id: string, data: any) => Promise<void>;
+  createBooking: (data: Partial<Booking> & { roomId: string; guestId: string; checkin: string; checkout: string }) => Promise<unknown>;
+  updateBooking: (id: string, data: Partial<Booking>) => Promise<void>;
   cancelBooking: (id: string) => Promise<void>;
   checkIn: (id: string) => Promise<void>;
   checkOut: (id: string) => Promise<void>;
-  createRoom: (data: any) => Promise<any>;
-  updateRoom: (id: string, data: any) => Promise<void>;
-  updateRoomStatus: (id: string, status: string) => Promise<void>;
+  createRoom: (data: Omit<Room, '_id'>) => Promise<unknown>;
+  updateRoom: (id: string, data: Partial<Room>) => Promise<void>;
+  updateRoomStatus: (id: string, status: Room['status']) => Promise<void>;
   deleteRoom: (id: string) => Promise<void>;
-  createGuest: (data: any) => Promise<any>;
-  searchGuests: (query: string) => Promise<any[]>;
+  createGuest: (data: Omit<Guest, '_id'>) => Promise<unknown>;
+  searchGuests: (query: string) => Promise<Guest[]>;
 }
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
@@ -96,47 +96,47 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const refreshRooms = useCallback(async () => {
     try {
       const data = await api.getRooms();
-      setRooms(data);
-    } catch (err: any) {
-      setError(err.message);
+      setRooms(data as Room[]);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unknown error refreshing rooms');
     }
   }, []);
 
   const refreshBookings = useCallback(async () => {
     try {
       const data = await api.getBookings({ limit: 200 });
-      setBookings(data.bookings);
-    } catch (err: any) {
-      setError(err.message);
+      setBookings(data.bookings as Booking[]);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unknown error refreshing bookings');
     }
   }, []);
 
   const refreshGuests = useCallback(async () => {
     try {
       const data = await api.getGuests();
-      setGuests(data.guests);
-    } catch (err: any) {
-      setError(err.message);
+      setGuests(data.guests as Guest[]);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unknown error refreshing guests');
     }
   }, []);
 
   // Load data when authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      setLoading(true);
+      setTimeout(() => setLoading(true), 0);
       Promise.all([refreshRooms(), refreshBookings(), refreshGuests()])
         .finally(() => setLoading(false));
     }
   }, [isAuthenticated, refreshRooms, refreshBookings, refreshGuests]);
 
-  const createBookingFn = useCallback(async (data: any) => {
+  const createBookingFn = useCallback(async (data: Partial<Booking> & { roomId: string; guestId: string; checkin: string; checkout: string }) => {
     const result = await api.createBooking(data);
     await refreshBookings();
     await refreshRooms(); // Room status might change
     return result;
   }, [refreshBookings, refreshRooms]);
 
-  const updateBooking = useCallback(async (id: string, data: any) => {
+  const updateBooking = useCallback(async (id: string, data: Partial<Booking>) => {
     await api.updateBooking(id, data);
     await refreshBookings();
     await refreshRooms();
@@ -160,18 +160,18 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await refreshRooms();
   }, [refreshBookings, refreshRooms]);
 
-  const createRoomFn = useCallback(async (data: any) => {
+  const createRoomFn = useCallback(async (data: Omit<Room, '_id'>) => {
     const result = await api.createRoom(data);
     await refreshRooms();
     return result;
   }, [refreshRooms]);
 
-  const updateRoomFn = useCallback(async (id: string, data: any) => {
+  const updateRoomFn = useCallback(async (id: string, data: Partial<Room>) => {
     await api.updateRoom(id, data);
     await refreshRooms();
   }, [refreshRooms]);
 
-  const updateRoomStatusFn = useCallback(async (id: string, status: string) => {
+  const updateRoomStatusFn = useCallback(async (id: string, status: Room['status']) => {
     await api.updateRoomStatus(id, status);
     await refreshRooms();
   }, [refreshRooms]);
@@ -181,14 +181,14 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await refreshRooms();
   }, [refreshRooms]);
 
-  const createGuestFn = useCallback(async (data: any) => {
+  const createGuestFn = useCallback(async (data: Omit<Guest, '_id'>) => {
     const result = await api.createGuest(data);
     await refreshGuests();
     return result;
   }, [refreshGuests]);
 
   const searchGuestsFn = useCallback(async (query: string) => {
-    return await api.searchGuests(query);
+    return await api.searchGuests(query) as Guest[];
   }, []);
 
   return (

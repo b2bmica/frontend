@@ -28,7 +28,7 @@ import {
 } from './ui/table';
 
 export function CashierReport() {
-  const { bookings, guests, rooms } = useBookings();
+  const { bookings, guests } = useBookings();
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   const reportData = useMemo(() => {
@@ -163,7 +163,8 @@ export function CashierReport() {
                         <TableCell className="font-bold text-xs">{tx.guest}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest py-0.5 border-slate-100 bg-white">
+                            <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest py-0.5 border-slate-100 bg-white flex items-center gap-1.5">
+                              {getMethodIcon(tx.method)}
                               {tx.method}
                             </Badge>
                           </div>
@@ -190,7 +191,8 @@ export function CashierReport() {
                            <span className="text-[9px] font-black font-mono text-slate-300 uppercase tracking-tighter">#{tx.booking}</span>
                            <h4 className="text-xs font-bold text-slate-900">{tx.guest}</h4>
                          </div>
-                         <Badge variant="outline" className="text-[8px] font-black uppercase px-2 py-0 border-slate-100 bg-slate-50/50">
+                         <Badge variant="outline" className="text-[8px] font-black uppercase px-2 py-0 border-slate-100 bg-slate-50/50 flex items-center gap-1">
+                           {getMethodIcon(tx.method)}
                            {tx.method}
                          </Badge>
                       </div>

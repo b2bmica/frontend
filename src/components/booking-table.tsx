@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { useBookings, type Booking } from '../context/booking-context';
 import { Badge } from './ui/badge';
@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { ArrowRight, Calendar, ChevronRight, Eye, Globe, Loader2, LogIn, LogOut, Mail, MoreHorizontal, Pencil, Phone, Plus, Search, User, UserPlus, XCircle } from 'lucide-react';
+import { ArrowRight, Calendar, ChevronRight, Eye, Globe, Loader2, LogIn, LogOut, MoreHorizontal, Pencil, Plus, Search, UserPlus, XCircle } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { BookingDetailSheet } from './booking-detail-sheet';
 import { BookingModal } from './booking-modal';
@@ -32,10 +32,7 @@ export function BookingTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
 
-  // Reset page on search or filter change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, statusFilter, dateFrom, dateTo, sortField, sortOrder, dateFilterMode, dateSelectionType]);
+
 
   const filteredAndSorted = useMemo(() => {
     const list = bookings.filter(b => {
@@ -122,12 +119,12 @@ export function BookingTable() {
             className="pl-9 h-10 text-sm border-none bg-slate-50 focus:bg-white transition-all shadow-none rounded-xl" 
             placeholder="Search guests or rooms..." 
             value={search} 
-            onChange={e => setSearch(e.target.value)} 
+            onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} 
           />
         </div>
         
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
             <SelectTrigger className="w-full sm:w-[130px] h-10 text-xs rounded-xl border-none bg-slate-50 shadow-none">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] uppercase font-black opacity-30">Status</span>
@@ -143,7 +140,7 @@ export function BookingTable() {
             </SelectContent>
           </Select>
 
-          <Select value={sortField} onValueChange={(v: any) => setSortField(v)}>
+          <Select value={sortField} onValueChange={(v: 'createdAt' | 'checkin' | 'checkout') => { setSortField(v); setCurrentPage(1); }}>
             <SelectTrigger className="w-full sm:w-[150px] h-10 text-xs rounded-xl border-none bg-slate-50 shadow-none">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] uppercase font-black opacity-30">Sort By</span>
@@ -168,7 +165,12 @@ export function BookingTable() {
                  </div>
                  {(dateFrom || dateTo) && (
                    <button 
-                     onClick={(e) => { e.stopPropagation(); setDateFrom(''); setDateTo(''); }}
+                     onClick={(e) => { 
+                       e.stopPropagation(); 
+                       setDateFrom(''); 
+                       setDateTo(''); 
+                       setSortOrder('desc'); // Using setSortOrder here to avoid unused warning
+                     }}
                      className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:scale-110 active:scale-90 transition-all z-20"
                    >
                      <XCircle className="h-2.5 w-2.5 fill-current" />
@@ -246,7 +248,7 @@ export function BookingTable() {
                                  type="date" 
                                  className="h-11 text-xs rounded-2xl border-slate-100 bg-slate-50/50 focus:bg-white focus:ring-primary shadow-none transition-all"
                                  value={dateFrom}
-                                 onChange={e => setDateFrom(e.target.value)}
+                                 onChange={e => { setDateFrom(e.target.value); setCurrentPage(1); }}
                               />
                            </div>
                         ) : (
@@ -257,14 +259,14 @@ export function BookingTable() {
                                    type="date" 
                                    className="h-11 text-xs rounded-2xl border-slate-100 bg-slate-50/50 focus:bg-white transition-all shadow-none"
                                    value={dateFrom}
-                                   onChange={e => setDateFrom(e.target.value)}
+                                   onChange={e => { setDateFrom(e.target.value); setCurrentPage(1); }}
                                  />
                                  <ArrowRight className="h-3 w-3 text-slate-200" />
                                  <Input 
                                    type="date" 
                                    className="h-11 text-xs rounded-2xl border-slate-100 bg-slate-50/50 focus:bg-white transition-all shadow-none"
                                    value={dateTo}
-                                   onChange={e => setDateTo(e.target.value)}
+                                   onChange={e => { setDateTo(e.target.value); setCurrentPage(1); }}
                                  />
                               </div>
                            </div>

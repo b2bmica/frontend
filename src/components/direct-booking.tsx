@@ -24,9 +24,17 @@ const mockAvailableRooms = [
   { id: '3', name: 'Standard Comfort', price: 4500, type: 'Standard', amenities: ['WiFi'] },
 ];
 
+interface RoomType {
+  id: string;
+  name: string;
+  price: number;
+  type: string;
+  amenities: string[];
+}
+
 export function DirectBookingEngine() {
   const [step, setStep] = useState(1); // 1: Search, 2: Select, 3: Details, 4: Confirm
-  const [selectedRoom, setSelectedRoom] = useState<any>(null);
+  const [selectedRoom, setSelectedRoom] = useState<RoomType | null>(null);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-[#0f172a]">

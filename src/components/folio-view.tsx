@@ -17,7 +17,6 @@ import {
   Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './ui/button';
 import { CardContent } from './ui/card';
 import { Badge } from './ui/badge';
@@ -51,8 +50,6 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
 
       if (!matchesSearch) return false;
 
-      if (!matchesSearch) return false;
-
       // Logic Filter
       if (showHistory) return true; // Show everything if history is toggled on
 
@@ -74,14 +71,14 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
         setSelectedBookingId(null);
       }
     }
-  }, [showHistory]);
+  }, [showHistory, selectedBookingId, bookings]);
 
   // Auto-select the first active booking if nothing selected
   useEffect(() => {
     if (!selectedBookingId && filteredBookings.length > 0) {
       setSelectedBookingId(filteredBookings[0]._id);
     }
-  }, [filteredBookings]);
+  }, [filteredBookings, selectedBookingId]);
 
   const booking = useMemo(() => bookings.find(b => b._id === selectedBookingId), [bookings, selectedBookingId]);
 
@@ -165,7 +162,17 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
     const paid = booking.advancePayment; // Use the actual field as source of truth
     const balance = Math.max(0, total - paid);
 
-    return { charges, payments, subtotal, tax, total, paid, balance, nights, guestName: (typeof booking.guestId === 'object' ? booking.guestId.name : guests.find(g => g._id === booking.guestId)?.name) || 'Guest' };
+    return { 
+      charges, 
+      payments, 
+      subtotal, 
+      tax, 
+      total, 
+      paid, 
+      balance, 
+      nights, 
+      guestName: (typeof booking.guestId === 'object' ? booking.guestId.name : guests.find(g => g._id === booking.guestId)?.name) || 'Guest' 
+    };
   }, [booking, hotel, rooms, guests]);
 
   useEffect(() => {
@@ -211,7 +218,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Guest Directory Sidebar - Responsive: Top on mobile, Left on large */}
+        {/* Guest Directory Sidebar */}
         <div className="lg:col-span-1 flex flex-col gap-4">
           <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3 px-1">
@@ -291,7 +298,6 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
               <div className="xl:col-span-2 space-y-4">
                 <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-                  {/* Header */}
                   <div className="p-4 md:p-8 border-b border-slate-100 bg-slate-50/50">
                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div className="flex items-center gap-4">
@@ -326,7 +332,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                        ].map(t => (
                          <button 
                            key={t.id}
-                           onClick={() => setActiveTab(t.id as any)}
+                           onClick={() => setActiveTab(t.id as 'folio' | 'payments')}
                            className={cn(
                              "px-5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap",
                              activeTab === t.id 
@@ -342,7 +348,6 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                     <div className="space-y-3">
                        {activeTab === 'folio' ? (
                           <>
-                            {/* Desktop Table Header (Implicit via layout) */}
                             <div className="hidden md:block">
                                {financials.charges.map(c => (
                                  <div key={c.id} className="flex items-center justify-between p-4 rounded-2xl bg-white border border-slate-100 hover:border-slate-200 transition-all mb-3">
@@ -360,7 +365,6 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                                ))}
                             </div>
 
-                            {/* Mobile Card-style Ledger */}
                             <div className="md:hidden space-y-3">
                                {financials.charges.map(c => (
                                  <div key={c.id} className="flex items-center justify-between p-4 rounded-xl bg-slate-50 border border-transparent">
@@ -386,8 +390,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                             )}
                           </>
                         ) : (
-                           <>
-                             {/* Desktop Payments */}
+                          <>
                              <div className="hidden md:block space-y-3">
                                {financials.payments.length === 0 ? (
                                  <div className="py-12 text-center text-slate-300">
@@ -406,7 +409,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                                          <p className="text-sm font-bold text-slate-900 capitalize">{p.method}</p>
                                          <div className="flex items-center gap-2 mt-0.5">
                                            <p className="text-[10px] font-medium text-emerald-600 uppercase tracking-widest">{new Date(p.date).toLocaleDateString()}</p>
-                                           {(p as any).note && <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest"> {(p as any).note}</span>}
+                                           {p.note && <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest"> {p.note}</span>}
                                          </div>
                                        </div>
                                      </div>
@@ -415,7 +418,6 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                                  );
                                })}
                              </div>
-                             {/* Mobile Payments */}
                              <div className="md:hidden space-y-3">
                                {financials.payments.length === 0 ? (
                                  <div className="py-10 text-center text-slate-300">
@@ -432,7 +434,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                                        </div>
                                        <div>
                                          <p className="text-[11px] font-bold text-slate-800 capitalize">{p.method}</p>
-                                          <p className="text-[9px] font-medium text-emerald-600 uppercase tracking-widest mt-0.5">{format(new Date(p.date), 'dd MMM')}{(p as any).note ? ' / ' + (p as any).note : ''}</p>
+                                         <p className="text-[9px] font-medium text-emerald-600 uppercase tracking-widest mt-0.5">{format(new Date(p.date), 'dd MMM')}{p.note ? ' / ' + p.note : ''}</p>
                                        </div>
                                      </div>
                                      <p className="font-bold text-xs text-emerald-600 ml-2 whitespace-nowrap">+ ₹{p.amount.toLocaleString()}</p>
@@ -440,14 +442,13 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                                  );
                                })}
                              </div>
-                           </>
+                          </>
                         )}
                     </div>
                   </CardContent>
                 </div>
               </div>
 
-              {/* Summary */}
               <div className="bg-slate-900 rounded-3xl p-6 md:p-8 text-white space-y-8 shadow-xl">
                  <div className="space-y-1">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Balance Due</p>
@@ -552,7 +553,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                       <button 
                         key={m.id}
                         disabled={isSettling}
-                        onClick={() => setPaymentMethod(m.id as any)}
+                        onClick={() => setPaymentMethod(m.id as 'Cash' | 'UPI' | 'Card')}
                         className={cn(
                            "h-14 rounded-xl border flex flex-col items-center justify-center transition-all gap-1",
                            paymentMethod === m.id 
@@ -613,7 +614,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
               </tr>
             </thead>
             <tbody>
-              {financials.charges.map((c: any) => (
+              {financials.charges.map((c: { id: string; amount: number; description: string }) => (
                 <tr key={c.id} className="border-b border-slate-50">
                   <td className="py-2 font-medium">{c.description}</td>
                   <td className="py-2 text-right font-bold">₹{c.amount.toLocaleString()}</td>

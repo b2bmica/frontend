@@ -2,11 +2,9 @@ import { useState, useEffect } from 'react';
 import { 
   Toolbox, 
   CheckCircle, 
-  Construction,
   Plus,
   Loader2,
   ShieldCheck,
-  Wrench,
   User,
   Clock,
   ArrowRight,
@@ -23,11 +21,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { cn } from '../lib/utils';
 import { api } from '../lib/api';
 import { format } from 'date-fns';
-import { useBookings } from '../context/booking-context';
+import { useBookings, type Room } from '../context/booking-context';
+
+interface MaintenanceTicket {
+  _id: string;
+  roomId: Room;
+  issue: string;
+  priority: 'low' | 'medium' | 'urgent';
+  status: 'pending' | 'in-progress' | 'resolved';
+  reportedBy?: { name: string };
+  createdAt: string;
+}
 
 export function MaintenanceTickets() {
   const { rooms } = useBookings();
-  const [tickets, setTickets] = useState<any[]>([]);
+  const [tickets, setTickets] = useState<MaintenanceTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -42,7 +50,7 @@ export function MaintenanceTickets() {
   const fetchTickets = async () => {
     try {
       const data = await api.getMaintenanceTickets();
-      setTickets(data);
+      setTickets(data as MaintenanceTicket[]);
     } catch (err) {
       console.error(err);
     } finally {
@@ -163,7 +171,7 @@ export function MaintenanceTickets() {
              <p className="text-[8px] font-bold text-slate-300 uppercase tracking-widest mt-1 px-8 max-w-xs mx-auto">No pending repairs found.</p>
           </div>
         ) : (
-          filteredTickets.map((ticket, i) => (
+          filteredTickets.map((ticket) => (
             <Card key={ticket._id} className="border-none shadow-sm hover:shadow-md transition-all group overflow-hidden bg-white rounded-[24px] border border-transparent hover:border-slate-100">
               <CardContent className="p-0">
                 <div className="flex flex-col md:flex-row items-stretch">

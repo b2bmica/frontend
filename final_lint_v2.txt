@@ -1,0 +1,81 @@
+﻿
+C:\Users\PRASAD\OneDrive\Desktop\hotel\frontend\src\components\auth-page.tsx
+  34:65  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\PRASAD\OneDrive\Desktop\hotel\frontend\src\components\guest-profile-sheet.tsx
+  44:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\PRASAD\OneDrive\Desktop\hotel\frontend\src\components\guest-profile-sheet.tsx:44:5
+  42 |     }
+  43 |     
+> 44 |     setLoading(true);
+     |     ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  45 |     setError(null);
+  46 |     
+  47 |     Promise.all([  react-hooks/set-state-in-effect
+
+C:\Users\PRASAD\OneDrive\Desktop\hotel\frontend\src\components\theme-provider.tsx
+  54:14  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\PRASAD\OneDrive\Desktop\hotel\frontend\src\components\ui\badge.tsx
+  48:17  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\PRASAD\OneDrive\Desktop\hotel\frontend\src\components\ui\button.tsx
+  64:18  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\PRASAD\OneDrive\Desktop\hotel\frontend\src\components\ui\sidebar.tsx
+  723:3  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\PRASAD\OneDrive\Desktop\hotel\frontend\src\components\ui\tabs.tsx
+  91:52  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\PRASAD\OneDrive\Desktop\hotel\frontend\src\context\auth-context.tsx
+  188:14  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  194:14  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\PRASAD\OneDrive\Desktop\hotel\frontend\src\context\booking-context.tsx
+  127:20  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\PRASAD\OneDrive\Desktop\hotel\frontend\src\context\booking-context.tsx:127:20
+  125 |     if (isAuthenticated) {
+  126 |       setTimeout(() => setLoading(true), 0);
+> 127 |       Promise.all([refreshRooms(), refreshBookings(), refreshGuests()])
+      |                    ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  128 |         .finally(() => setLoading(false));
+  129 |     }
+  130 |   }, [isAuthenticated, refreshRooms, refreshBookings, refreshGuests]);  react-hooks/set-state-in-effect
+  214:14  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                react-refresh/only-export-components
+
+C:\Users\PRASAD\OneDrive\Desktop\hotel\frontend\src\context\notification-context.tsx
+  62:7   error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\PRASAD\OneDrive\Desktop\hotel\frontend\src\context\notification-context.tsx:62:7
+  60 |       };
+  61 |     } else {
+> 62 |       setSocket(null);
+     |       ^^^^^^^^^ Avoid calling setState() directly within an effect
+  63 |     }
+  64 |   }, [isAuthenticated, hotel?._id]);
+  65 |  react-hooks/set-state-in-effect
+  73:14  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            react-refresh/only-export-components
+
+Γ£û 13 problems (13 errors, 0 warnings)
+

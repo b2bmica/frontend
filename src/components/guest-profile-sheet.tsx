@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from './ui/sheet';
+import { Sheet, SheetContent } from './ui/sheet';
 import { Badge } from './ui/badge';
-import { Separator } from './ui/separator';
-import { useBookings } from '../context/booking-context';
+import { useBookings, type Booking, type Guest } from '../context/booking-context';
 import { api } from '../lib/api';
 import { format, differenceInDays } from 'date-fns';
 import { 
@@ -12,14 +11,9 @@ import {
   Globe, 
   CreditCard, 
   CalendarDays, 
-  Hash, 
   Loader2, 
-  MapPin, 
-  Briefcase,
   History,
-  TrendingUp,
   AlertCircle,
-  ChevronRight
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -27,40 +21,44 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface GuestProfileSheetProps {
   guestId: string | null;
   onClose: () => void;
-  onBookingClick?: (booking: any) => void;
+  onBookingClick?: (booking: Booking) => void;
 }
 
 export function GuestProfileSheet({ guestId, onClose, onBookingClick }: GuestProfileSheetProps) {
   const { rooms } = useBookings();
-  const [guest, setGuest] = useState<any>(null);
-  const [history, setHistory] = useState<any[]>([]);
+  const [guest, setGuest] = useState<Guest | null>(null);
+  const [history, setHistory] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!guestId) { 
-      setGuest(null); 
-      setHistory([]); 
-      setError(null);
+      setTimeout(() => {
+        setGuest(null); 
+        setHistory([]); 
+        setError(null);
+      }, 0);
       return; 
     }
     
-    setLoading(true);
-    setError(null);
+    setTimeout(() => {
+      setLoading(true);
+      setError(null);
+    }, 0);
     
     Promise.all([
       api.getGuest(guestId),
       api.getGuestHistory(guestId),
     ]).then(([guestData, historyData]) => {
-      setGuest(guestData);
-      setHistory(Array.isArray(historyData) ? historyData : []);
+      setGuest(guestData as Guest);
+      setHistory(Array.isArray(historyData) ? historyData as Booking[] : []);
     }).catch(err => {
       console.error(err);
       setError("Database connection error. Profile unreachable.");
     }).finally(() => setLoading(false));
   }, [guestId]);
 
-  const totalSpend = history.reduce((sum: number, b: any) => {
+  const totalSpend = history.reduce((sum: number, b: Booking) => {
     const room = typeof b.roomId === 'object' ? b.roomId : rooms.find(r => r._id === b.roomId);
     const nights = Math.max(1, differenceInDays(new Date(b.checkout), new Date(b.checkin)));
     return sum + (room?.price || 0) * nights;
@@ -105,7 +103,7 @@ export function GuestProfileSheet({ guestId, onClose, onBookingClick }: GuestPro
                 <div className="grid grid-cols-3 gap-3">
                   {[
                     { label: 'Stay Logs', value: history.length, icon: History },
-                    { label: 'Room Nights', value: history.reduce((s: number, b: any) => s + Math.max(1, differenceInDays(new Date(b.checkout), new Date(b.checkin))), 0), icon: CalendarDays },
+                    { label: 'Room Nights', value: history.reduce((s: number, b: Booking) => s + Math.max(1, differenceInDays(new Date(b.checkout), new Date(b.checkin))), 0), icon: CalendarDays },
                     { label: 'LTV Spend', value: `₹${(totalSpend/1000).toFixed(1)}k`, icon: CreditCard },
                   ].map(stat => (
                     <div key={stat.label} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/60 flex flex-col items-center text-center space-y-1">
@@ -146,7 +144,7 @@ export function GuestProfileSheet({ guestId, onClose, onBookingClick }: GuestPro
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {history.map((b: any) => {
+                      {history.map((b: Booking) => {
                         const room = typeof b.roomId === 'object' ? b.roomId : rooms.find(r => r._id === b.roomId);
                         const nights = Math.max(1, differenceInDays(new Date(b.checkout), new Date(b.checkin)));
                         const config = statusConfig[b.status] || { color: 'text-slate-400', bgColor: 'bg-slate-100' };

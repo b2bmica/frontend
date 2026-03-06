@@ -37,11 +37,10 @@ export function ThemeProvider({
   }, [])
 
   const value = {
-    theme: "light" as Theme,
-    setTheme: (theme: Theme) => {
-      // Force light even if someone tries to set dark
-      localStorage.setItem(storageKey, "light")
-      setTheme("light")
+    theme,
+    setTheme: (t: Theme) => {
+      localStorage.setItem(storageKey, t)
+      setTheme(t)
     },
   }
 

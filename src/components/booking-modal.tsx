@@ -16,6 +16,7 @@ import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { TimePicker } from './ui/time-picker';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -37,11 +38,7 @@ const PLAN_TYPES = [
   { key: 'Custom', label: 'Custom Inclusions',     desc: 'Specify your own package',              icon: Star },
 ];
 
-const TIME_SLOTS = Array.from({ length: 48 }, (_, i) => {
-  const h = Math.floor(i / 2).toString().padStart(2, '0');
-  const m = i % 2 === 0 ? '00' : '30';
-  return `${h}:${m}`;
-});
+// Removed TIME_SLOTS, using TimePicker instead
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const parseHotelTime = (timeStr: string): string => {
@@ -176,7 +173,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       setAdvancePayment(0);
       setPaymentMethod('');
       setBlockReason('');
-      setExpiryHours('4');
+      setExpiryHours(hotel?.settings?.enquiryHoldTime || '4');
       setError(null);
       setGroupName('');
       setNumRooms(2);
@@ -187,7 +184,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       setIsSingleFolio(true);
       setPlanMixed(false);
     }
-  }, [isOpen, selectedRoomId, selectedDate, initialBooking, rooms, defaultCheckinTime, defaultCheckoutTime]);
+  }, [isOpen, selectedRoomId, selectedDate, initialBooking, rooms, defaultCheckinTime, defaultCheckoutTime, hotel?.settings?.enquiryHoldTime]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // ─── Availability ─────────────────────────────────────────────────────────
@@ -319,6 +316,14 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         : undefined;
 
       if (reservationType === 'group') {
+        const conflictRooms = selectedRooms.filter(rid => !isRoomAvailable(rid));
+        if (conflictRooms.length > 0) {
+          const conflictNames = conflictRooms.map(id => rooms.find(r => r._id === id)?.roomNumber).join(', ');
+          setError(`Conflicts detected. The following rooms are no longer available: ${conflictNames}. Please reselect.`);
+          setIsSubmitting(false);
+          return;
+        }
+
         const groupId = `GRP-${Date.now()}`;
         for (const rid of selectedRooms) {
           const assignment = roomAssignments[rid];
@@ -398,7 +403,17 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         {types.map(t => {
           const Icon = t.icon;
           return (
-            <button key={t.key} onClick={() => { setReservationType(t.key as 'booking' | 'enquiry' | 'block' | 'group'); goNext('dates'); }}
+            <button key={t.key} onClick={() => { 
+                setReservationType(t.key as 'booking' | 'enquiry' | 'block' | 'group');
+                if (t.key === 'block') {
+                   const bdStr = hotel?.settings?.blockDuration?.split(' ')[0] || '1';
+                   const bd = parseInt(bdStr, 10);
+                   if (!isNaN(bd) && checkinDate) {
+                      setCheckoutDate(format(addDays(parseISO(checkinDate), bd), 'yyyy-MM-dd'));
+                   }
+                }
+                goNext('dates'); 
+              }}
               className={cn('flex flex-col items-center gap-2 p-5 rounded-2xl border-2 transition-all text-center active:scale-95', t.color, 'hover:scale-[1.02] hover:shadow-md cursor-pointer')}>
               <Icon className="h-7 w-7" />
               <span className="font-black text-sm">{t.label}</span>
@@ -492,27 +507,39 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
   // ─── Render Step: Dates ───────────────────────────────────────────────────
   const renderDatesStep = () => {
-    const validDates = checkinISO && checkoutISO && new Date(checkinISO) < new Date(checkoutISO);
+    const validDates = checkinISO && checkoutISO && new Date(checkinISO) < new Date(checkoutISO) && (!isDayUse || checkinTime < checkoutTime);
     return (
       <div className="space-y-5">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5 col-span-2 sm:col-span-1">
             <Label className="text-xs font-black uppercase tracking-widest opacity-60">Check-in</Label>
-            <Input type="date" className="h-11 rounded-xl" value={checkinDate} onChange={e => { setCheckinDate(e.target.value); if (e.target.value >= checkoutDate) setCheckoutDate(format(addDays(parseISO(e.target.value), 1), 'yyyy-MM-dd')); }} />
-            <Select value={checkinTime} onValueChange={setCheckinTime}>
-              <SelectTrigger className="h-10 rounded-xl text-sm font-bold"><SelectValue /></SelectTrigger>
-              <SelectContent className="max-h-52">{TIME_SLOTS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-            </Select>
+            <Input type="date" className="h-11 rounded-xl" value={checkinDate} onChange={e => { 
+                setCheckinDate(e.target.value); 
+                if (e.target.value >= checkoutDate) setCheckoutDate(format(addDays(parseISO(e.target.value), 1), 'yyyy-MM-dd')); 
+                if (selectedRoom) { setSelectedRoom(''); setError('Dates changed. Please reselect a room.'); }
+            }} />
+            <TimePicker 
+               className="h-11 rounded-xl font-bold" 
+               value={checkinTime} 
+               onChange={v => { setCheckinTime(v); if (selectedRoom) { setSelectedRoom(''); setError('Dates changed. Please reselect a room.'); } }} 
+            />
           </div>
           <div className="space-y-1.5 col-span-2 sm:col-span-1">
             <Label className="text-xs font-black uppercase tracking-widest opacity-60">Check-out</Label>
-            <Input type="date" className="h-11 rounded-xl" value={checkoutDate} min={checkinDate} onChange={e => setCheckoutDate(e.target.value)} />
-            <Select value={checkoutTime} onValueChange={setCheckoutTime}>
-              <SelectTrigger className="h-10 rounded-xl text-sm font-bold"><SelectValue /></SelectTrigger>
-              <SelectContent className="max-h-52">{TIME_SLOTS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-            </Select>
+            <Input type="date" className="h-11 rounded-xl" value={checkoutDate} min={checkinDate} onChange={e => {
+                setCheckoutDate(e.target.value);
+                if (selectedRoom) { setSelectedRoom(''); setError('Dates changed. Please reselect a room.'); }
+            }} />
+            <TimePicker 
+               className="h-11 rounded-xl font-bold" 
+               value={checkoutTime} 
+               onChange={v => { setCheckoutTime(v); if (selectedRoom) { setSelectedRoom(''); setError('Dates changed. Please reselect a room.'); } }} 
+            />
           </div>
         </div>
+        {!validDates && checkinDate === checkoutDate && checkinTime >= checkoutTime && (
+          <p className="text-xs font-bold text-red-500 bg-red-50 p-2 rounded-lg mt-2 inline-block">Check-out time must be after check-in time for day use.</p>
+        )}
         {validDates && (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="bg-primary/10 text-primary text-xs font-black px-3 py-1 rounded-full">{isDayUse ? 'Day Use' : `${nights} night${nights !== 1 ? 's' : ''}`}</span>
@@ -824,23 +851,50 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
     roomAssignment: renderRoomAssignmentStep,
   };
 
+  const currentStepNum = stepOrder.indexOf(step) + 1;
+  const totalSteps = stepOrder.length;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-[500px] p-0 overflow-hidden border-none rounded-3xl">
-        <div className="bg-slate-50/50 p-6 border-b flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {step !== 'type' && <Button variant="ghost" size="icon" onClick={goBack} className="h-8 w-8 rounded-full"><ArrowLeft className="h-4 w-4" /></Button>}
-            <div><DialogTitle className="text-xl font-black">{initialBooking ? 'Edit' : 'New'} Reservation</DialogTitle><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stepLabel[step]}</p></div>
+      <DialogContent className="sm:max-w-[500px] w-full max-w-none h-[100dvh] sm:h-auto p-0 overflow-hidden border-none sm:rounded-[32px] rounded-none flex flex-col shadow-2xl bg-white">
+        <div className="bg-slate-50 border-b flex items-center justify-between p-4 sm:p-6 shrink-0 relative z-10">
+          <div className="flex items-center gap-3 w-full">
+            {step !== 'type' && (
+              <Button variant="ghost" size="icon" onClick={goBack} className="h-10 w-10 sm:h-8 sm:w-8 rounded-full bg-white shadow-sm border border-slate-200 shrink-0 hover:bg-slate-100 hover:scale-105 transition-all">
+                <ArrowLeft className="h-5 w-5 sm:h-4 sm:w-4" />
+              </Button>
+            )}
+            <div className="flex-1 min-w-0">
+               <DialogTitle className="text-lg sm:text-xl font-black tracking-tighter truncate">{initialBooking ? 'Edit' : 'New'} Reservation</DialogTitle>
+               <p className="text-[10px] font-black tracking-widest text-primary/60 uppercase">
+                 Step {currentStepNum} of {totalSteps} &bull; {stepLabel[step]}
+               </p>
+            </div>
+            <DialogTitle className="sr-only">New Booking Modal</DialogTitle>
           </div>
         </div>
-        <div className="p-6">
+        
+        <div className="p-4 sm:p-6 flex-1 overflow-y-auto bg-white/50 pb-24 sm:pb-6"
+             onKeyDown={(e) => {
+               if (e.key === 'Escape') {
+                 e.stopPropagation();
+                 onClose();
+               }
+             }}>
           <AnimatePresence mode="wait">
-            <motion.div key={step} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }}>
+            <motion.div 
+               key={step} 
+               initial={{ opacity: 0, x: 20 }} 
+               animate={{ opacity: 1, x: 0 }} 
+               exit={{ opacity: 0, x: -20 }} 
+               transition={{ type: "spring", stiffness: 300, damping: 30 }}
+               className="h-full"
+            >
               {error && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center gap-2">
                   <Info className="h-4 w-4 shrink-0" />
-                  <span className="flex-1">{error}</span>
-                  <button onClick={() => setError(null)}><X className="h-3 w-3 opacity-60 hover:opacity-100" /></button>
+                  <span className="flex-1 leading-tight">{error}</span>
+                  <button onClick={() => setError(null)}><X className="h-3.5 w-3.5 opacity-60 hover:opacity-100" /></button>
                 </div>
               )}
               {stepContent[step]()}

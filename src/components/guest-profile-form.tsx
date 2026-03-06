@@ -26,7 +26,7 @@ import {
 } from './ui/select';
 import { cn } from '../lib/utils';
 
-export function GuestProfileForm({ onSave, onCancel }: { onSave: (data: any) => void; onCancel: () => void }) {
+export function GuestProfileForm({ onSave, onCancel }: { onSave: (data: { idType: string; file: File | null }) => void; onCancel: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

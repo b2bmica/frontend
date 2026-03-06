@@ -1,16 +1,15 @@
 import * as React from "react"
 import {
-  Bed, Calendar, ChevronRight, Hotel, LayoutDashboard,
-  Settings, Users, Wallet, Home, Wrench, BookOpen, BarChart3,
-  Building2, LogOut, User,
+  Bed, Calendar, LayoutDashboard,
+  Users, Wallet, Wrench, BookOpen, BarChart3,
+  Building2, Home, Settings,
 } from "lucide-react"
 
 import {
-  Sidebar, SidebarContent, SidebarFooter, SidebarHeader,
+  Sidebar, SidebarContent, SidebarHeader,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem,
-  SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem, SidebarRail,
+  SidebarRail,
 } from "@/components/ui/sidebar"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useAuth } from "../context/auth-context"
 import { useSidebar } from "@/components/ui/sidebar"
 import { Link, useLocation } from "react-router-dom"
@@ -50,14 +49,9 @@ const sections = [
 ]
 
 export function AppSidebar({ 
-  activeTab, 
-  onTabChange, 
   ...props 
-}: React.ComponentProps<typeof Sidebar> & { 
-  activeTab?: string, 
-  onTabChange?: (tab: string) => void 
-}) {
-  const { user, hotel, logout } = useAuth()
+}: React.ComponentProps<typeof Sidebar>) {
+  const { user, hotel } = useAuth()
   const { setOpenMobile } = useSidebar()
   const location = useLocation()
   const pathSegments = location.pathname.split('/').filter(Boolean)
@@ -65,11 +59,6 @@ export function AppSidebar({
   const currentPathSegment = dashboardIndex !== -1 && pathSegments[dashboardIndex + 1] 
     ? pathSegments[dashboardIndex + 1] 
     : 'board'
-
-  const handleTabChange = (id: string) => {
-    onTabChange?.(id)
-    setOpenMobile(false)
-  }
 
   return (
     <Sidebar collapsible="icon" {...props}>

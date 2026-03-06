@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, Bed, Wifi, Tv, Coffee, Bath, Loader2, Sparkles, RefreshCw, Search } from 'lucide-react';
-import { useBookings, type Room } from '../context/booking-context';
+import { Plus, Pencil, Trash2, Bed, Wifi, Tv, Coffee, Bath, Loader2 } from 'lucide-react';
+import { useBookings, type Room, type Booking } from '../context/booking-context';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -9,8 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Badge } from './ui/badge';
 import { Card, CardContent } from './ui/card';
 import { cn } from '../lib/utils';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { HousekeepingBoard } from './housekeeping-board';
+
+
 
 const ROOM_TYPES = [
   'Standard AC', 'Standard Non-AC', 
@@ -58,7 +58,7 @@ export function RoomInventory() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [error, setError] = useState<string | null>(null);
 
-  const getBookingRoomId = (b: any): string => {
+  const getBookingRoomId = (b: Booking): string => {
     if (!b.roomId) return '';
     return typeof b.roomId === 'object' ? b.roomId._id : b.roomId;
   };
@@ -119,11 +119,11 @@ export function RoomInventory() {
       if (editingRoom) {
         await updateRoom(editingRoom._id, form);
       } else {
-        await createRoom(form);
+        await createRoom({ ...form, status: 'clean' });
       }
       setIsOpen(false);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsSubmitting(false);
     }
@@ -142,8 +142,8 @@ export function RoomInventory() {
     try {
       await deleteRoom(id);
       setDeleteConfirm(null);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
     }
   };
 

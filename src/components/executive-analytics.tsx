@@ -15,15 +15,13 @@ import {
   TrendingUp, 
   Users, 
   IndianRupee, 
-  ArrowUpRight, 
   Target,
-  History,
-  Info
+  History as HistoryIcon
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { useBookings } from '../context/booking-context';
+import { useBookings, type Booking } from '../context/booking-context';
 import { differenceInDays, format, startOfToday, subDays } from 'date-fns';
 import { cn } from '../lib/utils';
 
@@ -210,7 +208,7 @@ export function ExecutiveAnalytics() {
                   No active check-ins
                 </div>
               ) : (
-                stats.outstanding.map((item: any) => {
+                stats.outstanding.map((item: Booking) => {
                   const guest = typeof item.guestId === 'object' ? item.guestId : guests.find(g => g._id === item.guestId);
                   const room = typeof item.roomId === 'object' ? item.roomId : rooms.find(r => r._id === item.roomId);
                   return (
@@ -254,7 +252,7 @@ export function ExecutiveAnalytics() {
             </div>
             
             <div className="p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 flex items-center gap-4 mt-6">
-               <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center"><History className="h-5 w-5" /></div>
+               <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center"><HistoryIcon className="h-5 w-5" /></div>
                <div><p className="text-[8px] font-black uppercase text-white/50">Performance Rating</p><p className="text-xl font-black tracking-tight">Premium</p></div>
             </div>
           </CardContent>

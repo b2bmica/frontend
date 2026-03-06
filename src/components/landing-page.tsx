@@ -2,8 +2,6 @@ import { motion } from 'framer-motion';
 import { 
   Building2, 
   ArrowRight, 
-  CheckCircle2, 
-  Globe, 
   Zap, 
   Layers, 
   ShieldCheck, 

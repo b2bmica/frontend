@@ -52,84 +52,84 @@ class ApiClient {
 
   // Auth
   async register(data: { hotelName: string; userName: string; email: string; password: string; address?: string; phone?: string }) {
-    return this.request<{ token: string; user: any; hotel: any }>('/auth/register', {
+    return this.request<{ token: string; user: { _id: string; name: string; email: string; role: string }; hotel: { _id: string; name: string; settings: unknown } }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   async login(email: string, password: string) {
-    return this.request<{ token: string; user: any; hotel: any }>('/auth/login', {
+    return this.request<{ token: string; user: { _id: string; name: string; email: string; role: string }; hotel: { _id: string; name: string; settings: unknown }; unverified?: boolean }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
   }
 
   async verifyOtp(email: string, otp: string) {
-    return this.request<{ token: string; user: any; hotel: any }>('/auth/verify-otp', {
+    return this.request<{ token: string; user: unknown; hotel: unknown }>('/auth/verify-otp', {
       method: 'POST',
       body: JSON.stringify({ email, otp }),
     });
   }
 
   async forgotPassword(email: string) {
-    return this.request<any>('/auth/forgot-password', {
+    return this.request<unknown>('/auth/forgot-password', {
       method: 'POST',
       body: JSON.stringify({ email }),
     });
   }
 
-  async resetPassword(data: any) {
-    return this.request<any>('/auth/reset-password', {
+  async resetPassword(data: unknown) {
+    return this.request<unknown>('/auth/reset-password', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   async getMe() {
-    return this.request<{ user: any; hotel: any }>('/auth/me');
+    return this.request<{ user: { _id: string; name: string; email: string; role: string }; hotel: unknown }>('/auth/me');
   }
 
-  async updateHotel(data: any) {
-    return this.request<any>('/auth/hotel', {
+  async updateHotel(data: unknown) {
+    return this.request<unknown>('/auth/hotel', {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   }
 
   async deleteHotel() {
-    return this.request<any>('/auth/hotel', {
+    return this.request<unknown>('/auth/hotel', {
       method: 'DELETE',
     });
   }
 
   // Rooms
   async getRooms() {
-    return this.request<any[]>('/rooms');
+    return this.request<unknown[]>('/rooms');
   }
 
   async createRoom(data: { roomNumber: string; roomType: string; price: number; floor?: number; baseOccupancy?: number; maxOccupancy?: number; extraPersonPrice?: number; amenities?: string[] }) {
-    return this.request<any>('/rooms', {
+    return this.request<unknown>('/rooms', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async updateRoom(id: string, data: any) {
-    return this.request<any>(`/rooms/${id}`, {
+  async updateRoom(id: string, data: unknown) {
+    return this.request<unknown>(`/rooms/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   }
 
   async deleteRoom(id: string) {
-    return this.request<any>(`/rooms/${id}`, {
+    return this.request<unknown>(`/rooms/${id}`, {
       method: 'DELETE',
     });
   }
 
   async updateRoomStatus(id: string, status: string) {
-    return this.request<any>(`/rooms/${id}/status`, {
+    return this.request<unknown>(`/rooms/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     });
@@ -142,35 +142,35 @@ class ApiClient {
     if (params?.page) query.set('page', params.page.toString());
     if (params?.limit) query.set('limit', params.limit.toString());
     const qs = query.toString();
-    return this.request<{ bookings: any[]; pagination: any }>(`/bookings${qs ? '?' + qs : ''}`);
+    return this.request<{ bookings: unknown[]; pagination: unknown }>(`/bookings${qs ? '?' + qs : ''}`);
   }
 
   async createBooking(data: { roomId: string; guestId: string; checkin: string; checkout: string; adults?: number; children?: number; advancePayment?: number; bookingSource?: string }) {
-    return this.request<any>('/bookings', {
+    return this.request<unknown>('/bookings', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async updateBooking(id: string, data: any) {
-    return this.request<any>(`/bookings/${id}`, {
+  async updateBooking(id: string, data: Partial<{ roomId: unknown; guestId: unknown; checkin: string; checkout: string; status: string; advancePayment: number; roomPrice: number; paymentMethod: string; bookingType: string; enquiryExpiresAt: string; blockReason: string }>) {
+    return this.request<unknown>(`/bookings/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   }
 
   async cancelBooking(id: string) {
-    return this.request<any>(`/bookings/${id}`, {
+    return this.request<unknown>(`/bookings/${id}`, {
       method: 'DELETE',
     });
   }
 
   async getCalendarData(start: string, end: string) {
-    return this.request<any[]>(`/bookings/calendar?start=${start}&end=${end}`);
+    return this.request<unknown[]>(`/bookings/calendar?start=${start}&end=${end}`);
   }
 
   async checkAvailability(checkin: string, checkout: string) {
-    return this.request<any[]>(`/bookings/availability?checkin=${checkin}&checkout=${checkout}`);
+    return this.request<unknown[]>(`/bookings/availability?checkin=${checkin}&checkout=${checkout}`);
   }
 
   // Guests
@@ -179,53 +179,53 @@ class ApiClient {
     if (params?.page) query.set('page', params.page.toString());
     if (params?.limit) query.set('limit', params.limit.toString());
     const qs = query.toString();
-    return this.request<{ guests: any[]; pagination: any }>(`/guests${qs ? '?' + qs : ''}`);
+    return this.request<{ guests: unknown[]; pagination: { total: number; pages: number; current: number } }>(`/guests${qs ? '?' + qs : ''}`);
   }
 
   async createGuest(data: { name: string; phone: string; email?: string; nationality: string; address?: string; idProof: { idType: string; number: string } }) {
-    return this.request<any>('/guests', {
+    return this.request<unknown>('/guests', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   async searchGuests(query: string) {
-    return this.request<any[]>(`/guests/search?query=${encodeURIComponent(query)}`);
+    return this.request<unknown[]>(`/guests/search?query=${encodeURIComponent(query)}`);
   }
 
   async getGuestHistory(id: string) {
-    return this.request<any[]>(`/guests/${id}/history`);
+    return this.request<unknown[]>(`/guests/${id}/history`);
   }
 
   async getGuest(id: string) {
-    return this.request<any>(`/guests/${id}`);
+    return this.request<unknown>(`/guests/${id}`);
   }
 
   // Housekeeping & Maintenance
   async getHousekeepingBoard() {
-    return this.request<any[]>('/housekeeping/tickets');
+    return this.request<unknown[]>('/housekeeping/tickets');
   }
 
   async updateCleaningStatus(id: string, status: string) {
-    return this.request<any>(`/housekeeping/tickets/${id}/status`, {
+    return this.request<unknown>(`/housekeeping/tickets/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     });
   }
 
   async getMaintenanceTickets() {
-    return this.request<any[]>('/housekeeping/maintenance');
+    return this.request<unknown[]>('/housekeeping/maintenance');
   }
 
   async createMaintenanceTicket(data: { roomId: string; issue: string; priority: string }) {
-    return this.request<any>('/housekeeping/maintenance', {
+    return this.request<unknown>('/housekeeping/maintenance', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   async updateMaintenanceStatus(id: string, status: string) {
-    return this.request<any>(`/housekeeping/maintenance/${id}`, {
+    return this.request<unknown>(`/housekeeping/maintenance/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     });

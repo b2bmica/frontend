@@ -19,6 +19,10 @@ interface Hotel {
   settings?: {
     checkinTime: string;
     checkoutTime: string;
+    earlyCheckinBuffer?: string;
+    lateCheckoutBuffer?: string;
+    enquiryHoldTime?: string;
+    blockDuration?: string;
     currency: string;
     taxConfig: {
       enabled: boolean;
@@ -42,8 +46,8 @@ interface AuthContextType {
   hotel: Hotel | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<any>;
-  register: (data: { hotelName: string; userName: string; email: string; password: string; address?: string; phone?: string }) => Promise<any>;
+  login: (email: string, password: string) => Promise<unknown>;
+  register: (data: { hotelName: string; userName: string; email: string; password: string; address?: string; phone?: string }) => Promise<unknown>;
   verifyOtp: (email: string, otp: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (email: string, otp: string, newPassword: string) => Promise<void>;
@@ -72,7 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const data = await api.getMe();
         setUser(data.user);
-        setHotel(data.hotel);
+        setHotel(data.hotel as Hotel);
       } catch {
         api.setToken(null);
       } finally {
@@ -86,7 +90,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const data = await api.getMe();
       setUser(data.user);
-      setHotel(data.hotel);
+      setHotel(data.hotel as Hotel);
     } catch {
       // If refresh fails, might be token expiry
     }
@@ -95,12 +99,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = useCallback(async (email: string, password: string) => {
     setError(null);
     try {
-      const data = await api.login(email, password);
-      api.setToken(data.token);
-      setUser(data.user);
-      setHotel(data.hotel);
-    } catch (err: any) {
-      setError(err.message);
+      const data = await api.login(email, password) as { token: string; user: unknown; hotel: unknown; unverified?: boolean };
+      if (!data.unverified) {
+        api.setToken(data.token);
+        setUser(data.user as User);
+        setHotel(data.hotel as Hotel);
+      }
+      return data;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Login failed');
       throw err;
     }
   }, []);
@@ -110,8 +117,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const result = await api.register(data);
       return result;
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Registration failed');
       throw err;
     }
   }, []);
@@ -121,10 +128,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const data = await api.verifyOtp(email, otp);
       api.setToken(data.token);
-      setUser(data.user);
-      setHotel(data.hotel);
-    } catch (err: any) {
-      setError(err.message);
+      setUser(data.user as User);
+      setHotel(data.hotel as Hotel);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Verification failed');
       throw err;
     }
   }, []);
@@ -133,8 +140,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     try {
       await api.forgotPassword(email);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to send reset code');
       throw err;
     }
   }, []);
@@ -143,8 +150,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     try {
       await api.resetPassword({ email, otp, newPassword });
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Password reset failed');
       throw err;
     }
   }, []);
@@ -182,4 +189,9 @@ export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
+};
+
+export const useHotelSettings = () => {
+  const { hotel } = useAuth();
+  return hotel?.settings || {};
 };

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { toast } from 'sonner';
 import { useAuth } from './auth-context';
@@ -11,7 +11,7 @@ const NotificationContext = createContext<NotificationContextType>({ socket: nul
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { hotel, isAuthenticated } = useAuth();
-  const socketRef = useRef<Socket | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -48,17 +48,23 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         });
       });
 
-      socketRef.current = socket;
+      socket.on('disconnect', () => {
+        setSocket(null);
+      });
+
+      setTimeout(() => setSocket(socket), 0);
 
       return () => {
         socket.disconnect();
-        socketRef.current = null;
+        setSocket(null);
       };
+    } else {
+      setTimeout(() => setSocket(null), 0);
     }
   }, [isAuthenticated, hotel?._id]);
 
   return (
-    <NotificationContext.Provider value={{ socket: socketRef.current }}>
+    <NotificationContext.Provider value={{ socket }}>
       {children}
     </NotificationContext.Provider>
   );

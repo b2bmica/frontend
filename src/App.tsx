@@ -1,20 +1,15 @@
 import { useState, lazy, Suspense } from 'react'
 import { useNavigate, useLocation, Navigate, Routes, Route } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
 import { NotificationProvider } from './context/notification-context'
 import { Toaster } from 'sonner'
 import { 
-  Users, Calendar, Bed, TrendingUp, Plus, Download, LogOut,
-  Building2, Loader2, AlertTriangle
+  Users, Calendar, Bed, TrendingUp, Building2, Loader2, AlertTriangle
 } from 'lucide-react'
-import { Badge } from './components/ui/badge'
-
 import DashboardLayout from './components/layout/dashboard-layout'
 import { BookingTable } from './components/booking-table'
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card'
 import { Button } from './components/ui/button'
 import { PageSkeleton } from './components/page-states'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs'
 
 import { cn } from './lib/utils'
 import { AuthProvider, useAuth } from './context/auth-context'
@@ -25,14 +20,12 @@ import { RoomInventory } from './components/room-inventory'
 import { LandingPage } from './components/landing-page'
 
 // Lazy Loading Components
-const BookingBoard = lazy(() => import('./components/booking-board').then(module => ({ default: module.BookingBoard })))
 const GuestTable = lazy(() => import('./components/guest-table').then(module => ({ default: module.GuestTable })))
 const GuestProfileForm = lazy(() => import('./components/guest-profile-form').then(module => ({ default: module.GuestProfileForm })))
 const FolioView = lazy(() => import('./components/folio-view').then(module => ({ default: module.FolioView })))
-const CashierReport = lazy(() => import('./components/cashier-report').then(module => ({ default: module.CashierReport })))
+const BookingBoard = lazy(() => import('./components/booking-board').then(module => ({ default: module.BookingBoard })))
 const HousekeepingBoard = lazy(() => import('./components/housekeeping-board').then(module => ({ default: module.HousekeepingBoard })))
 const MaintenanceTickets = lazy(() => import('./components/maintenance-tickets').then(module => ({ default: module.MaintenanceTickets })))
-const ExecutiveAnalytics = lazy(() => import('./components/executive-analytics').then(module => ({ default: module.ExecutiveAnalytics })))
 const DirectBookingEngine = lazy(() => import('./components/direct-booking').then(module => ({ default: module.DirectBookingEngine })))
 const HotelSettings = lazy(() => import('./components/hotel-settings').then(module => ({ default: module.HotelSettings })))
 const PerformanceReport = lazy(() => import('./components/performance-report').then(module => ({ default: module.PerformanceReport })))
@@ -126,7 +119,7 @@ function DashboardContent() {
     )
   }
 
-  const currentPage = pageTitles[activeTab] || pageTitles.board
+  const currentPage = pageTitles[activeTab] || pageTitles.board;
 
   return (
     <>
@@ -143,6 +136,12 @@ function DashboardContent() {
         }
       }}>
         <div className={cn("flex flex-col", activeTab === 'board' ? "h-full" : "gap-4 md:gap-6")}>
+          {/* Page Title & Subtitle */}
+          <div className="mb-2">
+            <h2 className="text-2xl font-black tracking-tight text-slate-900">{currentPage.title}</h2>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{currentPage.subtitle}</p>
+          </div>
+
           {hotel?.status === 'deleted' && (
              <div className="p-3 bg-amber-50 border border-amber-100 rounded-2xl flex items-center gap-3 text-amber-900 mb-4">
                 <div className="p-2 bg-white rounded-lg"><AlertTriangle className="h-4 w-4 text-amber-600" /></div>

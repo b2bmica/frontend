@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Building2, Mail, Lock, User, MapPin, Phone, Eye, EyeOff, Loader2, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
+import { Building2, Eye, EyeOff, Loader2, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
 import { useAuth } from '../context/auth-context';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -31,7 +31,7 @@ export function AuthPage() {
     setSuccessMessage(null);
     try {
       if (view === 'login') {
-        const res = await login(form.email, form.password);
+        const res = (await login(form.email, form.password)) as any;
         if (res?.unverified) {
           setView('verify');
         }
@@ -50,8 +50,8 @@ export function AuthPage() {
         setSuccessMessage('Password reset successful. Please login.');
         setView('login');
       }
-    } catch (err: any) {
-      if (err.message && err.message.toLowerCase().includes('unverified')) {
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message.toLowerCase().includes('unverified')) {
         setView('verify');
       }
     } finally {
@@ -296,7 +296,7 @@ export function AuthPage() {
   );
 }
 
-function InfoIcon(props: any) {
+function InfoIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
   )

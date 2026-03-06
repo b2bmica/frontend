@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Bell, LogOut, Settings, Plus, Building2, ChevronDown } from "lucide-react"
+import { LogOut, Settings, Plus, Building2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"

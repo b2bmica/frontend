@@ -44,7 +44,6 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
   const [isSettled, setIsSettled] = useState(false);
   const [showDirtyRoomPrompt, setShowDirtyRoomPrompt] = useState(false);
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'upi'>('cash');
   const [groupActionLoading, setGroupActionLoading] = useState(false);
 
   // Allow internal navigation for groups
@@ -204,13 +203,13 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                 <div className="flex gap-1">
                    {/* Group Bulk Actions Trigger */}
                    {bookingData.status === 'reserved' && (
-                     <Button size="icon" variant="ghost" className="h-6 w-6 rounded-md hover:bg-emerald-100 hover:text-emerald-700" title="Check-in All" onClick={() => handleBulkAction(checkIn, sortedGroupRooms.filter(b => b.status === 'reserved'))}>
-                       <ShieldCheck className="h-3.5 w-3.5" />
+                     <Button size="icon" variant="ghost" disabled={groupActionLoading} className="h-6 w-6 rounded-md hover:bg-emerald-100 hover:text-emerald-700" title="Check-in All" onClick={() => handleBulkAction(checkIn, sortedGroupRooms.filter(b => b.status === 'reserved'))}>
+                       {groupActionLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
                      </Button>
                    )}
                    {bookingData.status === 'checked-in' && balance <= 0 && (
-                     <Button size="icon" variant="ghost" className="h-6 w-6 rounded-md hover:bg-blue-100 hover:text-blue-700" title="Checkout All" onClick={() => handleBulkAction(checkOut, sortedGroupRooms.filter(b => b.status === 'checked-in'))}>
-                       <CheckCircle2 className="h-3.5 w-3.5" />
+                     <Button size="icon" variant="ghost" disabled={groupActionLoading} className="h-6 w-6 rounded-md hover:bg-blue-100 hover:text-blue-700" title="Checkout All" onClick={() => handleBulkAction(checkOut, sortedGroupRooms.filter(b => b.status === 'checked-in'))}>
+                       {groupActionLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                      </Button>
                    )}
                 </div>
@@ -384,7 +383,6 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                                 <button
                                   key={m}
                                   onClick={() => {
-                                    setPaymentMethod(m as 'cash' | 'card' | 'upi');
                                     handleAction((id) => updateBooking(id, { 
                                       advancePayment: (bookingData.advancePayment || 0) + balance,
                                       paymentMethod: m as 'cash' | 'card' | 'upi'

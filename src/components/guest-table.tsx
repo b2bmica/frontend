@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Search, UserPlus, Phone, Mail, Globe, Eye, Loader2, User, ChevronRight } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -25,10 +25,7 @@ export function GuestTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
 
-  // Reset page on search change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search]);
+
 
   const filtered = guests.filter(g => {
     if (!search) return true;
@@ -47,8 +44,8 @@ export function GuestTable() {
       await createGuest(form);
       setShowAdd(false);
       setForm({ name: '', phone: '', email: '', nationality: 'Indian', idProof: { idType: 'aadhaar', number: '' } });
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
     }
     setIsSubmitting(false);
   };
@@ -64,7 +61,7 @@ export function GuestTable() {
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Search by name, phone or email..." className="pl-10"
-            value={search} onChange={e => setSearch(e.target.value)} />
+            value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} />
         </div>
         <Button size="sm" onClick={() => setShowAdd(true)}>
           <UserPlus className="mr-2 h-4 w-4" /> Add Guest
