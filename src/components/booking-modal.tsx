@@ -35,7 +35,7 @@ const PLAN_TYPES = [
   { key: 'CP',     label: 'Continental Plan',      desc: 'Room + Breakfast',                      icon: Coffee },
   { key: 'MAP',    label: 'Modified American',     desc: 'Room + Breakfast + Dinner',             icon: Sun },
   { key: 'AP',     label: 'American Plan',         desc: 'Room + All Meals (B+L+D)',              icon: Utensils },
-  { key: 'Custom', label: 'Custom Inclusions',     desc: 'Specify your own package',              icon: Star },
+  { key: 'custom', label: 'Custom Inclusions',     desc: 'Specify your own package',              icon: Star },
 ];
 
 // Removed TIME_SLOTS, using TimePicker instead
@@ -85,7 +85,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
   // Enquiry/Block expiry
   const [expiryHours, setExpiryHours] = useState('4');
-  const [customExpiryHours, setCustomExpiryHours] = useState('6');
+  const [customExpiryHours, setcustomExpiryHours] = useState('6');
   const [blockReason, setBlockReason] = useState('');
 
   // Date/time state
@@ -101,8 +101,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const [selectedRoom, setSelectedRoom] = useState<string>('');
 
   // Plan
-  const [planType, setPlanType] = useState<'EP' | 'CP' | 'MAP' | 'AP' | 'Custom'>('EP');
-  const [planCustomText, setPlanCustomText] = useState('');
+  const [planType, setPlanType] = useState<'EP' | 'CP' | 'MAP' | 'AP' | 'custom'>('EP');
+  const [planCustomText, setplanCustomText] = useState('');
 
   // Guest
   const [guestQuery, setGuestQuery] = useState('');
@@ -126,7 +126,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
   const [groupRoomPrefs, setGroupRoomPrefs] = useState<Record<string, number>>({});
   const [additionalGuests, setAdditionalGuests] = useState<Array<{ name: string; phone: string }>>([]);
-  const [roomAssignments, setRoomAssignments] = useState<Record<string, { guestName: string; plan: string; price: number }>>({});
+  const [roomAssignments, setRoomAssignments] = useState<Record<string, { guestName: string; plan: 'EP' | 'CP' | 'MAP' | 'AP' | 'custom'; price: number }>>({});
   const [isSingleFolio, setIsSingleFolio] = useState(true);
   const [planMixed, setPlanMixed] = useState(false);
 
@@ -143,7 +143,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       setSelectedRoom(rm?._id || '');
       setRoomPrice(initialBooking.roomPrice || rm?.price || 0);
       setPlanType(initialBooking.planType || 'EP');
-      setPlanCustomText(initialBooking.planCustomText || '');
+      setplanCustomText(initialBooking.planCustomText || '');
       setAdults(initialBooking.adults || 2);
       setSelectedGuest(typeof initialBooking.guestId === 'object' ? initialBooking.guestId : null);
       setBookingSource(initialBooking.bookingSource || 'direct');
@@ -162,7 +162,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       setSelectedRoom(selectedRoomId || '');
       setRoomPrice(rooms.find(r => r._id === selectedRoomId)?.price || 0);
       setPlanType('EP');
-      setPlanCustomText('');
+      setplanCustomText('');
       setAdults(2);
       setSelectedGuest(null);
       setGuestQuery('');
@@ -217,7 +217,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const isDayUse = nights === 0 && checkinDate === checkoutDate;
 
   const mealRates: Record<string, number> = hotel?.settings?.mealRates || {};
-  const mealCharge = planType !== 'EP' && planType !== 'Custom'
+  const mealCharge = planType !== 'EP' && planType !== 'custom'
     ? (mealRates[planType] || 0) * adults * Math.max(nights, isDayUse ? 1 : 0)
     : 0;
 
@@ -242,7 +242,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
   const goNext = (nextStep: StepType) => { 
     if (nextStep === 'roomAssignment' && reservationType === 'group') {
-      const init: Record<string, { guestName: string; plan: string; price: number }> = { ...roomAssignments };
+      const init: Record<string, { guestName: string; plan: 'EP' | 'CP' | 'MAP' | 'AP' | 'custom'; price: number }> = { ...roomAssignments };
       const guestNames = [selectedGuest?.name || 'Lead', ...additionalGuests.map(ag => ag.name).filter(Boolean)];
       
       selectedRooms.forEach((rid, i) => {
@@ -250,7 +250,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           const r = rooms.find(rm => rm._id === rid);
           init[rid] = { 
             guestName: guestNames[i] || 'TBA', 
-            plan: planType, 
+            plan: planType as 'EP' | 'CP' | 'MAP' | 'AP' | 'custom', 
             price: r?.price || 0 
           };
         }
@@ -290,10 +290,17 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
     if (!/^\+?[0-9]{10,15}$/.test(newGuest.phone)) { setError('Valid phone number required'); return; }
     setIsSubmitting(true); setError(null);
     try {
-      const payload: Record<string, unknown> = { name: newGuest.name, phone: newGuest.phone, email: newGuest.email || undefined, nationality: newGuest.nationality };
-      if (newGuest.idProof.number) payload.idProof = newGuest.idProof;
+      const payload: Omit<Guest, '_id'> = { 
+        name: newGuest.name, 
+        phone: newGuest.phone, 
+        email: newGuest.email || '', 
+        nationality: newGuest.nationality,
+        idProof: newGuest.idProof.number ? newGuest.idProof : { idType: 'aadhaar', number: 'TBA' }
+      };
       const guest = await createGuest(payload);
-      setSelectedGuest(guest); setShowNewGuest(false); goNext('payment');
+      setSelectedGuest(guest); 
+      setShowNewGuest(false); 
+      goNext('payment');
     } catch (err: unknown) { 
       const errorMessage = err instanceof Error ? err.message : 'An error occurred';
       setError(errorMessage); 
@@ -328,6 +335,12 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         for (const rid of selectedRooms) {
           const assignment = roomAssignments[rid];
           const rmLocal = rooms.find(r => r._id === rid);
+          if (!selectedGuest?._id) {
+            setError('Guest is required for group booking');
+            setIsSubmitting(false);
+            return;
+          }
+
           const payload = {
             roomId: rid,
             checkin: checkinDate,
@@ -343,18 +356,25 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
             paymentMethod: (advancePayment > 0) ? paymentMethod : undefined,
             bookingSource,
             specialRequests: `GROUP: ${groupName}. Room Guest: ${assignment?.guestName || 'TBA'}. ${specialRequests}`,
-            bookingType: 'booking' as const,
-            planType: assignment?.plan || planType,
+            reservationType: 'booking' as const,
+            planType: (assignment?.plan || planType) as 'EP' | 'CP' | 'MAP' | 'AP' | 'custom',
             isGroup: true,
             groupId,
             groupName,
-            guestId: selectedGuest?._id,
+            guestId: selectedGuest._id,
           };
           await createBooking(payload);
         }
       } else {
+        if (!selectedGuest?._id && reservationType !== 'block') {
+          setError('Guest is required');
+          setIsSubmitting(false);
+          return;
+        }
+
         const payload = {
           roomId: selectedRoom,
+          guestId: selectedGuest?._id || 'BLOCK-GUEST', // Placeholder for blocks
           checkin: checkinDate,
           checkout: checkoutDate,
           checkinTime,
@@ -369,17 +389,25 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           bookingSource,
           specialRequests: specialRequests || undefined,
           bookingType: reservationType === 'booking' ? undefined : reservationType as 'enquiry' | 'block',
-          planType: (reservationType === 'block' ? undefined : planType) as 'EP' | 'CP' | 'MAP' | 'AP' | 'Custom' | undefined,
-          planCustomText: planType === 'Custom' ? planCustomText : undefined,
+          reservationType: reservationType,
+          planType: (reservationType === 'block' ? undefined : planType) as 'EP' | 'CP' | 'MAP' | 'AP' | 'custom' | undefined,
+          planCustomText: planType === 'custom' ? planCustomText : undefined,
           enquiryExpiresAt,
           blockReason: reservationType === 'block' ? blockReason || undefined : undefined,
-          guestId: selectedGuest?._id,
+        };
+
+        const bookingPayload: Partial<Booking> & { roomId: string; guestId: string; checkin: string; checkout: string } = {
+          ...payload,
+          roomId: selectedRoom,
+          guestId: selectedGuest?._id || 'BLOCK-GUEST',
+          checkin: checkinDate,
+          checkout: checkoutDate,
         };
 
         if (initialBooking) {
-          await updateBooking(initialBooking._id, payload);
+          await updateBooking(initialBooking._id, bookingPayload as Partial<Booking>);
         } else {
-          await createBooking(payload);
+          await createBooking(bookingPayload); 
         }
       }
       onClose();
@@ -494,7 +522,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
             <button onClick={() => setPlanMixed(true)} className={cn('p-3 rounded-xl border-2 text-xs font-black transition-all', planMixed ? 'border-primary bg-primary/5' : 'border-slate-200')}>Mixed Plans</button>
           </div>
           {!planMixed && (
-            <Select value={planType} onValueChange={(v: 'EP' | 'CP' | 'MAP' | 'AP' | 'Custom') => setPlanType(v)}>
+            <Select value={planType} onValueChange={(v: 'EP' | 'CP' | 'MAP' | 'AP' | 'custom') => setPlanType(v)}>
               <SelectTrigger className="h-10 rounded-xl font-bold"><SelectValue /></SelectTrigger>
               <SelectContent>{PLAN_TYPES.map(p => <SelectItem key={p.key} value={p.key}>{p.key} — {p.label}</SelectItem>)}</SelectContent>
             </Select>
@@ -556,7 +584,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
             </div>
             {expiryHours === 'custom' && (
               <div className="flex items-center gap-2">
-                <Input type="number" min="0.5" step="0.5" className="h-9 rounded-xl w-28" value={customExpiryHours} onChange={e => setCustomExpiryHours(e.target.value)} />
+                <Input type="number" min="0.5" step="0.5" className="h-9 rounded-xl w-28" value={customExpiryHours} onChange={e => setcustomExpiryHours(e.target.value)} />
                 <span className="text-xs font-bold text-slate-500">hours</span>
               </div>
             )}
@@ -625,9 +653,9 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       <div className="space-y-2">
         {PLAN_TYPES.map(p => {
           const Icon = p.icon;
-          const rate = p.key !== 'EP' && p.key !== 'Custom' ? (mealRates[p.key] || 0) : 0;
+          const rate = p.key !== 'EP' && p.key !== 'custom' ? (mealRates[p.key] || 0) : 0;
           return (
-            <button key={p.key} onClick={() => setPlanType(p.key as 'EP' | 'CP' | 'MAP' | 'AP' | 'Custom')} className={cn('w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left', planType === p.key ? 'border-primary bg-primary/5' : 'border-slate-200 bg-white')}>
+            <button key={p.key} onClick={() => setPlanType(p.key as 'EP' | 'CP' | 'MAP' | 'AP' | 'custom')} className={cn('w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left', planType === p.key ? 'border-primary bg-primary/5' : 'border-slate-200 bg-white')}>
               <div className={cn('p-2.5 rounded-lg', planType === p.key ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500')}><Icon className="h-4 w-4" /></div>
               <div className="flex-1 min-w-0"><span className="font-black text-sm uppercase">{p.key}</span><p className="text-[10px] text-slate-400">{p.desc}</p></div>
               {rate > 0 && <span className="text-xs font-black text-primary shrink-0">+₹{rate}/pp</span>}
@@ -807,7 +835,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         const a = roomAssignments[rid];
         const roomStay = (a?.price || 0) * Math.max(nights, isDayUse ? 1 : 0);
         // Add meal costs for each room if applicable
-        const mealRate = (a?.plan && a.plan !== 'EP' && a.plan !== 'Custom') ? (mealRates[a.plan] || 0) : 0;
+        const mealRate = (a?.plan && a.plan !== 'EP' && a.plan !== 'custom') ? (mealRates[a.plan] || 0) : 0;
         const roomMeals = mealRate * adults * Math.max(nights, isDayUse ? 1 : 0);
         groupSubtotal += roomStay + roomMeals;
       });

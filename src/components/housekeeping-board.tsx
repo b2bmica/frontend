@@ -63,7 +63,7 @@ export function HousekeepingBoard() {
 
   const handleStatusChange = async (roomId: string, newStatus: string) => {
     setActioning(roomId);
-    try { await updateRoomStatus(roomId, newStatus); } catch { /* noop */ }
+    try { await updateRoomStatus(roomId, newStatus as any); } catch { /* noop */ }
     setActioning(null);
   };
 

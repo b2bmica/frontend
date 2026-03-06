@@ -34,10 +34,12 @@ export interface Booking {
   bookingSource: string;
   paymentMethod?: string;
   paymentLogs?: Array<{ _id?: string; amount: number; method: string; date: string; note?: string }>;
-  status: 'reserved' | 'checked-in' | 'checked-out' | 'cancelled' | 'blocked';
-  bookingType?: 'booking' | 'enquiry' | 'block';
-  enquiryExpiresAt?: string;  // ISO timestamp for auto-release
-  planType?: 'EP' | 'CP' | 'MAP' | 'AP' | 'Custom';
+  status: 'reserved' | 'checked-in' | 'checked-out' | 'cancelled' | 'expired' | 'blocked';
+  bookingType?: 'booking' | 'enquiry' | 'block' | 'group';
+  reservationType?: 'booking' | 'enquiry' | 'block' | 'group';
+  enquiryExpiresAt?: string;
+  blockExpiresAt?: string;
+  planType?: 'EP' | 'CP' | 'MAP' | 'AP' | 'custom';
   planCustomText?: string;
   specialRequests?: string;
   blockReason?: string;
@@ -70,16 +72,16 @@ interface BookingContextType {
   refreshBookings: () => Promise<void>;
   refreshRooms: () => Promise<void>;
   refreshGuests: () => Promise<void>;
-  createBooking: (data: Partial<Booking> & { roomId: string; guestId: string; checkin: string; checkout: string }) => Promise<unknown>;
+  createBooking: (data: Partial<Booking> & { roomId: string; guestId: string; checkin: string; checkout: string }) => Promise<Booking>;
   updateBooking: (id: string, data: Partial<Booking>) => Promise<void>;
   cancelBooking: (id: string) => Promise<void>;
   checkIn: (id: string) => Promise<void>;
   checkOut: (id: string) => Promise<void>;
-  createRoom: (data: Omit<Room, '_id'>) => Promise<unknown>;
+  createRoom: (data: Omit<Room, '_id'>) => Promise<Room>;
   updateRoom: (id: string, data: Partial<Room>) => Promise<void>;
   updateRoomStatus: (id: string, status: Room['status']) => Promise<void>;
   deleteRoom: (id: string) => Promise<void>;
-  createGuest: (data: Omit<Guest, '_id'>) => Promise<unknown>;
+  createGuest: (data: Omit<Guest, '_id'>) => Promise<Guest>;
   searchGuests: (query: string) => Promise<Guest[]>;
 }
 
@@ -133,7 +135,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const result = await api.createBooking(data);
     await refreshBookings();
     await refreshRooms(); // Room status might change
-    return result;
+    return result as Booking;
   }, [refreshBookings, refreshRooms]);
 
   const updateBooking = useCallback(async (id: string, data: Partial<Booking>) => {
@@ -163,7 +165,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const createRoomFn = useCallback(async (data: Omit<Room, '_id'>) => {
     const result = await api.createRoom(data);
     await refreshRooms();
-    return result;
+    return result as Room;
   }, [refreshRooms]);
 
   const updateRoomFn = useCallback(async (id: string, data: Partial<Room>) => {
@@ -184,7 +186,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const createGuestFn = useCallback(async (data: Omit<Guest, '_id'>) => {
     const result = await api.createGuest(data);
     await refreshGuests();
-    return result;
+    return result as Guest;
   }, [refreshGuests]);
 
   const searchGuestsFn = useCallback(async (query: string) => {
