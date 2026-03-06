@@ -372,9 +372,9 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           return;
         }
 
-        const payload = {
+        const bookingPayload: Partial<Booking> & { roomId: string; checkin: string; checkout: string } = {
           roomId: selectedRoom,
-          guestId: selectedGuest?._id || 'BLOCK-GUEST', // Placeholder for blocks
+          guestId: selectedGuest?._id,  // undefined is fine for blocks
           checkin: checkinDate,
           checkout: checkoutDate,
           checkinTime,
@@ -396,18 +396,10 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           blockReason: reservationType === 'block' ? blockReason || undefined : undefined,
         };
 
-        const bookingPayload: Partial<Booking> & { roomId: string; guestId: string; checkin: string; checkout: string } = {
-          ...payload,
-          roomId: selectedRoom,
-          guestId: selectedGuest?._id || 'BLOCK-GUEST',
-          checkin: checkinDate,
-          checkout: checkoutDate,
-        };
-
         if (initialBooking) {
           await updateBooking(initialBooking._id, bookingPayload as Partial<Booking>);
         } else {
-          await createBooking(bookingPayload); 
+          await createBooking(bookingPayload);
         }
       }
       onClose();

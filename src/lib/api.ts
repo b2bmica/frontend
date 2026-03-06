@@ -145,7 +145,7 @@ class ApiClient {
     return this.request<{ bookings: unknown[]; pagination: unknown }>(`/bookings${qs ? '?' + qs : ''}`);
   }
 
-  async createBooking(data: { roomId: string; guestId: string; checkin: string; checkout: string; adults?: number; children?: number; advancePayment?: number; bookingSource?: string }) {
+  async createBooking(data: { roomId: string; guestId?: string; checkin: string; checkout: string; adults?: number; children?: number; advancePayment?: number; bookingSource?: string }) {
     return this.request<unknown>('/bookings', {
       method: 'POST',
       body: JSON.stringify(data),

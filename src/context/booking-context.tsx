@@ -20,7 +20,7 @@ export interface Room {
 export interface Booking {
   _id: string;
   roomId: string | Room; // populated with room data or ID
-  guestId: string | Guest; // populated with guest data or ID  
+  guestId?: string | Guest; // populated with guest data or ID  
   checkin: string;
   checkout: string;
   checkinTime?: string;   // "HH:mm"
@@ -72,7 +72,7 @@ interface BookingContextType {
   refreshBookings: () => Promise<void>;
   refreshRooms: () => Promise<void>;
   refreshGuests: () => Promise<void>;
-  createBooking: (data: Partial<Booking> & { roomId: string; guestId: string; checkin: string; checkout: string }) => Promise<Booking>;
+  createBooking: (data: Partial<Booking> & { roomId: string; checkin: string; checkout: string }) => Promise<Booking>;
   updateBooking: (id: string, data: Partial<Booking>) => Promise<void>;
   cancelBooking: (id: string) => Promise<void>;
   checkIn: (id: string) => Promise<void>;
@@ -131,10 +131,17 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, [isAuthenticated, refreshRooms, refreshBookings, refreshGuests]);
 
-  const createBookingFn = useCallback(async (data: Partial<Booking> & { roomId: string; guestId: string; checkin: string; checkout: string }) => {
-    const result = await api.createBooking(data);
+  const createBookingFn = useCallback(async (data: Partial<Booking> & { roomId: string; checkin: string; checkout: string }) => {
+    // Normalize guestId — it may be a populated Guest object or a string
+    const rawGuestId = data.guestId;
+    const guestIdStr = typeof rawGuestId === 'object' && rawGuestId !== null
+      ? (rawGuestId as Guest)._id
+      : rawGuestId as string | undefined;
+
+    const apiPayload = { ...data, guestId: guestIdStr };
+    const result = await api.createBooking(apiPayload);
     await refreshBookings();
-    await refreshRooms(); // Room status might change
+    await refreshRooms();
     return result as Booking;
   }, [refreshBookings, refreshRooms]);
 
