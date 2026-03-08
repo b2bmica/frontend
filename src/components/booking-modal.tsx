@@ -688,27 +688,32 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       {selectedRoom && (
         <div className="space-y-1.5">
           <Label className="text-xs font-black uppercase tracking-widest opacity-60">Stay Plan</Label>
-          <div className="grid grid-cols-2 gap-2">
-            {(hotel?.settings?.stayPlans || PLAN_TYPES).map((p: any) => {
-              const isSel = planType === p.key;
-              const rate = (p.key !== 'EP' && p.key !== 'custom') ? (mealRates[p.key] || 0) : 0;
-              return (
-                <button 
-                  key={p.key} 
-                  type="button"
-                  onClick={() => setPlanType(p.key)}
-                  className={cn(
-                    "flex flex-col p-2.5 rounded-xl border-2 text-left transition-all",
-                    isSel ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "border-slate-100 hover:border-slate-200 bg-white"
-                  )}
-                >
-                  <span className="font-black text-xs uppercase">{p.key}</span>
-                  <p className="text-[9px] text-slate-400 line-clamp-1">{p.label}</p>
-                  {rate > 0 && <span className="text-[10px] font-black text-primary/70 mt-1">₹{rate}/pp</span>}
-                </button>
-              );
-            })}
-          </div>
+          <Select value={planType} onValueChange={setPlanType}>
+            <SelectTrigger className="h-11 rounded-xl font-bold bg-white">
+              <SelectValue placeholder="Select a plan" />
+            </SelectTrigger>
+            <SelectContent>
+              {(hotel?.settings?.stayPlans || PLAN_TYPES).map((p: any) => {
+                const rate = (p.key !== 'EP' && p.key !== 'custom') ? (mealRates[p.key] || 0) : 0;
+                return (
+                  <SelectItem key={p.key} value={p.key}>
+                    <div className="flex items-center justify-between min-w-[280px] w-full">
+                      <div className="flex flex-col py-0.5">
+                        <span className="font-black text-xs uppercase">{p.key} • {p.label}</span>
+                        <span className="text-[10px] text-slate-400 font-medium leading-none mt-1">{p.description || p.desc}</span>
+                      </div>
+                      {rate > 0 && (
+                        <div className="ml-4 flex flex-col items-end shrink-0">
+                          <span className="text-[10px] font-black text-primary">₹{rate}</span>
+                          <span className="text-[8px] opacity-40 uppercase tracking-tighter">per pax</span>
+                        </div>
+                      )}
+                    </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
         </div>
       )}
       {selectedRoom && nights >= 0 && (
