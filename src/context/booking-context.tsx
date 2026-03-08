@@ -13,8 +13,8 @@ export interface Room {
   baseOccupancy: number;
   maxOccupancy: number;
   extraPersonPrice: number;
-  defaultCheckinTime?: string;   // "HH:mm"
-  defaultCheckoutTime?: string;  // "HH:mm"
+  checkinTime?: string;   // "HH:mm"
+  checkoutTime?: string;  // "HH:mm"
 }
 
 export interface Booking {

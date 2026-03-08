@@ -22,7 +22,9 @@ import {
   Loader2,
   CheckCircle2,
   Utensils,
-  Timer
+  Timer,
+  Trash2,
+  Plus
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -40,12 +42,12 @@ export function HotelSettings() {
     email: hotel?.email || '',
     gstin: hotel?.gstin || '',
     settings: {
-      checkinTime: hotel?.settings?.checkinTime || '14:00',
-      checkoutTime: hotel?.settings?.checkoutTime || '11:00',
-      earlyCheckinBuffer: hotel?.settings?.earlyCheckinBuffer || 'None',
-      lateCheckoutBuffer: hotel?.settings?.lateCheckoutBuffer || 'None',
-      enquiryHoldTime: hotel?.settings?.enquiryHoldTime || '24hr',
-      blockDuration: hotel?.settings?.blockDuration || '1 day',
+      checkinTimes: hotel?.settings?.checkinTimes?.length ? hotel.settings.checkinTimes : ['14:00'],
+      checkoutTimes: hotel?.settings?.checkoutTimes?.length ? hotel.settings.checkoutTimes : ['11:00'],
+      earlyCheckinBuffer: hotel?.settings?.earlyCheckinBuffer ?? 0,
+      lateCheckoutBuffer: hotel?.settings?.lateCheckoutBuffer ?? 0,
+      defaultEnquiryHold: hotel?.settings?.defaultEnquiryHold ?? 240,
+      defaultBlockDuration: hotel?.settings?.defaultBlockDuration ?? 1440,
       currency: hotel?.settings?.currency || 'INR',
       taxConfig: {
         enabled: hotel?.settings?.taxConfig?.enabled ?? true,
@@ -54,13 +56,43 @@ export function HotelSettings() {
         igst: hotel?.settings?.taxConfig?.igst ?? 12,
         hsnCode: hotel?.settings?.taxConfig?.hsnCode || '9963'
       },
-      mealRates: {
-        CP: hotel?.settings?.mealRates?.CP || 350,
-        MAP: hotel?.settings?.mealRates?.MAP || 650,
-        AP: hotel?.settings?.mealRates?.AP || 950,
-      }
+      mealRates: hotel?.settings?.mealRates || { CP: 350, MAP: 650, AP: 950 },
+      stayPlans: hotel?.settings?.stayPlans?.length ? hotel.settings.stayPlans : [
+        { key: 'EP', label: 'Room Only', description: 'No meals included' },
+        { key: 'CP', label: 'Continental Plan', description: 'Room + Breakfast' },
+        { key: 'MAP', label: 'Modified American', description: 'Room + Breakfast + Dinner' },
+        { key: 'AP', label: 'American Plan', description: 'Room + All Meals (B+L+D)' },
+        { key: 'custom', label: 'Custom Inclusions', description: 'Specify your own package' }
+      ]
     }
   });
+
+  const handleAddPlan = () => {
+    const newKey = `PLAN-${Date.now().toString().slice(-4)}`;
+    setForm({
+      ...form,
+      settings: {
+        ...form.settings,
+        stayPlans: [...form.settings.stayPlans, { key: newKey, label: 'New Plan', description: 'Description' }],
+        mealRates: { ...form.settings.mealRates, [newKey]: 0 }
+      }
+    });
+  };
+
+  const handleRemovePlan = (key: string) => {
+    if (['EP', 'CP', 'MAP', 'AP', 'custom'].includes(key)) return; // Prevent deleting defaults
+    const newPlans = form.settings.stayPlans.filter(p => p.key !== key);
+    const newRates = { ...form.settings.mealRates };
+    delete newRates[key];
+    setForm({
+      ...form,
+      settings: {
+        ...form.settings,
+        stayPlans: newPlans,
+        mealRates: newRates
+      }
+    });
+  };
 
   const handleSave = async () => {
     setLoading(true);
@@ -243,73 +275,182 @@ export function HotelSettings() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label>Default Check-in Time</Label>
-                  <TimePicker value={form.settings.checkinTime} onChange={v => setForm({...form, settings: {...form.settings, checkinTime: v}})} />
+                <div className="space-y-4">
+                  <Label>Allowed Check-in Times</Label>
+                  <div className="space-y-2">
+                    {form.settings.checkinTimes.map((time, idx) => (
+                      <div key={idx} className="flex gap-2 items-center">
+                        <TimePicker 
+                          value={time} 
+                          onChange={v => {
+                            const newArr = [...form.settings.checkinTimes];
+                            newArr[idx] = v;
+                            setForm({...form, settings: {...form.settings, checkinTimes: newArr}});
+                          }} 
+                        />
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => {
+                            if (form.settings.checkinTimes.length > 1) {
+                              setForm({
+                                ...form, 
+                                settings: {
+                                  ...form.settings, 
+                                  checkinTimes: form.settings.checkinTimes.filter((_, i) => i !== idx)
+                                }
+                              });
+                            }
+                          }}
+                          disabled={form.settings.checkinTimes.length === 1}
+                        >
+                          <Trash2 className="w-4 h-4 text-red-500" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full mt-2"
+                      onClick={() => setForm({
+                        ...form, 
+                        settings: {
+                          ...form.settings, 
+                          checkinTimes: [...form.settings.checkinTimes, '14:00']
+                        }
+                      })}
+                    >
+                      <Plus className="w-4 h-4 mr-2" /> Add Time
+                    </Button>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Default Check-out Time</Label>
-                  <TimePicker value={form.settings.checkoutTime} onChange={v => setForm({...form, settings: {...form.settings, checkoutTime: v}})} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Early Check-in Buffer</Label>
-                  <Select value={form.settings.earlyCheckinBuffer} onValueChange={v => setForm({...form, settings: {...form.settings, earlyCheckinBuffer: v}})}>
-                    <SelectTrigger><SelectValue/></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="None">None</SelectItem>
-                      <SelectItem value="1hr">1 Hour</SelectItem>
-                      <SelectItem value="2hr">2 Hours</SelectItem>
-                      <SelectItem value="3hr">3 Hours</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Late Check-out Buffer</Label>
-                  <Select value={form.settings.lateCheckoutBuffer} onValueChange={v => setForm({...form, settings: {...form.settings, lateCheckoutBuffer: v}})}>
-                    <SelectTrigger><SelectValue/></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="None">None</SelectItem>
-                      <SelectItem value="1hr">1 Hour</SelectItem>
-                      <SelectItem value="2hr">2 Hours</SelectItem>
-                      <SelectItem value="3hr">3 Hours</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-4">
+                  <Label>Allowed Check-out Times</Label>
+                  <div className="space-y-2">
+                    {form.settings.checkoutTimes.map((time, idx) => (
+                      <div key={idx} className="flex gap-2 items-center">
+                        <TimePicker 
+                          value={time} 
+                          onChange={v => {
+                            const newArr = [...form.settings.checkoutTimes];
+                            newArr[idx] = v;
+                            setForm({...form, settings: {...form.settings, checkoutTimes: newArr}});
+                          }} 
+                        />
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => {
+                            if (form.settings.checkoutTimes.length > 1) {
+                              setForm({
+                                ...form, 
+                                settings: {
+                                  ...form.settings, 
+                                  checkoutTimes: form.settings.checkoutTimes.filter((_, i) => i !== idx)
+                                }
+                              });
+                            }
+                          }}
+                          disabled={form.settings.checkoutTimes.length === 1}
+                        >
+                          <Trash2 className="w-4 h-4 text-red-500" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full mt-2"
+                      onClick={() => setForm({
+                        ...form, 
+                        settings: {
+                          ...form.settings, 
+                          checkoutTimes: [...form.settings.checkoutTimes, '11:00']
+                        }
+                      })}
+                    >
+                      <Plus className="w-4 h-4 mr-2" /> Add Time
+                    </Button>
+                  </div>
+```
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-none shadow-md">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Utensils className="h-5 w-5 text-primary" />
-                <CardTitle>Meal Plan Rates</CardTitle>
+          <Card className="border-none shadow-md overflow-hidden">
+            <CardHeader className="bg-slate-50/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Utensils className="h-5 w-5 text-primary" />
+                  <CardTitle>Stay Plans & Meal Rates</CardTitle>
+                </div>
+                <Button variant="outline" size="sm" onClick={handleAddPlan} className="h-8 gap-1 font-bold">
+                  <Plus className="h-3.5 w-3.5" /> Add Plan
+                </Button>
               </div>
-              <CardDescription>Daily rates per person (excluding GST).</CardDescription>
+              <CardDescription>Configure packages like EP/CP/MAP and their per-person pricing.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label className="flex justify-between">CP <span className="text-[10px] text-muted-foreground">Breakfast</span></Label>
-                  <div className="relative">
-                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                    <Input type="number" className="pl-8" value={form.settings.mealRates.CP} onChange={e => setForm({...form, settings: {...form.settings, mealRates: {...form.settings.mealRates, CP: parseFloat(e.target.value) || 0}}})} />
+            <CardContent className="p-0">
+              <div className="divide-y border-t">
+                {form.settings.stayPlans.map((plan, idx) => (
+                  <div key={plan.key} className="p-4 hover:bg-slate-50/50 transition-colors">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                      <div className="md:col-span-2 space-y-1.5">
+                        <Label className="text-[10px] font-black uppercase tracking-widest opacity-50">Code (Slug)</Label>
+                        <Input 
+                          value={plan.key} 
+                          disabled={['EP', 'CP', 'MAP', 'AP', 'custom'].includes(plan.key)}
+                          onChange={e => {
+                            const newKey = e.target.value.toUpperCase().replace(/\s+/g, '-');
+                            const updatedPlans = [...form.settings.stayPlans];
+                            updatedPlans[idx] = { ...plan, key: newKey };
+                            const updatedRates = { ...form.settings.mealRates };
+                            updatedRates[newKey] = updatedRates[plan.key] || 0;
+                            if (newKey !== plan.key) delete updatedRates[plan.key];
+                            setForm({ ...form, settings: { ...form.settings, stayPlans: updatedPlans, mealRates: updatedRates } });
+                          }}
+                          className="h-9 font-bold text-xs" 
+                        />
+                      </div>
+                      <div className="md:col-span-4 space-y-1.5">
+                        <Label className="text-[10px] font-black uppercase tracking-widest opacity-50">Label</Label>
+                        <Input 
+                          value={plan.label} 
+                          onChange={e => {
+                            const updatedPlans = [...form.settings.stayPlans];
+                            updatedPlans[idx] = { ...plan, label: e.target.value };
+                            setForm({ ...form, settings: { ...form.settings, stayPlans: updatedPlans } });
+                          }}
+                          className="h-9 font-bold" 
+                        />
+                      </div>
+                      <div className="md:col-span-3 space-y-1.5">
+                        <Label className="text-[10px] font-black uppercase tracking-widest opacity-50">Meal Charge (PP)</Label>
+                        <div className="relative">
+                          <IndianRupee className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                          <Input 
+                            type="number"
+                            disabled={plan.key === 'EP' || plan.key === 'custom'}
+                            value={form.settings.mealRates[plan.key] || 0}
+                            onChange={e => {
+                              const updatedRates = { ...form.settings.mealRates, [plan.key]: parseFloat(e.target.value) || 0 };
+                              setForm({ ...form, settings: { ...form.settings, mealRates: updatedRates } });
+                            }}
+                            className="h-9 pl-7 font-bold" 
+                          />
+                        </div>
+                      </div>
+                      <div className="md:col-span-1 flex items-center justify-end">
+                        {!['EP', 'CP', 'MAP', 'AP', 'custom'].includes(plan.key) && (
+                          <Button variant="ghost" size="icon" onClick={() => handleRemovePlan(plan.key)} className="text-red-500 hover:text-red-600 hover:bg-red-50 h-9 w-9">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="flex justify-between">MAP <span className="text-[10px] text-muted-foreground">B + Dinner</span></Label>
-                  <div className="relative">
-                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                    <Input type="number" className="pl-8" value={form.settings.mealRates.MAP} onChange={e => setForm({...form, settings: {...form.settings, mealRates: {...form.settings.mealRates, MAP: parseFloat(e.target.value) || 0}}})} />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="flex justify-between">AP <span className="text-[10px] text-muted-foreground">All Meals</span></Label>
-                  <div className="relative">
-                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                    <Input type="number" className="pl-8" value={form.settings.mealRates.AP} onChange={e => setForm({...form, settings: {...form.settings, mealRates: {...form.settings.mealRates, AP: parseFloat(e.target.value) || 0}}})} />
-                  </div>
-                </div>
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -325,27 +466,27 @@ export function HotelSettings() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label>Default Enquiry Hold Time</Label>
-                  <Select value={form.settings.enquiryHoldTime} onValueChange={v => setForm({...form, settings: {...form.settings, enquiryHoldTime: v}})}>
+                  <Select value={form.settings.defaultEnquiryHold.toString()} onValueChange={v => setForm({...form, settings: {...form.settings, defaultEnquiryHold: Number(v)}})}>
                     <SelectTrigger><SelectValue/></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1hr">1 Hour</SelectItem>
-                      <SelectItem value="2hr">2 Hours</SelectItem>
-                      <SelectItem value="4hr">4 Hours</SelectItem>
-                      <SelectItem value="8hr">8 Hours</SelectItem>
-                      <SelectItem value="12hr">12 Hours</SelectItem>
-                      <SelectItem value="24hr">24 Hours</SelectItem>
+                      <SelectItem value="60">1 Hour</SelectItem>
+                      <SelectItem value="120">2 Hours</SelectItem>
+                      <SelectItem value="240">4 Hours</SelectItem>
+                      <SelectItem value="480">8 Hours</SelectItem>
+                      <SelectItem value="720">12 Hours</SelectItem>
+                      <SelectItem value="1440">24 Hours</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Default Block Duration</Label>
-                  <Select value={form.settings.blockDuration} onValueChange={v => setForm({...form, settings: {...form.settings, blockDuration: v}})}>
+                  <Select value={form.settings.defaultBlockDuration.toString()} onValueChange={v => setForm({...form, settings: {...form.settings, defaultBlockDuration: Number(v)}})}>
                     <SelectTrigger><SelectValue/></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1 day">1 Day</SelectItem>
-                      <SelectItem value="3 days">3 Days</SelectItem>
-                      <SelectItem value="7 days">7 Days</SelectItem>
-                      <SelectItem value="Custom">Custom</SelectItem>
+                      <SelectItem value="1440">1 Day</SelectItem>
+                      <SelectItem value="4320">3 Days</SelectItem>
+                      <SelectItem value="10080">7 Days</SelectItem>
+                      <SelectItem value="0">Custom</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

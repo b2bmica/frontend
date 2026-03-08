@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Badge } from './ui/badge';
 import { Card, CardContent } from './ui/card';
 import { cn } from '../lib/utils';
-
+import { useAuth } from '../context/auth-context';
+import { format, parseISO } from 'date-fns';
 
 
 const ROOM_TYPES = [
@@ -43,11 +44,12 @@ const defaultForm = {
   maxOccupancy: 4,
   extraPersonPrice: 0,
   amenities: [] as string[],
-  defaultCheckinTime: '14:00',
-  defaultCheckoutTime: '11:00',
+  checkinTime: '',
+  checkoutTime: '',
 };
 
 export function RoomInventory() {
+  const { hotel } = useAuth();
   const { rooms, bookings, createRoom, updateRoom, deleteRoom, loading } = useBookings();
   const [isOpen, setIsOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
@@ -88,7 +90,11 @@ export function RoomInventory() {
 
   const openCreateModal = () => {
     setEditingRoom(null);
-    setForm({ ...defaultForm });
+    setForm({ 
+      ...defaultForm,
+      checkinTime: hotel?.settings?.checkinTimes?.[0] || '14:00',
+      checkoutTime: hotel?.settings?.checkoutTimes?.[0] || '11:00',
+    });
     setError(null);
     setIsOpen(true);
   };
@@ -104,8 +110,8 @@ export function RoomInventory() {
       maxOccupancy: room.maxOccupancy || 4,
       extraPersonPrice: room.extraPersonPrice || 0,
       amenities: room.amenities || [],
-      defaultCheckinTime: room.defaultCheckinTime || '14:00',
-      defaultCheckoutTime: room.defaultCheckoutTime || '11:00',
+      checkinTime: room.checkinTime || hotel?.settings?.checkinTimes?.[0] || '14:00',
+      checkoutTime: room.checkoutTime || hotel?.settings?.checkoutTimes?.[0] || '11:00',
     });
     setError(null);
     setIsOpen(true);
@@ -307,16 +313,6 @@ export function RoomInventory() {
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-black text-sm">₹</span>
                   <Input type="number" className="h-11 rounded-xl pl-7 font-bold" value={form.extraPersonPrice} onChange={e => setForm({ ...form, extraPersonPrice: Number(e.target.value) })} />
                 </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 underline underline-offset-4">Default Check-in Time</Label>
-                <Input type="time" className="h-11 rounded-xl font-bold" value={form.defaultCheckinTime} onChange={e => setForm({ ...form, defaultCheckinTime: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 underline underline-offset-4">Default Check-out Time</Label>
-                <Input type="time" className="h-11 rounded-xl font-bold" value={form.defaultCheckoutTime} onChange={e => setForm({ ...form, defaultCheckoutTime: e.target.value })} />
               </div>
             </div>
             <div className="space-y-1.5">

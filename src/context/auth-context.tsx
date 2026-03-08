@@ -17,12 +17,12 @@ interface Hotel {
   email?: string;
   gstin?: string;
   settings?: {
-    checkinTime: string;
-    checkoutTime: string;
-    earlyCheckinBuffer?: string;
-    lateCheckoutBuffer?: string;
-    enquiryHoldTime?: string;
-    blockDuration?: string;
+    checkinTimes: string[];
+    checkoutTimes: string[];
+    earlyCheckinBuffer?: number;
+    lateCheckoutBuffer?: number;
+    defaultEnquiryHold?: number;
+    defaultBlockDuration?: number;
     currency: string;
     taxConfig: {
       enabled: boolean;
@@ -31,11 +31,12 @@ interface Hotel {
       igst: number;
       hsnCode: string;
     };
-    mealRates?: {
-      CP?: number;
-      MAP?: number;
-      AP?: number;
-    };
+    mealRates?: Record<string, number>;
+    stayPlans?: Array<{
+      key: string;
+      label: string;
+      description: string;
+    }>;
   };
   status?: 'active' | 'deleted';
   deletedAt?: string;

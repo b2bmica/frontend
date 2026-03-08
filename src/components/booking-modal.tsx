@@ -16,7 +16,6 @@ import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TimePicker } from './ui/time-picker';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -76,7 +75,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const { hotel } = useAuth();
 
   // Step management
-  type StepType = 'type' | 'dates' | 'room' | 'plan' | 'guest' | 'payment' | 'groupConfig' | 'roomAssignment';
+  type StepType = 'type' | 'dates' | 'room' | 'guest' | 'payment' | 'groupConfig' | 'roomAssignment';
   const [step, setStep] = useState<StepType>('type');
   const [reservationType, setReservationType] = useState<'booking' | 'enquiry' | 'block' | 'group'>('booking');
 
@@ -89,8 +88,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const [blockReason, setBlockReason] = useState('');
 
   // Date/time state
-  const defaultCheckinTime  = parseHotelTime(hotel?.settings?.checkinTime  || '14:00');
-  const defaultCheckoutTime = parseHotelTime(hotel?.settings?.checkoutTime || '11:00');
+  const defaultCheckinTime  = parseHotelTime(hotel?.settings?.checkinTimes?.[0]  || '14:00');
+  const defaultCheckoutTime = parseHotelTime(hotel?.settings?.checkoutTimes?.[0] || '11:00');
 
   const [checkinDate,  setCheckinDate]  = useState('');
   const [checkinTime,  setCheckinTime]  = useState(defaultCheckinTime);
@@ -99,9 +98,10 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
   // Room selection
   const [selectedRoom, setSelectedRoom] = useState<string>('');
+  const [selectedRoomType, setSelectedRoomType] = useState<string>('');
 
   // Plan
-  const [planType, setPlanType] = useState<'EP' | 'CP' | 'MAP' | 'AP' | 'custom'>('EP');
+  const [planType, setPlanType] = useState<string>('EP');
   const [planCustomText, setplanCustomText] = useState('');
 
   // Guest
@@ -126,7 +126,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
   const [groupRoomPrefs, setGroupRoomPrefs] = useState<Record<string, number>>({});
   const [additionalGuests, setAdditionalGuests] = useState<Array<{ name: string; phone: string }>>([]);
-  const [roomAssignments, setRoomAssignments] = useState<Record<string, { guestName: string; plan: 'EP' | 'CP' | 'MAP' | 'AP' | 'custom'; price: number }>>({});
+  const [roomAssignments, setRoomAssignments] = useState<Record<string, { guestName: string; plan: string; price: number }>>({});
   const [isSingleFolio, setIsSingleFolio] = useState(true);
   const [planMixed, setPlanMixed] = useState(false);
 
@@ -141,6 +141,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       setCheckoutDate(format(parseISO(initialBooking.checkout), 'yyyy-MM-dd'));
       setCheckoutTime(initialBooking.checkoutTime || defaultCheckoutTime);
       setSelectedRoom(rm?._id || '');
+      setSelectedRoomType(rm?.roomType || '');
       setRoomPrice(initialBooking.roomPrice || rm?.price || 0);
       setPlanType(initialBooking.planType || 'EP');
       setplanCustomText(initialBooking.planCustomText || '');
@@ -151,7 +152,9 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       setAdvancePayment(initialBooking.advancePayment || 0);
       setStep('dates');
     } else {
-      setStep('type');
+      // If a room was pre-selected (clicked from calendar), skip 'type' and go to 'dates'
+      // The room will already be pre-selected on the room step
+      setStep(selectedRoomId ? 'dates' : 'type');
       setReservationType('booking');
       const todayStr = format(new Date(), 'yyyy-MM-dd');
       const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
@@ -159,8 +162,10 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       setCheckinTime(defaultCheckinTime);
       setCheckoutDate(selectedDate ? format(addDays(parseISO(selectedDate), 1), 'yyyy-MM-dd') : tomorrowStr);
       setCheckoutTime(defaultCheckoutTime);
+      const preRm = rooms.find(r => r._id === selectedRoomId);
       setSelectedRoom(selectedRoomId || '');
-      setRoomPrice(rooms.find(r => r._id === selectedRoomId)?.price || 0);
+      setSelectedRoomType(preRm?.roomType || '');
+      setRoomPrice(preRm?.price || 0);
       setPlanType('EP');
       setplanCustomText('');
       setAdults(2);
@@ -173,7 +178,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       setAdvancePayment(0);
       setPaymentMethod('');
       setBlockReason('');
-      setExpiryHours(hotel?.settings?.enquiryHoldTime || '4');
+      setExpiryHours(hotel?.settings?.defaultEnquiryHold ? String(hotel.settings.defaultEnquiryHold / 60) : '4');
       setError(null);
       setGroupName('');
       setNumRooms(2);
@@ -184,7 +189,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       setIsSingleFolio(true);
       setPlanMixed(false);
     }
-  }, [isOpen, selectedRoomId, selectedDate, initialBooking, rooms, defaultCheckinTime, defaultCheckoutTime, hotel?.settings?.enquiryHoldTime]);
+  }, [isOpen, selectedRoomId, selectedDate, initialBooking, rooms, defaultCheckinTime, defaultCheckoutTime, hotel?.settings?.defaultEnquiryHold]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // ─── Availability ─────────────────────────────────────────────────────────
@@ -233,7 +238,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const totalAmount = subtotal + taxAmount;
 
   // ─── Navigation ───────────────────────────────────────────────────────────
-  const STEP_ORDER_BOOKING: StepType[] = ['type', 'dates', 'room', 'plan', 'guest', 'payment'];
+  const STEP_ORDER_BOOKING: StepType[] = ['type', 'dates', 'room', 'guest', 'payment'];
   const STEP_ORDER_BLOCK:   StepType[] = ['type', 'dates', 'room', 'payment'];
   const STEP_ORDER_GROUP:   StepType[] = ['type', 'dates', 'groupConfig', 'guest', 'roomAssignment', 'payment'];
 
@@ -242,7 +247,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
   const goNext = (nextStep: StepType) => { 
     if (nextStep === 'roomAssignment' && reservationType === 'group') {
-      const init: Record<string, { guestName: string; plan: 'EP' | 'CP' | 'MAP' | 'AP' | 'custom'; price: number }> = { ...roomAssignments };
+      const init: Record<string, { guestName: string; plan: string; price: number }> = { ...roomAssignments };
       const guestNames = [selectedGuest?.name || 'Lead', ...additionalGuests.map(ag => ag.name).filter(Boolean)];
       
       selectedRooms.forEach((rid, i) => {
@@ -250,7 +255,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           const r = rooms.find(rm => rm._id === rid);
           init[rid] = { 
             guestName: guestNames[i] || 'TBA', 
-            plan: planType as 'EP' | 'CP' | 'MAP' | 'AP' | 'custom', 
+            plan: planType, 
             price: r?.price || 0 
           };
         }
@@ -268,8 +273,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const stepLabel: Record<StepType, string> = {
     type: 'Select Type',
     dates: 'Dates & Times',
-    room: 'Room Selection',
-    plan: 'Stay Plan',
+    room: 'Room & Plan',
     guest: reservationType === 'group' ? 'Lead Guest' : 'Guest Info',
     payment: 'Payment',
     groupConfig: 'Group Config',
@@ -426,8 +430,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
             <button key={t.key} onClick={() => { 
                 setReservationType(t.key as 'booking' | 'enquiry' | 'block' | 'group');
                 if (t.key === 'block') {
-                   const bdStr = hotel?.settings?.blockDuration?.split(' ')[0] || '1';
-                   const bd = parseInt(bdStr, 10);
+                   const bdMinutes = hotel?.settings?.defaultBlockDuration || 1440;
+                   const bd = Math.max(1, bdMinutes / 1440);
                    if (!isNaN(bd) && checkinDate) {
                       setCheckoutDate(format(addDays(parseISO(checkinDate), bd), 'yyyy-MM-dd'));
                    }
@@ -538,11 +542,12 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                 if (e.target.value >= checkoutDate) setCheckoutDate(format(addDays(parseISO(e.target.value), 1), 'yyyy-MM-dd')); 
                 if (selectedRoom) { setSelectedRoom(''); setError('Dates changed. Please reselect a room.'); }
             }} />
-            <TimePicker 
-               className="h-11 rounded-xl font-bold" 
-               value={checkinTime} 
-               onChange={v => { setCheckinTime(v); if (selectedRoom) { setSelectedRoom(''); setError('Dates changed. Please reselect a room.'); } }} 
-            />
+            <Select value={checkinTime} onValueChange={v => { setCheckinTime(v); if (selectedRoom) { setSelectedRoom(''); setError('Dates changed. Please reselect a room.'); } }}>
+              <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Check-in Time" /></SelectTrigger>
+              <SelectContent>
+                {Array.from(new Set(hotel?.settings?.checkinTimes || [])).map(t => <SelectItem key={t} value={t}>{format(parseISO(`2000-01-01T${t}:00`), 'h:mm a')}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1.5 col-span-2 sm:col-span-1">
             <Label className="text-xs font-black uppercase tracking-widest opacity-60">Check-out</Label>
@@ -550,11 +555,12 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                 setCheckoutDate(e.target.value);
                 if (selectedRoom) { setSelectedRoom(''); setError('Dates changed. Please reselect a room.'); }
             }} />
-            <TimePicker 
-               className="h-11 rounded-xl font-bold" 
-               value={checkoutTime} 
-               onChange={v => { setCheckoutTime(v); if (selectedRoom) { setSelectedRoom(''); setError('Dates changed. Please reselect a room.'); } }} 
-            />
+            <Select value={checkoutTime} onValueChange={v => { setCheckoutTime(v); if (selectedRoom) { setSelectedRoom(''); setError('Dates changed. Please reselect a room.'); } }}>
+              <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Check-out Time" /></SelectTrigger>
+              <SelectContent>
+                {Array.from(new Set(hotel?.settings?.checkoutTimes || [])).map(t => <SelectItem key={t} value={t}>{format(parseISO(`2000-01-01T${t}:00`), 'h:mm a')}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         {!validDates && checkinDate === checkoutDate && checkinTime >= checkoutTime && (
@@ -596,26 +602,112 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   // ─── Render Step: Room ────────────────────────────────────────────────────
   const renderRoomStep = () => (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-64 overflow-y-auto pr-1">
-        {rooms.map(room => {
-          const avail = isRoomAvailable(room._id);
-          const sel = selectedRoom === room._id;
-          return (
-            <button key={room._id} disabled={!avail} onClick={() => { setSelectedRoom(room._id); setRoomPrice(room.price); }}
-              className={cn('p-3 rounded-xl border-2 text-left transition-all flex flex-col gap-1', sel ? 'border-primary bg-primary/5 ring-2 ring-primary/20 shadow-sm' : avail ? 'border-slate-200 hover:border-primary/40 bg-white' : 'border-slate-100 bg-slate-50 opacity-50 cursor-not-allowed')}>
-              <div className="flex items-center justify-between"><span className="font-black text-sm">{room.roomNumber}</span><span className={cn('text-[8px] font-black uppercase px-1.5 py-0.5 rounded-full', avail ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}>{avail ? 'Free' : 'Occupied'}</span></div>
-              <span className="text-[10px] font-bold text-slate-400 capitalize">{room.roomType}</span>
-              <span className="text-xs font-black text-primary mt-1">₹{room.price}<span className="text-[9px] font-medium text-slate-400">/night</span></span>
-            </button>
-          );
-        })}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label className="text-xs font-black uppercase tracking-widest opacity-60">1. Select Category</Label>
+          <Select 
+            value={selectedRoomType} 
+            onValueChange={val => {
+              setSelectedRoomType(val);
+              setSelectedRoom(''); // Clear specific room when type changes
+            }}
+          >
+            <SelectTrigger className="h-11 rounded-xl font-black">
+              <SelectValue placeholder="Room Type" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from(new Set(rooms.map(r => r.roomType))).map(type => (
+                <SelectItem key={type} value={type} className="font-bold">{type}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs font-black uppercase tracking-widest opacity-60">2. Select Room</Label>
+          <Select 
+            value={selectedRoom || undefined} 
+            disabled={!selectedRoomType}
+            onValueChange={val => {
+              const rm = rooms.find(r => r._id === val);
+              setSelectedRoom(val);
+              if (rm) {
+                setRoomPrice(rm.price);
+                if (adults > rm.maxOccupancy) setAdults(rm.maxOccupancy);
+              }
+            }}
+          >
+            <SelectTrigger className="h-11 rounded-xl font-black">
+              <SelectValue placeholder={selectedRoomType ? "Select Number" : "Select type first"} />
+            </SelectTrigger>
+            <SelectContent>
+              {rooms.filter(r => r.roomType === selectedRoomType).map(room => {
+                const avail = isRoomAvailable(room._id);
+                return (
+                  <SelectItem 
+                    key={room._id} 
+                    value={room._id} 
+                    disabled={!avail}
+                    className={cn("font-bold text-sm", !avail && "opacity-40")}
+                  >
+                    <div className="flex items-center justify-between w-full min-w-[180px]">
+                       <div className="flex items-center gap-2">
+                          <span className={cn(
+                             "w-1.5 h-1.5 rounded-full shrink-0",
+                             (!avail || room.status === 'clean' || room.status === 'occupied') ? 'bg-emerald-500' : room.status === 'dirty' ? 'bg-amber-400' : 'bg-red-500'
+                          )} />
+                          <span>Room #{room.roomNumber}</span>
+                       </div>
+                       <span className={cn(
+                          'text-[9px] font-black uppercase px-2 py-0.5 rounded-full ml-4 tracking-widest leading-none', 
+                          !avail ? 'bg-red-100 text-red-700' : (room.status === 'dirty' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700')
+                       )}>
+                          {!avail ? 'Occupied' : (room.status === 'dirty' ? 'Dirty' : 'Clean')}
+                       </span>
+                    </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       {selectedRoom && (
-        <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3">
-          <Label className="text-xs font-black uppercase tracking-widest opacity-60 shrink-0">Rate/night</Label>
-          <div className="relative flex-1">
-            <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input type="number" className="h-9 pl-8 rounded-lg font-bold" value={roomPrice} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRoomPrice(parseFloat(e.target.value) || 0)} />
+        <div>
+          <Label className="text-xs font-black uppercase tracking-widest opacity-60 mb-1.5 block">Adults</Label>
+          <Select value={adults.toString()} onValueChange={v => setAdults(Number(v))}>
+            <SelectTrigger className="h-10 rounded-xl font-bold"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {[1, 2, 3, 4, 5, 6, 7, 8].filter(n => n <= (rooms.find(r => r._id === selectedRoom)?.maxOccupancy || 6)).map(n => (
+                <SelectItem key={n} value={n.toString()}>{n} Adult{n > 1 ? 's' : ''}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      {selectedRoom && (
+        <div className="space-y-1.5">
+          <Label className="text-xs font-black uppercase tracking-widest opacity-60">Stay Plan</Label>
+          <div className="grid grid-cols-2 gap-2">
+            {(hotel?.settings?.stayPlans || PLAN_TYPES).map((p: any) => {
+              const isSel = planType === p.key;
+              const rate = (p.key !== 'EP' && p.key !== 'custom') ? (mealRates[p.key] || 0) : 0;
+              return (
+                <button 
+                  key={p.key} 
+                  type="button"
+                  onClick={() => setPlanType(p.key)}
+                  className={cn(
+                    "flex flex-col p-2.5 rounded-xl border-2 text-left transition-all",
+                    isSel ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "border-slate-100 hover:border-slate-200 bg-white"
+                  )}
+                >
+                  <span className="font-black text-xs uppercase">{p.key}</span>
+                  <p className="text-[9px] text-slate-400 line-clamp-1">{p.label}</p>
+                  {rate > 0 && <span className="text-[10px] font-black text-primary/70 mt-1">₹{rate}/pp</span>}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -623,39 +715,18 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         <div className="rounded-xl bg-muted/30 border p-4 space-y-1.5 text-xs font-bold">
           <div className="flex justify-between text-slate-500"><span>Stay ({Math.max(nights, isDayUse ? 1 : 0)}N)</span><span className="text-slate-800">₹{baseSubtotal.toLocaleString()}</span></div>
           {extraAdults > 0 && <div className="flex justify-between text-slate-500"><span>Extra persons</span><span>+ ₹{extraCharge.toLocaleString()}</span></div>}
+          {mealCharge > 0 && (
+            <div className="flex justify-between text-slate-500 italic">
+               <span>Plan ({planType})</span>
+               <span>+ ₹{mealCharge.toLocaleString()}</span>
+            </div>
+          )}
           {taxConfig?.enabled && <div className="flex justify-between text-orange-600"><span>GST</span><span>+ ₹{taxAmount.toLocaleString()}</span></div>}
           <Separator className="my-1" />
           <div className="flex justify-between text-base font-black text-primary"><span>Total</span><span>₹{totalAmount.toLocaleString()}</span></div>
         </div>
       )}
-      <div>
-        <Label className="text-xs font-black uppercase tracking-widest opacity-60 mb-1.5 block">Adults</Label>
-        <Select value={adults.toString()} onValueChange={v => setAdults(Number(v))}>
-          <SelectTrigger className="h-10 rounded-xl font-bold"><SelectValue /></SelectTrigger>
-          <SelectContent>{[1,2,3,4,5,6].map(n => <SelectItem key={n} value={n.toString()}>{n} Adult{n > 1 ? 's' : ''}</SelectItem>)}</SelectContent>
-        </Select>
-      </div>
-      <Button className="w-full h-11 rounded-xl font-black" disabled={!selectedRoom} onClick={() => goNext(reservationType === 'block' ? 'payment' : 'plan')}>Continue <ChevronRight className="ml-1 h-4 w-4" /></Button>
-    </div>
-  );
-
-  // ─── Render Step: Plan ────────────────────────────────────────────────────
-  const renderPlanStep = () => (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        {PLAN_TYPES.map(p => {
-          const Icon = p.icon;
-          const rate = p.key !== 'EP' && p.key !== 'custom' ? (mealRates[p.key] || 0) : 0;
-          return (
-            <button key={p.key} onClick={() => setPlanType(p.key as 'EP' | 'CP' | 'MAP' | 'AP' | 'custom')} className={cn('w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left', planType === p.key ? 'border-primary bg-primary/5' : 'border-slate-200 bg-white')}>
-              <div className={cn('p-2.5 rounded-lg', planType === p.key ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500')}><Icon className="h-4 w-4" /></div>
-              <div className="flex-1 min-w-0"><span className="font-black text-sm uppercase">{p.key}</span><p className="text-[10px] text-slate-400">{p.desc}</p></div>
-              {rate > 0 && <span className="text-xs font-black text-primary shrink-0">+₹{rate}/pp</span>}
-            </button>
-          );
-        })}
-      </div>
-      <Button className="w-full h-11 rounded-xl font-black" onClick={() => goNext('guest')}>Continue <ChevronRight className="ml-1 h-4 w-4" /></Button>
+      <Button className="w-full h-11 rounded-xl font-black" disabled={!selectedRoom} onClick={() => goNext(reservationType === 'block' ? 'payment' : 'guest')}>Continue <ChevronRight className="ml-1 h-4 w-4" /></Button>
     </div>
   );
 
@@ -864,7 +935,6 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
     type: renderTypeStep,
     dates: renderDatesStep,
     room: renderRoomStep,
-    plan: renderPlanStep,
     guest: renderGuestStep,
     payment: renderPaymentStep,
     groupConfig: renderGroupConfigStep,

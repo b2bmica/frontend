@@ -901,29 +901,20 @@ export function BookingBoard() {
                               const isOccupied = getRoomOccupancy(room._id);
                               return (
                                  <div className="space-y-1.5">
-                                    <div className="flex items-center justify-between w-full">
-                                       <div className="flex items-center gap-1.5">
-                                          <span className="font-black text-slate-800 text-[13px] tracking-tighter">#{room.roomNumber}</span>
-                                          {isOccupied && <Bed className="h-3 w-3 text-blue-500 fill-blue-50" />}
-                                       </div>
-                                       <div className={cn(
-                                          "flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[8px] font-black uppercase tracking-tight",
-                                          isOccupied ? "bg-blue-50 border-blue-200 text-blue-600" : "bg-slate-50 border-slate-200 text-slate-400"
-                                       )}>
-                                          <div className={cn("w-1 h-1 rounded-full", isOccupied ? "bg-blue-500" : "bg-slate-300")} />
-                                          {isOccupied ? 'Occupied' : 'Vacant'}
-                                       </div>
-                                    </div>
-                                    
-                                    <div className="flex items-center gap-1 text-[9px] font-bold">
-                                       <span className={cn(
-                                          "w-1.5 h-1.5 rounded-full",
-                                          room.status === 'clean' ? 'bg-emerald-500' : room.status === 'dirty' ? 'bg-amber-400' : 'bg-red-500'
-                                       )} />
-                                       <span className="text-slate-500 capitalize">{room.status}</span>
-                                       <span className="text-slate-300 mx-0.5">|</span>
-                                       <span className="text-slate-500 truncate w-16">{room.roomType}</span>
-                                    </div>
+                                     <div className="flex items-center justify-between w-full">
+                                        <div className="flex items-center gap-1.5">
+                                           <span className="font-black text-slate-800 text-[13px] tracking-tighter">#{room.roomNumber}</span>
+                                           {isOccupied && <Bed className="h-3 w-3 text-blue-500 fill-blue-50" />}
+                                        </div>
+                                     </div>
+                                     
+                                     <div className="flex items-center gap-1 text-[9px] font-bold">
+                                        <span className={cn(
+                                           "w-1.5 h-1.5 rounded-full shrink-0",
+                                           (room.status === 'clean' || room.status === 'occupied') ? 'bg-emerald-500' : room.status === 'dirty' ? 'bg-amber-400' : 'bg-red-500'
+                                        )} />
+                                        <span className="text-slate-500 truncate w-24">{room.roomType}</span>
+                                     </div>
                                     
                                     <div className="text-[10px] font-black text-primary">₹{room.price}</div>
                                  </div>
