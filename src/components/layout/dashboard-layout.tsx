@@ -20,6 +20,7 @@ import {
 
 const navItems = [
   { title: "Calendar", id: "board", icon: Calendar },
+  { title: "Calendar V2", id: "board-v2", icon: Calendar },
   { title: "Bookings", id: "bookings", icon: BookOpen },
   { title: "Guests", id: "guests", icon: Users },
   { title: "Housekeeping", id: "housekeeping", icon: Home },

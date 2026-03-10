@@ -88,6 +88,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const [blockReason, setBlockReason] = useState('');
 
   // Date/time state
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
   const defaultCheckinTime  = parseHotelTime(hotel?.settings?.checkinTimes?.[0]  || '14:00');
   const defaultCheckoutTime = parseHotelTime(hotel?.settings?.checkoutTimes?.[0] || '11:00');
 
@@ -135,7 +136,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
     if (!isOpen) return;
     if (initialBooking) {
       const rm = typeof initialBooking.roomId === 'object' ? initialBooking.roomId : rooms.find(r => r._id === initialBooking.roomId);
-      setReservationType(initialBooking.bookingType || 'booking');
+      const effectiveType = (initialBooking.reservationType || initialBooking.bookingType || 'booking') as 'booking' | 'enquiry' | 'block' | 'group';
+      setReservationType(effectiveType);
       setCheckinDate(format(parseISO(initialBooking.checkin), 'yyyy-MM-dd'));
       setCheckinTime(initialBooking.checkinTime || defaultCheckinTime);
       setCheckoutDate(format(parseISO(initialBooking.checkout), 'yyyy-MM-dd'));
@@ -146,22 +148,31 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       setPlanType(initialBooking.planType || 'EP');
       setplanCustomText(initialBooking.planCustomText || '');
       setAdults(initialBooking.adults || 2);
-      setSelectedGuest(typeof initialBooking.guestId === 'object' ? initialBooking.guestId : null);
+      
+      // Intelligent Guest Resolution: if ID is a string, try to find data in other bookings
+      if (typeof initialBooking.guestId === 'object') {
+        setSelectedGuest(initialBooking.guestId);
+      } else if (initialBooking.guestId) {
+        const guestData = bookings.find(b => typeof b.guestId === 'object' && (b.guestId as any)._id === initialBooking.guestId)?.guestId;
+        setSelectedGuest(guestData as any || null);
+      } else {
+        setSelectedGuest(null);
+      }
+
       setBookingSource(initialBooking.bookingSource || 'direct');
       setSpecialRequests(initialBooking.specialRequests || '');
       setAdvancePayment(initialBooking.advancePayment || 0);
+      setBlockReason(initialBooking.blockReason || '');
       setStep('dates');
     } else {
-      // If a room was pre-selected (clicked from calendar), skip 'type' and go to 'dates'
-      // The room will already be pre-selected on the room step
-      setStep(selectedRoomId ? 'dates' : 'type');
+      setStep('type');
       setReservationType('booking');
       const todayStr = format(new Date(), 'yyyy-MM-dd');
       const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd');
       setCheckinDate(selectedDate || todayStr);
-      setCheckinTime(defaultCheckinTime);
+      setCheckinTime(defaultCheckinTime || '14:00');
       setCheckoutDate(selectedDate ? format(addDays(parseISO(selectedDate), 1), 'yyyy-MM-dd') : tomorrowStr);
-      setCheckoutTime(defaultCheckoutTime);
+      setCheckoutTime(defaultCheckoutTime || '11:00');
       const preRm = rooms.find(r => r._id === selectedRoomId);
       setSelectedRoom(selectedRoomId || '');
       setSelectedRoomType(preRm?.roomType || '');
@@ -239,8 +250,16 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
   // ─── Navigation ───────────────────────────────────────────────────────────
   const STEP_ORDER_BOOKING: StepType[] = ['type', 'dates', 'room', 'guest', 'payment'];
-  const STEP_ORDER_BLOCK:   StepType[] = ['type', 'dates', 'room', 'payment'];
+  const STEP_ORDER_BLOCK:   StepType[] = ['type', 'dates', 'room'];
   const STEP_ORDER_GROUP:   StepType[] = ['type', 'dates', 'groupConfig', 'guest', 'roomAssignment', 'payment'];
+
+  const getActiveSteps = () => {
+    const list = reservationType === 'group' ? STEP_ORDER_GROUP : reservationType === 'block' ? STEP_ORDER_BLOCK : STEP_ORDER_BOOKING;
+    // If editing, 'type' is locked, but we still show it in sequence if user goes back
+    return list;
+  };
+
+
 
   const stepOrder = reservationType === 'block' ? STEP_ORDER_BLOCK : 
                     reservationType === 'group' ? STEP_ORDER_GROUP : STEP_ORDER_BOOKING;
@@ -272,9 +291,9 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
   const stepLabel: Record<StepType, string> = {
     type: 'Select Type',
-    dates: 'Dates & Times',
-    room: 'Room & Plan',
-    guest: reservationType === 'group' ? 'Lead Guest' : 'Guest Info',
+    dates: reservationType === 'block' ? 'Block Duration' : 'Dates & Times',
+    room: reservationType === 'block' ? 'Select Room' : 'Room & Plan',
+    guest: reservationType === 'group' ? 'Lead Guest' : (reservationType === 'enquiry' ? 'Enquirer Details' : 'Guest Info'),
     payment: 'Payment',
     groupConfig: 'Group Config',
     roomAssignment: 'Assignments',
@@ -322,9 +341,11 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
     setIsSubmitting(true); setError(null);
     try {
       const effectiveExpiry = expiryHours === 'custom' ? parseFloat(customExpiryHours) : parseFloat(expiryHours);
-      const enquiryExpiresAt = (reservationType === 'enquiry' || reservationType === 'block')
-        ? addHours(new Date(), effectiveExpiry).toISOString()
-        : undefined;
+      const enquiryExpiresAt = initialBooking?.enquiryExpiresAt 
+        ? initialBooking.enquiryExpiresAt 
+        : (reservationType === 'enquiry' || reservationType === 'block')
+          ? addHours(new Date(), effectiveExpiry).toISOString()
+          : undefined;
 
       if (reservationType === 'group') {
         const conflictRooms = selectedRooms.filter(rid => !isRoomAvailable(rid));
@@ -419,15 +440,19 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
     const types = [
       { key: 'booking', label: 'Booking', desc: 'Confirmed reservation', icon: CalendarCheck, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
       { key: 'enquiry', label: 'Enquiry',  desc: 'Tentative hold, auto-releases', icon: Clock, color: 'text-amber-600 bg-amber-50 border-amber-200' },
-      { key: 'block',   label: 'Block',    desc: 'Maintenance / owner use', icon: Lock, color: 'text-slate-600 bg-slate-50 border-slate-200' },
+      { key: 'block',   label: 'Room Block', desc: 'Maintenance / owner use', icon: Lock, color: 'text-slate-600 bg-slate-50 border-slate-200' },
       { key: 'group',   label: 'Group',    desc: 'Multiple rooms at once', icon: Users, color: 'text-blue-600 bg-blue-50 border-blue-200' },
     ];
     return (
       <div className="grid grid-cols-2 gap-3 p-2">
         {types.map(t => {
           const Icon = t.icon;
+          const isActive = reservationType === t.key;
           return (
-            <button key={t.key} onClick={() => { 
+            <button 
+              key={t.key} 
+              disabled={!!initialBooking}
+              onClick={() => { 
                 setReservationType(t.key as 'booking' | 'enquiry' | 'block' | 'group');
                 if (t.key === 'block') {
                    const bdMinutes = hotel?.settings?.defaultBlockDuration || 1440;
@@ -438,10 +463,20 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                 }
                 goNext('dates'); 
               }}
-              className={cn('flex flex-col items-center gap-2 p-5 rounded-2xl border-2 transition-all text-center active:scale-95', t.color, 'hover:scale-[1.02] hover:shadow-md cursor-pointer')}>
+              className={cn(
+                'relative flex flex-col items-center gap-2 p-5 rounded-2xl border-2 transition-all text-center',
+                initialBooking 
+                  ? (isActive ? t.color + ' border-primary ring-2 ring-primary/20 opacity-100 shadow-sm' : 'opacity-40 grayscale pointer-events-none border-slate-100') 
+                  : (t.color + ' hover:scale-[1.02] hover:shadow-md cursor-pointer active:scale-95')
+              )}>
               <Icon className="h-7 w-7" />
               <span className="font-black text-sm">{t.label}</span>
               <span className="text-[10px] font-medium opacity-70 leading-tight">{t.desc}</span>
+              {initialBooking && isActive && (
+                <div className="absolute top-2 right-2 h-5 w-5 rounded-full bg-primary text-white flex items-center justify-center shadow-lg border-2 border-white">
+                  <Lock className="h-2.5 w-2.5" />
+                </div>
+              )}
             </button>
           );
         })}
@@ -537,7 +572,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5 col-span-2 sm:col-span-1">
             <Label className="text-xs font-black uppercase tracking-widest opacity-60">Check-in</Label>
-            <Input type="date" className="h-11 rounded-xl" value={checkinDate} onChange={e => { 
+            <Input type="date" className="h-11 rounded-xl" value={checkinDate} min={todayStr} onChange={e => { 
                 setCheckinDate(e.target.value); 
                 if (e.target.value >= checkoutDate) setCheckoutDate(format(addDays(parseISO(e.target.value), 1), 'yyyy-MM-dd')); 
                 if (selectedRoom) { setSelectedRoom(''); setError('Dates changed. Please reselect a room.'); }
@@ -545,7 +580,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
             <Select value={checkinTime} onValueChange={v => { setCheckinTime(v); if (selectedRoom) { setSelectedRoom(''); setError('Dates changed. Please reselect a room.'); } }}>
               <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Check-in Time" /></SelectTrigger>
               <SelectContent>
-                {Array.from(new Set(hotel?.settings?.checkinTimes || [])).map(t => <SelectItem key={t} value={t}>{format(parseISO(`2000-01-01T${t}:00`), 'h:mm a')}</SelectItem>)}
+                {(hotel?.settings?.checkinTimes?.length ? hotel.settings.checkinTimes : ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00']).map(t => <SelectItem key={t} value={t}>{format(parseISO(`2000-01-01T${t}:00`), 'h:mm a')}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -558,7 +593,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
             <Select value={checkoutTime} onValueChange={v => { setCheckoutTime(v); if (selectedRoom) { setSelectedRoom(''); setError('Dates changed. Please reselect a room.'); } }}>
               <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Check-out Time" /></SelectTrigger>
               <SelectContent>
-                {Array.from(new Set(hotel?.settings?.checkoutTimes || [])).map(t => <SelectItem key={t} value={t}>{format(parseISO(`2000-01-01T${t}:00`), 'h:mm a')}</SelectItem>)}
+                {(hotel?.settings?.checkoutTimes?.length ? hotel.settings.checkoutTimes : ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00']).map(t => <SelectItem key={t} value={t}>{format(parseISO(`2000-01-01T${t}:00`), 'h:mm a')}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -567,13 +602,22 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           <p className="text-xs font-bold text-red-500 bg-red-50 p-2 rounded-lg mt-2 inline-block">Check-out time must be after check-in time for day use.</p>
         )}
         {validDates && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="bg-primary/10 text-primary text-xs font-black px-3 py-1 rounded-full">{isDayUse ? 'Day Use' : `${nights} night${nights !== 1 ? 's' : ''}`}</span>
-            <span className={cn('text-xs font-black px-3 py-1 rounded-full', availableRooms.length > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}>{availableRooms.length} room{availableRooms.length !== 1 ? 's' : ''} available</span>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="bg-primary/10 text-primary text-[10px] font-black px-4 py-1.5 rounded-full border border-primary/20 shadow-sm flex items-center gap-2">
+               <Clock className="w-3 h-3" />
+               {isDayUse ? 'DAY USE (No Night)' : `${nights} NIGHT${nights !== 1 ? 'S' : ''}`}
+            </div>
+            <div className={cn(
+               'text-[10px] font-black px-4 py-1.5 rounded-full border shadow-sm flex items-center gap-2', 
+               availableRooms.length > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'
+            )}>
+               <Bed className="w-3 h-3" />
+               {availableRooms.length} ROOMS AVAILABLE
+            </div>
           </div>
         )}
-        {(reservationType === 'enquiry' || reservationType === 'block') && (
-          <div className={cn('rounded-xl border-2 p-4 space-y-3', reservationType === 'enquiry' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50')}>
+        {reservationType === 'enquiry' && (
+          <div className="rounded-xl border-2 p-4 space-y-3 border-amber-200 bg-amber-50">
             <Label className="text-xs font-black uppercase tracking-widest opacity-70">Auto-release after</Label>
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {ENQUIRY_DURATIONS.map(d => (
@@ -586,12 +630,14 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                 <span className="text-xs font-bold text-slate-500">hours</span>
               </div>
             )}
-            {reservationType === 'block' && (
-              <div>
-                <Label className="text-xs font-black uppercase tracking-widest opacity-60 mb-1 block">Reason (optional)</Label>
-                <Input className="h-10 rounded-xl" placeholder="e.g. Owner stay, deep cleaning…" value={blockReason} onChange={e => setBlockReason(e.target.value)} />
-              </div>
-            )}
+          </div>
+        )}
+        {reservationType === 'block' && (
+          <div className="rounded-xl border-2 p-4 space-y-3 border-slate-200 bg-slate-50">
+            <div>
+              <Label className="text-xs font-black uppercase tracking-widest opacity-60 mb-1 block">Block Reason</Label>
+              <Input className="h-10 rounded-xl" placeholder="e.g. Owner stay, maintenance, deep cleaning…" value={blockReason} onChange={e => setBlockReason(e.target.value)} />
+            </div>
           </div>
         )}
         <Button className="w-full h-11 rounded-xl font-black" disabled={!validDates} onClick={() => goNext(reservationType === 'group' ? 'groupConfig' : 'room')}>Continue <ChevronRight className="ml-1 h-4 w-4" /></Button>
@@ -672,8 +718,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           </Select>
         </div>
       </div>
-      {selectedRoom && (
-        <div>
+      {selectedRoom && reservationType !== 'block' && (
+        <div className="space-y-1.5">
           <Label className="text-xs font-black uppercase tracking-widest opacity-60 mb-1.5 block">Adults</Label>
           <Select value={adults.toString()} onValueChange={v => setAdults(Number(v))}>
             <SelectTrigger className="h-10 rounded-xl font-bold"><SelectValue /></SelectTrigger>
@@ -685,7 +731,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           </Select>
         </div>
       )}
-      {selectedRoom && (
+      {selectedRoom && reservationType !== 'block' && (hotel?.settings?.stayPlans?.length || 0) > 0 && (
         <div className="space-y-1.5">
           <Label className="text-xs font-black uppercase tracking-widest opacity-60">Stay Plan</Label>
           <Select value={planType} onValueChange={setPlanType}>
@@ -716,22 +762,56 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           </Select>
         </div>
       )}
-      {selectedRoom && nights >= 0 && (
-        <div className="rounded-xl bg-muted/30 border p-4 space-y-1.5 text-xs font-bold">
-          <div className="flex justify-between text-slate-500"><span>Stay ({Math.max(nights, isDayUse ? 1 : 0)}N)</span><span className="text-slate-800">₹{baseSubtotal.toLocaleString()}</span></div>
-          {extraAdults > 0 && <div className="flex justify-between text-slate-500"><span>Extra persons</span><span>+ ₹{extraCharge.toLocaleString()}</span></div>}
-          {mealCharge > 0 && (
-            <div className="flex justify-between text-slate-500 italic">
-               <span>Plan ({planType})</span>
-               <span>+ ₹{mealCharge.toLocaleString()}</span>
+      {selectedRoom && nights >= 0 && (reservationType !== 'block') && (
+        <div className="rounded-[24px] bg-slate-50 border border-slate-100 p-5 space-y-3 shadow-inner">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Estimated Total</span>
+            <div className="flex items-baseline gap-1">
+               <span className="text-[10px] font-bold text-slate-400">₹</span>
+               <span className="text-2xl font-black text-primary tracking-tighter">{totalAmount.toLocaleString()}</span>
             </div>
-          )}
-          {taxConfig?.enabled && <div className="flex justify-between text-orange-600"><span>GST</span><span>+ ₹{taxAmount.toLocaleString()}</span></div>}
-          <Separator className="my-1" />
-          <div className="flex justify-between text-base font-black text-primary"><span>Total</span><span>₹{totalAmount.toLocaleString()}</span></div>
+          </div>
+          
+          <Separator className="bg-slate-200" />
+          
+          <div className="grid grid-cols-1 gap-2">
+            <div className="flex justify-between items-center px-1">
+              <span className="text-[10px] font-bold text-slate-500">Base Fare ({Math.max(nights, isDayUse ? 1 : 0)}N × ₹{roomPrice})</span>
+              <span className="text-[11px] font-black text-slate-800">₹{baseSubtotal.toLocaleString()}</span>
+            </div>
+            {extraAdults > 0 && (
+              <div className="flex justify-between items-center px-1">
+                <span className="text-[10px] font-bold text-emerald-600">Extra Person ({extraAdults} × ₹{extraPersonPrice})</span>
+                <span className="text-[11px] font-black text-emerald-700">+ ₹{extraCharge.toLocaleString()}</span>
+              </div>
+            )}
+            {mealCharge > 0 && (
+              <div className="flex justify-between items-center px-1">
+                <span className="text-[10px] font-bold text-blue-600">Plan: {planType}</span>
+                <span className="text-[11px] font-black text-blue-700">+ ₹{mealCharge.toLocaleString()}</span>
+              </div>
+            )}
+            {taxConfig?.enabled && (
+              <div className="flex justify-between items-center px-1">
+                <span className="text-[10px] font-bold text-orange-600">GST ({ (taxConfig.cgst||0)+(taxConfig.sgst||0) }%)</span>
+                <span className="text-[11px] font-black text-orange-700">+ ₹{taxAmount.toLocaleString()}</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
-      <Button className="w-full h-11 rounded-xl font-black" disabled={!selectedRoom} onClick={() => goNext(reservationType === 'block' ? 'payment' : 'guest')}>Continue <ChevronRight className="ml-1 h-4 w-4" /></Button>
+      <Button 
+        className="w-full h-11 rounded-xl font-black" 
+        disabled={!selectedRoom || isSubmitting} 
+        onClick={() => {
+          if (reservationType === 'block') handleSubmit();
+          else goNext(reservationType === 'group' ? 'guest' : 'guest');
+        }}
+      >
+        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : (
+          reservationType === 'block' ? 'Confirm Block' : <>Continue <ChevronRight className="ml-1 h-4 w-4" /></>
+        )}
+      </Button>
     </div>
   );
 
@@ -828,8 +908,14 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                 </div>
               )}
 
-              <Button className="w-full h-11 rounded-xl font-black" onClick={() => goNext(reservationType === 'group' ? 'roomAssignment' : 'payment')}>
-                Continue to {reservationType === 'group' ? 'Assignments' : 'Payment'} <ChevronRight className="ml-1 h-4 w-4" />
+              <Button 
+                className="w-full h-11 rounded-xl font-black" 
+                onClick={() => {
+                  if (reservationType === 'enquiry') handleSubmit();
+                  else goNext(reservationType === 'group' ? 'roomAssignment' : 'payment');
+                }}
+              >
+                {reservationType === 'enquiry' ? 'Confirm Enquiry' : `Continue to ${reservationType === 'group' ? 'Assignments' : 'Payment'}`} <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
             </div>
           )}
@@ -930,7 +1016,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           </div>
         </div>
         <Button className="w-full h-12 rounded-2xl font-black text-lg shadow-lg" disabled={isSubmitting || (advancePayment > 0 && !paymentMethod)} onClick={handleSubmit}>
-          {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : 'Confirm Reservation'}
+          {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin mx-auto" /> : `Confirm ${reservationType === 'group' ? 'Group Booking' : 'Reservation'}`}
         </Button>
       </div>
     );
@@ -960,11 +1046,16 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               </Button>
             )}
             <div className="flex-1 min-w-0">
-               <DialogTitle className="text-lg sm:text-xl font-black tracking-tighter truncate">{initialBooking ? 'Edit' : 'New'} Reservation</DialogTitle>
+                <DialogTitle className="text-lg sm:text-xl font-black tracking-tighter truncate">
+                  {initialBooking ? 'Edit' : 'New'} {reservationType === 'block' ? 'Room Block' : reservationType === 'enquiry' ? 'Enquiry Hold' : 'Room Booking'}
+                </DialogTitle>
                <p className="text-[10px] font-black tracking-widest text-primary/60 uppercase">
                  Step {currentStepNum} of {totalSteps} &bull; {stepLabel[step]}
                </p>
             </div>
+            <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10 sm:h-8 sm:w-8 rounded-full bg-white shadow-sm border border-slate-200 shrink-0 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all">
+              <X className="h-5 w-5 sm:h-4 sm:w-4" />
+            </Button>
             <DialogTitle className="sr-only">New Booking Modal</DialogTitle>
           </div>
         </div>

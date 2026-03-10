@@ -80,7 +80,6 @@ export function HotelSettings() {
   };
 
   const handleRemovePlan = (key: string) => {
-    if (['EP', 'CP', 'MAP', 'AP', 'custom'].includes(key)) return; // Prevent deleting defaults
     const newPlans = form.settings.stayPlans.filter(p => p.key !== key);
     const newRates = { ...form.settings.mealRates };
     delete newRates[key];
@@ -431,7 +430,7 @@ export function HotelSettings() {
                           <IndianRupee className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                           <Input 
                             type="number"
-                            disabled={plan.key === 'EP' || plan.key === 'custom'}
+                            disabled={plan.key === 'EP'}
                             value={form.settings.mealRates[plan.key] || 0}
                             onChange={e => {
                               const updatedRates = { ...form.settings.mealRates, [plan.key]: parseFloat(e.target.value) || 0 };
@@ -442,11 +441,9 @@ export function HotelSettings() {
                         </div>
                       </div>
                       <div className="md:col-span-1 flex items-center justify-end">
-                        {!['EP', 'CP', 'MAP', 'AP', 'custom'].includes(plan.key) && (
-                          <Button variant="ghost" size="icon" onClick={() => handleRemovePlan(plan.key)} className="text-red-500 hover:text-red-600 hover:bg-red-50 h-9 w-9">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
+                        <Button variant="ghost" size="icon" onClick={() => handleRemovePlan(plan.key)} className="text-red-500 hover:text-red-600 hover:bg-red-50 h-9 w-9">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   </div>

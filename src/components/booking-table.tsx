@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { ArrowRight, Calendar, ChevronRight, Eye, Globe, Loader2, LogIn, LogOut, MoreHorizontal, Pencil, Plus, Search, UserPlus, XCircle } from 'lucide-react';
+import { ArrowRight, Calendar, ChevronRight, Eye, Globe, Loader2, LogIn, LogOut, MoreHorizontal, Pencil, Plus, Search, UserPlus, XCircle, Lock } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { BookingDetailSheet } from './booking-detail-sheet';
 import { BookingModal } from './booking-modal';
@@ -43,7 +43,12 @@ export function BookingTable() {
         guestName.toLowerCase().includes(search.toLowerCase()) ||
         roomNumber.toLowerCase().includes(search.toLowerCase()) ||
         bookingId.toLowerCase().includes(search.toLowerCase());
-      const matchStatus = statusFilter === 'all' || b.status === statusFilter;
+      const type = b.reservationType || b.bookingType || 'booking';
+      const matchStatus = statusFilter === 'all' || 
+                         (statusFilter === 'enquiry' && type === 'enquiry') ||
+                         (statusFilter === 'block' && type === 'block') ||
+                         (statusFilter === 'booking' && type === 'booking' && b.status === 'reserved') ||
+                         (b.status === statusFilter && type === 'booking');
       
       let matchDate = true;
       if (dateFrom || dateTo) {
@@ -80,14 +85,25 @@ export function BookingTable() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const paginatedData = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  const statusBadge = (status: string) => {
+  const statusBadge = (booking: Booking) => {
+    const type = booking.reservationType || booking.bookingType || 'booking';
+    const isEnquiryExpired = type === 'enquiry' && booking.enquiryExpiresAt && new Date(booking.enquiryExpiresAt) < new Date();
+    if (isEnquiryExpired) {
+       return <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20">Expired Hold</Badge>;
+    }
+    if (type === 'enquiry') {
+       return <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20">Enquiry</Badge>;
+    }
+    if (type === 'block') {
+       return <Badge variant="outline" className="bg-slate-500/10 text-slate-500 border-slate-500/20">Room Block</Badge>;
+    }
     const config: Record<string, { label: string; className: string }> = {
       'reserved': { label: 'Reserved', className: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' },
       'checked-in': { label: 'Checked In', className: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
       'checked-out': { label: 'Checked Out', className: 'bg-orange-500/10 text-orange-500 border-orange-500/20' },
       'cancelled': { label: 'Cancelled', className: 'bg-red-500/10 text-red-500 border-red-500/20' },
     };
-    const c = config[status] || { label: status, className: '' };
+    const c = config[booking.status] || { label: booking.status, className: '' };
     return <Badge variant="outline" className={c.className}>{c.label}</Badge>;
   };
 
@@ -136,6 +152,8 @@ export function BookingTable() {
               <SelectItem value="reserved">Reserved</SelectItem>
               <SelectItem value="checked-in">Checked In</SelectItem>
               <SelectItem value="checked-out">Checked Out</SelectItem>
+              <SelectItem value="enquiry">Enquiry</SelectItem>
+              <SelectItem value="block">Blocked</SelectItem>
               <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
@@ -324,13 +342,22 @@ export function BookingTable() {
                   return (
                     <TableRow key={booking._id} className="hover:bg-muted/20 transition-colors">
                       <TableCell>
-                        <button 
-                          className="font-black hover:text-primary hover:underline underline-offset-4 transition-all text-left"
-                          onClick={() => guest?._id && setSelectedGuestId(guest._id)}
-                        >
-                          {guest?.name || '—'}
-                        </button>
-                        <div className="text-xs text-muted-foreground">{guest?.phone || ''}</div>
+                        {(booking.reservationType === 'block' || booking.bookingType === 'block') ? (
+                          <div className="flex items-center gap-1.5 text-slate-500 font-bold">
+                            <Lock className="h-3.5 w-3.5 opacity-60" />
+                            <span className="truncate max-w-[150px]">{booking.blockReason || 'Maintenance'}</span>
+                          </div>
+                        ) : (
+                          <>
+                            <button 
+                              className="font-black hover:text-primary hover:underline underline-offset-4 transition-all text-left"
+                              onClick={() => guest?._id && setSelectedGuestId(guest._id)}
+                            >
+                              {guest?.name || '—'}
+                            </button>
+                            <div className="text-xs text-muted-foreground">{guest?.phone || ''}</div>
+                          </>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="text-sm font-medium">{booking.createdAt ? format(new Date(booking.createdAt), 'dd MMM yy HH:mm') : '—'}</div>
@@ -341,8 +368,10 @@ export function BookingTable() {
                       </TableCell>
                       <TableCell className="text-sm">{format(new Date(booking.checkin), 'dd MMM yy')}</TableCell>
                       <TableCell className="text-sm">{format(new Date(booking.checkout), 'dd MMM yy')}</TableCell>
-                      <TableCell>{statusBadge(booking.status)}</TableCell>
-                      <TableCell className="text-right font-medium">₹{amount.toLocaleString()}</TableCell>
+                      <TableCell>{statusBadge(booking)}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {(booking.reservationType === 'block' || booking.bookingType === 'block') ? '—' : `₹${amount.toLocaleString()}`}
+                      </TableCell>
                       <TableCell>
                         {actioningId === booking._id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -495,12 +524,14 @@ export function BookingTable() {
                      </button>
                     <Badge variant="outline" className={cn(
                       "text-[8px] font-black uppercase tracking-widest border-none h-5 px-2 rounded-md",
+                      (booking.reservationType === 'enquiry' || booking.bookingType === 'enquiry') ? 'bg-amber-50 text-amber-600' :
+                      (booking.reservationType === 'block' || booking.bookingType === 'block') ? 'bg-slate-50 text-slate-600' :
                       status === 'reserved' ? 'bg-emerald-50 text-emerald-600' :
                       status === 'checked-in' ? 'bg-blue-50 text-blue-600' :
                       status === 'checked-out' ? 'bg-orange-50 text-orange-600' :
                       'bg-red-50 text-red-600'
                     )}>
-                      {status.replace('-', ' ')}
+                      {(booking.reservationType === 'booking' || (!booking.reservationType && (booking.bookingType === 'booking' || !booking.bookingType))) ? status.replace('-', ' ') : (booking.reservationType || booking.bookingType)}
                     </Badge>
                   </div>
                   <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground/70 uppercase tracking-tighter">
@@ -531,7 +562,7 @@ export function BookingTable() {
                 <div className="flex flex-col items-end">
                    <span className="text-[9px] font-bold text-slate-300 uppercase leading-none mb-0.5">Total Revenue</span>
                    <span className="text-base font-black text-slate-900 tracking-tighter">
-                      ₹{amount.toLocaleString()}
+                      {(booking.reservationType === 'block' || booking.bookingType === 'block') ? '—' : `₹${amount.toLocaleString()}`}
                    </span>
                 </div>
               </div>

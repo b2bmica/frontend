@@ -64,11 +64,13 @@ export function GuestProfileSheet({ guestId, onClose, onBookingClick }: GuestPro
     return sum + (room?.price || 0) * nights;
   }, 0);
 
-  const statusConfig: Record<string, { color: string; bgColor: string }> = {
-    'reserved':    { color: 'text-emerald-600', bgColor: 'bg-emerald-500/10' },
-    'checked-in':  { color: 'text-blue-600', bgColor: 'bg-blue-500/10' },
-    'checked-out': { color: 'text-orange-600', bgColor: 'bg-orange-500/10' },
-    'cancelled':   { color: 'text-red-600', bgColor: 'bg-red-500/10' },
+  const statusConfig: Record<string, { color: string; bgColor: string; label?: string }> = {
+    'reserved':    { color: 'text-emerald-600', bgColor: 'bg-emerald-500/10', label: 'Reserved' },
+    'checked-in':  { color: 'text-blue-600', bgColor: 'bg-blue-500/10', label: 'Checked In' },
+    'checked-out': { color: 'text-orange-600', bgColor: 'bg-orange-500/10', label: 'Checked Out' },
+    'cancelled':   { color: 'text-red-600', bgColor: 'bg-red-500/10', label: 'Cancelled' },
+    'enquiry':     { color: 'text-amber-600', bgColor: 'bg-amber-500/10', label: 'Enquiry' },
+    'expired':     { color: 'text-slate-400', bgColor: 'bg-slate-100', label: 'Expired' },
   };
 
   return (
@@ -147,7 +149,10 @@ export function GuestProfileSheet({ guestId, onClose, onBookingClick }: GuestPro
                       {history.map((b: Booking) => {
                         const room = typeof b.roomId === 'object' ? b.roomId : rooms.find(r => r._id === b.roomId);
                         const nights = Math.max(1, differenceInDays(new Date(b.checkout), new Date(b.checkin)));
-                        const config = statusConfig[b.status] || { color: 'text-slate-400', bgColor: 'bg-slate-100' };
+                        const isEnquiry = b.reservationType === 'enquiry' || b.bookingType === 'enquiry';
+                        const isExpired = b.status === 'expired' || (isEnquiry && b.enquiryExpiresAt && new Date(b.enquiryExpiresAt) < new Date());
+                        const effectiveStatus = isExpired ? 'expired' : isEnquiry ? 'enquiry' : b.status;
+                        const config = statusConfig[effectiveStatus] || { color: 'text-slate-400', bgColor: 'bg-slate-100', label: (b.status || 'Reserved').replace('-', ' ') };
                         
                         return (
                           <div 
@@ -168,7 +173,7 @@ export function GuestProfileSheet({ guestId, onClose, onBookingClick }: GuestPro
                                 </div>
                               </div>
                               <Badge className={cn("text-[8px] font-black uppercase tracking-tighter border-none h-5 px-2", config.bgColor, config.color)}>
-                                {b.status.replace('-', ' ')}
+                                {config.label}
                               </Badge>
                             </div>
                             
