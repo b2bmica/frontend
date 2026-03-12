@@ -87,9 +87,10 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
   }, [currentBooking, bookings, rooms]);
 
   const expiryTime = currentBooking?.enquiryExpiresAt ? new Date(currentBooking.enquiryExpiresAt) : null;
-  const isEnquiryExpired = expiryTime ? isBefore(expiryTime, now) : false;
   const isBlock = currentBooking?.reservationType === 'block' || currentBooking?.bookingType === 'block';
   const isEnquiry = currentBooking?.reservationType === 'enquiry' || currentBooking?.bookingType === 'enquiry';
+  // Only expired if it's STILL an enquiry type — converted bookings keep the expiresAt field but should NOT show as expired
+  const isEnquiryExpired = isEnquiry && expiryTime ? isBefore(expiryTime, now) : false;
 
   const priceStats = useMemo(() => {
     if (!currentBooking) return { taxAmount: 0, totalAmount: 0, balance: 0, subtotal: 0, nights: 0, roomPrice: 0, baseSubtotal: 0, extraAdults: 0, extraPersonCharge: 0 };
@@ -514,7 +515,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
         {!isEnquiryExpired && (
           <div className="p-4 bg-white border-t flex flex-col gap-2 relative z-10 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.03)]">
             <div className="flex items-stretch gap-2 w-full h-11">
-              {(bookingData.status === 'reserved' || bookingData.status === 'checked-in' || (bookingData.reservationType === 'block' || bookingData.bookingType === 'block')) && (
+              {(bookingData.status === 'reserved' || bookingData.status === 'checked-in' || ((bookingData.reservationType === 'block' || bookingData.bookingType === 'block') && bookingData.status !== 'cancelled')) && (
                 <Button 
                   variant="outline"
                   className="w-11 h-11 p-0 rounded-xl border-2 text-slate-400 border-slate-100 hover:border-slate-300 hover:text-slate-600 transition-all active:scale-95 shrink-0"
@@ -608,7 +609,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                 </div>
               )}
 
-              {(bookingData.reservationType !== 'block' && bookingData.bookingType !== 'block') && (
+              {(bookingData.reservationType !== 'block' && bookingData.bookingType !== 'block' && bookingData.status !== 'cancelled') && (
                 <Button variant="outline" className="h-11 px-4 rounded-xl border-2 flex items-center justify-center gap-2 font-black active:scale-95" onClick={() => window.print()}>
                   <Printer className="h-4 w-4" />
                 </Button>

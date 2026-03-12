@@ -20,7 +20,6 @@ import {
 
 const navItems = [
   { title: "Calendar", id: "board", icon: Calendar },
-  { title: "Calendar V2", id: "board-v2", icon: Calendar },
   { title: "Bookings", id: "bookings", icon: BookOpen },
   { title: "Guests", id: "guests", icon: Users },
   { title: "Housekeeping", id: "housekeeping", icon: Home },
@@ -42,6 +41,19 @@ export default function DashboardLayout({
 }) {
   const { user, hotel, logout } = useAuth()
   const location = useLocation()
+  
+  const [isLandscapeMobile, setIsLandscapeMobile] = React.useState(false)
+
+  React.useEffect(() => {
+    const checkLandscape = () => {
+      // Typically mobile landscape has height less than 500px
+      setIsLandscapeMobile(window.innerHeight < 500 && window.innerWidth > window.innerHeight)
+    }
+    checkLandscape()
+    window.addEventListener('resize', checkLandscape)
+    return () => window.removeEventListener('resize', checkLandscape)
+  }, [])
+
   const initials = user?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || 'U'
 
   const pathSegments = location.pathname.split('/').filter(Boolean)
@@ -54,8 +66,9 @@ export default function DashboardLayout({
     <div className="flex flex-col min-h-screen bg-background overflow-hidden h-screen">
 
       {/* ── Top Navigation Bar ── */}
-      <header className="sticky top-0 z-50 border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 shadow-sm flex-shrink-0">
-        <div className="flex items-center h-14 px-3 md:px-5 gap-3">
+      {!isLandscapeMobile && (
+        <header className="sticky top-0 z-50 border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 shadow-sm flex-shrink-0">
+          <div className="flex items-center h-14 px-3 md:px-5 gap-3">
 
           {/* Brand */}
           <Link to="/dashboard/board" className="flex items-center gap-2.5 shrink-0 mr-2">
@@ -95,6 +108,7 @@ export default function DashboardLayout({
           {/* Right Actions */}
           <div className="flex items-center gap-1.5 shrink-0">
             {['board', 'bookings'].includes(activeTab || '') && (
+
               <Button
                 size="sm"
                 onClick={() => onTabChange?.('new-booking')}
@@ -128,16 +142,17 @@ export default function DashboardLayout({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        </div>
-      </header>
+          </div>
+        </header>
+      )}
 
       {/* ── Main Content ── */}
       <main className="flex-1 overflow-auto min-h-0">
         <div className={cn(
           "h-full",
-          activeTab === 'board' ? "p-3 md:p-4" : "p-3 md:p-6"
+          currentTab === 'board' || isLandscapeMobile ? "p-0" : "p-3 md:p-6"
         )}>
-          <div className={cn("mx-auto h-full", activeTab === 'board' ? "max-w-none" : "max-w-7xl")}>
+          <div className={cn("mx-auto h-full", currentTab === 'board' || isLandscapeMobile ? "max-w-none" : "max-w-7xl")}>
             {children}
           </div>
         </div>

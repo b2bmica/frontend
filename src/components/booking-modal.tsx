@@ -209,21 +209,45 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
   const availableRooms = useMemo(() => {
     if (!checkinISO || !checkoutISO || new Date(checkinISO) >= new Date(checkoutISO)) return rooms;
+    const now = new Date();
     return rooms.filter(room => {
       if (room.status === 'maintenance' || room.status === 'under-maintenance') return false;
       return !bookings.some(b => {
-        if (b.status === 'cancelled' || b.status === 'checked-out') return false;
-        if (initialBooking && b._id === initialBooking._id) return false;
-        const bRoomId = typeof b.roomId === 'object' ? b.roomId._id : b.roomId;
-        if (bRoomId !== room._id) return false;
-        const bCI = toISO(format(parseISO(b.checkin), 'yyyy-MM-dd'), b.checkinTime  || '00:00');
-        const bCO = toISO(format(parseISO(b.checkout),'yyyy-MM-dd'), b.checkoutTime || '23:59');
+        const bStatus = b.status;
+        const bType = b.reservationType || (b as any).bookingType;
+        
+        // Skip explicitly non-blocking statuses
+        if (bStatus === 'cancelled' || bStatus === 'checked-out' || bStatus === 'expired') return false;
+        
+        // Skip expired enquiries or blocks
+        const expiry = b.enquiryExpiresAt || b.blockExpiresAt;
+        if (expiry && new Date(expiry) < now && (bType === 'enquiry' || bType === 'block')) return false;
+
+        // Always skip the current booking being edited
+        const bId = typeof b._id === 'object' ? String((b._id as any)) : String(b._id);
+        const initId = initialBooking ? (typeof initialBooking._id === 'object' ? String((initialBooking._id as any)) : String(initialBooking._id)) : null;
+        if (initId && bId === initId) return false;
+        
+        const bRoomId = typeof b.roomId === 'object' ? String((b.roomId as any)._id) : String(b.roomId);
+        if (bRoomId !== String(room._id)) return false;
+
+        const checkinDateStr = typeof b.checkin === 'string' ? b.checkin.slice(0, 10) : format(new Date(b.checkin), 'yyyy-MM-dd');
+        const checkoutDateStr = typeof b.checkout === 'string' ? b.checkout.slice(0, 10) : format(new Date(b.checkout), 'yyyy-MM-dd');
+        
+        const bCI = toISO(checkinDateStr, b.checkinTime  || '00:00');
+        const bCO = toISO(checkoutDateStr, b.checkoutTime || '23:59');
         return overlaps(checkinISO, checkoutISO, bCI, bCO);
       });
     });
   }, [rooms, bookings, checkinISO, checkoutISO, initialBooking]);
 
-  const isRoomAvailable = (roomId: string) => availableRooms.some(r => r._id === roomId);
+  const isRoomAvailable = (roomId: string) => {
+    // If we're editing an existing booking, the original room is always available for this booking
+    const initId = initialBooking ? (typeof initialBooking._id === 'object' ? String((initialBooking._id as any)) : String(initialBooking._id)) : null;
+    const originalRoomIdStr = typeof initialBooking?.roomId === 'object' ? String((initialBooking.roomId as any)._id) : String(initialBooking?.roomId ?? '');
+    if (initId && roomId === originalRoomIdStr) return true;
+    return availableRooms.some(r => r._id === roomId);
+  };
 
   // ─── Price calculations ───────────────────────────────────────────────────
   const nights = useMemo(() => (checkinDate && checkoutDate
@@ -572,12 +596,12 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5 col-span-2 sm:col-span-1">
             <Label className="text-xs font-black uppercase tracking-widest opacity-60">Check-in</Label>
-            <Input type="date" className="h-11 rounded-xl" value={checkinDate} min={todayStr} onChange={e => { 
+            <Input type="date" className="h-11 rounded-xl" value={checkinDate} min={!initialBooking ? todayStr : undefined} onChange={e => { 
                 setCheckinDate(e.target.value); 
                 if (e.target.value >= checkoutDate) setCheckoutDate(format(addDays(parseISO(e.target.value), 1), 'yyyy-MM-dd')); 
-                if (selectedRoom) { setSelectedRoom(''); setError('Dates changed. Please reselect a room.'); }
+                // Let the user keep their selected room; validation is handled downstream.
             }} />
-            <Select value={checkinTime} onValueChange={v => { setCheckinTime(v); if (selectedRoom) { setSelectedRoom(''); setError('Dates changed. Please reselect a room.'); } }}>
+            <Select value={checkinTime} onValueChange={v => { setCheckinTime(v); }}>
               <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Check-in Time" /></SelectTrigger>
               <SelectContent>
                 {(hotel?.settings?.checkinTimes?.length ? hotel.settings.checkinTimes : ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00']).map(t => <SelectItem key={t} value={t}>{format(parseISO(`2000-01-01T${t}:00`), 'h:mm a')}</SelectItem>)}
@@ -588,9 +612,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
             <Label className="text-xs font-black uppercase tracking-widest opacity-60">Check-out</Label>
             <Input type="date" className="h-11 rounded-xl" value={checkoutDate} min={checkinDate} onChange={e => {
                 setCheckoutDate(e.target.value);
-                if (selectedRoom) { setSelectedRoom(''); setError('Dates changed. Please reselect a room.'); }
             }} />
-            <Select value={checkoutTime} onValueChange={v => { setCheckoutTime(v); if (selectedRoom) { setSelectedRoom(''); setError('Dates changed. Please reselect a room.'); } }}>
+            <Select value={checkoutTime} onValueChange={v => { setCheckoutTime(v); }}>
               <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Check-out Time" /></SelectTrigger>
               <SelectContent>
                 {(hotel?.settings?.checkoutTimes?.length ? hotel.settings.checkoutTimes : ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00']).map(t => <SelectItem key={t} value={t}>{format(parseISO(`2000-01-01T${t}:00`), 'h:mm a')}</SelectItem>)}
@@ -607,13 +630,16 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                <Clock className="w-3 h-3" />
                {isDayUse ? 'DAY USE (No Night)' : `${nights} NIGHT${nights !== 1 ? 'S' : ''}`}
             </div>
-            <div className={cn(
-               'text-[10px] font-black px-4 py-1.5 rounded-full border shadow-sm flex items-center gap-2', 
-               availableRooms.length > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'
-            )}>
-               <Bed className="w-3 h-3" />
-               {availableRooms.length} ROOMS AVAILABLE
-            </div>
+            {/* Only show rooms available count for new bookings, not edits */}
+            {!initialBooking && (
+              <div className={cn(
+                 'text-[10px] font-black px-4 py-1.5 rounded-full border shadow-sm flex items-center gap-2', 
+                 availableRooms.length > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'
+              )}>
+                 <Bed className="w-3 h-3" />
+                 {availableRooms.length} ROOMS AVAILABLE
+              </div>
+            )}
           </div>
         )}
         {reservationType === 'enquiry' && (
@@ -640,7 +666,9 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
             </div>
           </div>
         )}
-        <Button className="w-full h-11 rounded-xl font-black" disabled={!validDates} onClick={() => goNext(reservationType === 'group' ? 'groupConfig' : 'room')}>Continue <ChevronRight className="ml-1 h-4 w-4" /></Button>
+        <Button className="w-full h-11 rounded-xl font-black" disabled={!validDates} onClick={() => {
+            goNext(reservationType === 'group' ? 'groupConfig' : 'room');
+        }}>Continue <ChevronRight className="ml-1 h-4 w-4" /></Button>
       </div>
     );
   };
@@ -1022,6 +1050,208 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
     );
   };
 
+  // ─── Render Edit Form (single-page, no wizard) ───────────────────────────
+  const renderEditForm = () => {
+    const validDates = checkinISO && checkoutISO && new Date(checkinISO) < new Date(checkoutISO) && (!isDayUse || checkinTime < checkoutTime);
+    // Resolve the original room ID regardless of whether roomId is a populated object or a plain string
+    const originalRoomId = typeof initialBooking?.roomId === 'object'
+      ? String((initialBooking!.roomId as any)._id)
+      : String(initialBooking?.roomId ?? '');
+    // Only flag conflict if the room genuinely conflicts AND it's not the booking's original room.
+    // (Note: isRoomAvailable now returns true for the original room, so selectedRoom !== originalRoomId is extra safety)
+    const isRoomConflicted = !!selectedRoom && !isRoomAvailable(selectedRoom) && selectedRoom !== originalRoomId;
+    
+    return (
+      <div className="space-y-5">
+
+        {/* Dates Row */}
+        <div>
+          <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-2 block">Check-in / Check-out</Label>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Input type="date" className="h-11 rounded-xl font-bold" value={checkinDate} onChange={e => {
+                setCheckinDate(e.target.value);
+                if (e.target.value >= checkoutDate) setCheckoutDate(format(addDays(parseISO(e.target.value), 1), 'yyyy-MM-dd'));
+              }} />
+              <Select value={checkinTime} onValueChange={setCheckinTime}>
+                <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(hotel?.settings?.checkinTimes?.length ? hotel.settings.checkinTimes : ['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00']).map(t => <SelectItem key={t} value={t}>{format(parseISO(`2000-01-01T${t}:00`), 'h:mm a')}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Input type="date" className="h-11 rounded-xl font-bold" value={checkoutDate} min={checkinDate} onChange={e => setCheckoutDate(e.target.value)} />
+              <Select value={checkoutTime} onValueChange={setCheckoutTime}>
+                <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(hotel?.settings?.checkoutTimes?.length ? hotel.settings.checkoutTimes : ['08:00','09:00','10:00','11:00','12:00','13:00','14:00']).map(t => <SelectItem key={t} value={t}>{format(parseISO(`2000-01-01T${t}:00`), 'h:mm a')}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {validDates && (
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-[10px] font-black px-3 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
+                {isDayUse ? 'DAY USE' : `${nights} NIGHT${nights !== 1 ? 'S' : ''}`}
+              </span>
+            </div>
+          )}
+          {!validDates && checkinDate === checkoutDate && checkinTime >= checkoutTime && (
+            <p className="text-xs font-bold text-red-500 mt-1">Check-out time must be after check-in.</p>
+          )}
+        </div>
+
+        <Separator />
+
+        {/* Room Selection */}
+        {reservationType !== 'block' && (
+          <div>
+            <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-2 block">Room</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <Select value={selectedRoomType} onValueChange={val => { setSelectedRoomType(val); setSelectedRoom(''); }}>
+                <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Category" /></SelectTrigger>
+                <SelectContent>
+                  {Array.from(new Set(rooms.map(r => r.roomType))).map(type => (
+                    <SelectItem key={type} value={type} className="font-bold">{type}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={selectedRoom || undefined} disabled={!selectedRoomType} onValueChange={val => {
+                const rm = rooms.find(r => r._id === val);
+                setSelectedRoom(val);
+                if (rm) { setRoomPrice(rm.price); if (adults > rm.maxOccupancy) setAdults(rm.maxOccupancy); }
+              }}>
+                <SelectTrigger className={cn('h-11 rounded-xl font-bold transition-colors', isRoomConflicted && 'border-red-500 bg-red-50 text-red-700 shadow-[0_0_0_1px_rgba(239,68,68,0.1)]')}>
+                  <SelectValue placeholder={rooms.filter(r => r.roomType === selectedRoomType).length === 0 ? "No Rooms Found" : "Room #"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {rooms.filter(r => r.roomType === selectedRoomType).map(room => {
+                    const avail = isRoomAvailable(room._id);
+                    const isCurrent = room._id === (typeof initialBooking?.roomId === 'object' ? (initialBooking.roomId as any)._id : initialBooking?.roomId);
+                    const isSelectable = avail || isCurrent;
+                    return (
+                      <SelectItem 
+                        key={room._id} 
+                        value={room._id} 
+                        disabled={!isSelectable}
+                        className={cn("font-bold text-sm h-11", !isSelectable && "opacity-40")}
+                      >
+                        <div className="flex items-center justify-between w-full min-w-[240px]">
+                           <div className="flex items-center gap-2">
+                              <span className={cn(
+                                 "w-2 h-2 rounded-full shrink-0",
+                                 (!isSelectable || room.status === 'clean' || room.status === 'occupied') ? 'bg-emerald-500' : room.status === 'dirty' ? 'bg-amber-400' : 'bg-red-500'
+                              )} />
+                              <span className="whitespace-nowrap">Room #{room.roomNumber}</span>
+                           </div>
+                           <span className={cn(
+                              'text-[9px] font-black uppercase px-2.5 py-1 rounded-full ml-4 tracking-widest leading-none shrink-0', 
+                              isCurrent ? 'bg-slate-100 text-slate-600 border border-slate-200' : (!isSelectable ? 'bg-red-100 text-red-700' : (room.status === 'dirty' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'))
+                           )}>
+                              {isCurrent ? 'Current' : (!isSelectable ? 'Occupied' : (room.status === 'dirty' ? 'Dirty' : 'Clean'))}
+                           </span>
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+            {isRoomConflicted && (
+              <p className="text-xs font-bold text-red-500 mt-2 bg-red-50/50 p-2 rounded-lg border border-red-100/50 flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                <Info className="h-3 w-3" />
+                This room is no longer available for the selected dates.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Block reason */}
+        {reservationType === 'block' && (
+          <div>
+            <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-2 block">Block Reason</Label>
+            <Input className="h-11 rounded-xl font-bold" placeholder="e.g. Owner stay, maintenance…" value={blockReason} onChange={e => setBlockReason(e.target.value)} />
+          </div>
+        )}
+
+        <Separator />
+
+        {/* Adults + Plan + Rate */}
+        {reservationType !== 'block' && selectedRoom && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div>
+              <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-1.5 block">Adults</Label>
+              <Select value={adults.toString()} onValueChange={v => setAdults(Number(v))}>
+                <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[1,2,3,4,5,6,7,8].filter(n => n <= (rooms.find(r => r._id === selectedRoom)?.maxOccupancy || 6)).map(n => (
+                    <SelectItem key={n} value={n.toString()}>{n}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-1.5 block">Plan</Label>
+              <Select value={planType} onValueChange={setPlanType}>
+                <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(hotel?.settings?.stayPlans || PLAN_TYPES).map((p: any) => (
+                    <SelectItem key={p.key} value={p.key}>{p.key}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-1.5 block">Rate / Night</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">₹</span>
+                <Input type="number" className="h-11 rounded-xl pl-7 font-bold bg-slate-50 border-slate-200 cursor-not-allowed opacity-80" value={roomPrice} readOnly />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Price summary */}
+        {reservationType !== 'block' && selectedRoom && nights >= 0 && (
+          <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Estimated Total</p>
+              <p className="text-xl font-black text-primary">₹{totalAmount.toLocaleString()}</p>
+            </div>
+            <div className="text-right text-[10px] text-slate-500 space-y-0.5">
+              <p>Base: ₹{baseSubtotal.toLocaleString()}</p>
+              {extraAdults > 0 && <p>+Extra: ₹{extraCharge.toLocaleString()}</p>}
+              {mealCharge > 0 && <p>+Plan: ₹{mealCharge.toLocaleString()}</p>}
+              {taxConfig?.enabled && <p>+GST: ₹{taxAmount.toLocaleString()}</p>}
+            </div>
+          </div>
+        )}
+
+        {/* Special requests */}
+        {reservationType !== 'block' && (
+          <div>
+            <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-1.5 block">Special Requests</Label>
+            <textarea
+              className="w-full h-16 rounded-xl border border-input bg-transparent px-3 py-2 text-sm font-medium resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+              placeholder="e.g. High floor, extra pillow…"
+              value={specialRequests}
+              onChange={e => setSpecialRequests(e.target.value)}
+            />
+          </div>
+        )}
+
+        <Button
+          className="w-full h-11 rounded-xl font-black"
+          disabled={!validDates || isSubmitting || (!!isRoomConflicted)}
+          onClick={handleSubmit}
+        >
+          {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Save Changes'}
+        </Button>
+      </div>
+    );
+  };
+
   const stepContent: Record<StepType, () => React.JSX.Element> = {
     type: renderTypeStep,
     dates: renderDatesStep,
@@ -1037,10 +1267,11 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px] w-full max-w-none h-[100dvh] sm:h-auto p-0 overflow-hidden border-none sm:rounded-[32px] rounded-none flex flex-col shadow-2xl bg-white">
+      <DialogContent className="sm:max-w-[500px] w-full max-w-none h-auto sm:max-h-[96dvh] p-0 overflow-hidden border-none sm:rounded-[32px] rounded-none flex flex-col shadow-2xl bg-white focus:outline-none">
         <div className="bg-slate-50 border-b flex items-center justify-between p-4 sm:p-6 shrink-0 relative z-10">
           <div className="flex items-center gap-3 w-full">
-            {step !== 'type' && (
+            {/* Back button — only show in wizard mode (new bookings) */}
+            {!initialBooking && step !== 'type' && (
               <Button variant="ghost" size="icon" onClick={goBack} className="h-10 w-10 sm:h-8 sm:w-8 rounded-full bg-white shadow-sm border border-slate-200 shrink-0 hover:bg-slate-100 hover:scale-105 transition-all">
                 <ArrowLeft className="h-5 w-5 sm:h-4 sm:w-4" />
               </Button>
@@ -1049,9 +1280,20 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                 <DialogTitle className="text-lg sm:text-xl font-black tracking-tighter truncate">
                   {initialBooking ? 'Edit' : 'New'} {reservationType === 'block' ? 'Room Block' : reservationType === 'enquiry' ? 'Enquiry Hold' : 'Room Booking'}
                 </DialogTitle>
-               <p className="text-[10px] font-black tracking-widest text-primary/60 uppercase">
-                 Step {currentStepNum} of {totalSteps} &bull; {stepLabel[step]}
-               </p>
+               {!initialBooking && (
+                 <p className="text-[10px] font-black tracking-widest text-primary/60 uppercase">
+                   Step {currentStepNum} of {totalSteps} &bull; {stepLabel[step]}
+                 </p>
+               )}
+               {initialBooking && (
+                 <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
+                   {typeof initialBooking.roomId === 'object' 
+                     ? `Room ${(initialBooking.roomId as any).roomNumber}` 
+                     : rooms.find(r => r._id === initialBooking.roomId)?.roomNumber 
+                       ? `Room ${rooms.find(r => r._id === initialBooking.roomId)!.roomNumber}` 
+                       : ''}
+                 </p>
+               )}
             </div>
             <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10 sm:h-8 sm:w-8 rounded-full bg-white shadow-sm border border-slate-200 shrink-0 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all">
               <X className="h-5 w-5 sm:h-4 sm:w-4" />
@@ -1067,25 +1309,29 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                  onClose();
                }
              }}>
-          <AnimatePresence mode="wait">
-            <motion.div 
-               key={step} 
-               initial={{ opacity: 0, x: 20 }} 
-               animate={{ opacity: 1, x: 0 }} 
-               exit={{ opacity: 0, x: -20 }} 
-               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-               className="h-full"
-            >
-              {error && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center gap-2">
-                  <Info className="h-4 w-4 shrink-0" />
-                  <span className="flex-1 leading-tight">{error}</span>
-                  <button onClick={() => setError(null)}><X className="h-3.5 w-3.5 opacity-60 hover:opacity-100" /></button>
-                </div>
-              )}
-              {stepContent[step]()}
-            </motion.div>
-          </AnimatePresence>
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center gap-2">
+              <Info className="h-4 w-4 shrink-0" />
+              <span className="flex-1 leading-tight">{error}</span>
+              <button onClick={() => setError(null)}><X className="h-3.5 w-3.5 opacity-60 hover:opacity-100" /></button>
+            </div>
+          )}
+
+          {/* Edit mode: single-page form */}
+          {initialBooking ? renderEditForm() : (
+            <AnimatePresence mode="wait">
+              <motion.div 
+                 key={step} 
+                 initial={{ opacity: 0, x: 20 }} 
+                 animate={{ opacity: 1, x: 0 }} 
+                 exit={{ opacity: 0, x: -20 }} 
+                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                 className="h-full"
+              >
+                {stepContent[step]()}
+              </motion.div>
+            </AnimatePresence>
+          )}
         </div>
       </DialogContent>
     </Dialog>

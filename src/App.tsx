@@ -23,8 +23,7 @@ import { LandingPage } from './components/landing-page'
 const GuestTable = lazy(() => import('./components/guest-table').then(module => ({ default: module.GuestTable })))
 const GuestProfileForm = lazy(() => import('./components/guest-profile-form').then(module => ({ default: module.GuestProfileForm })))
 const FolioView = lazy(() => import('./components/folio-view').then(module => ({ default: module.FolioView })))
-const BookingBoard = lazy(() => import('./components/booking-board').then(module => ({ default: module.BookingBoard })))
-const BookingBoardV2 = lazy(() => import('./components/booking-board-v2').then(module => ({ default: module.BookingBoard })))
+const BookingBoard = lazy(() => import('./components/booking-board-v2').then(module => ({ default: module.BookingBoard })))
 const HousekeepingBoard = lazy(() => import('./components/housekeeping-board').then(module => ({ default: module.HousekeepingBoard })))
 const MaintenanceTickets = lazy(() => import('./components/maintenance-tickets').then(module => ({ default: module.MaintenanceTickets })))
 const DirectBookingEngine = lazy(() => import('./components/direct-booking').then(module => ({ default: module.DirectBookingEngine })))
@@ -34,7 +33,6 @@ const PerformanceReport = lazy(() => import('./components/performance-report').t
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
   overview: { title: 'Stats & Overview', subtitle: 'Overview of operations and key metrics.' },
   board: { title: 'Calendar View', subtitle: 'Visual timeline of all room reservations.' },
-  'board-v2': { title: 'Calendar V2', subtitle: 'Next generation calendar experience.' },
   bookings: { title: 'Registrations', subtitle: 'Complete list of current and past reservations.' },
   rooms: { title: 'Room List', subtitle: 'Manage your rooms, types, rates and availability.' },
   guests: { title: 'Guest History', subtitle: 'Manage your visitor records and stay history.' },
@@ -137,8 +135,8 @@ function DashboardContent() {
           setActiveTab(tab);
         }
       }}>
-        <div className={cn("flex flex-col", ['board', 'board-v2'].includes(activeTab) ? "h-full p-0" : "gap-4 md:gap-6 pt-4 md:pt-6 pb-20")}>
-          {!['board', 'board-v2'].includes(activeTab) && (
+        <div className={cn("flex flex-col", activeTab === 'board' ? "h-full p-0" : "gap-4 md:gap-6 pt-4 md:pt-6 pb-20")}>
+          {activeTab !== 'board' && (
             <div className="mb-2 px-4 md:px-6">
               <h2 className="text-2xl font-black tracking-tight text-slate-900">{currentPage.title}</h2>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{currentPage.subtitle}</p>
@@ -156,11 +154,11 @@ function DashboardContent() {
           )}
 
           <Suspense fallback={<PageSkeleton />}>
-            <div className={cn(['board', 'board-v2'].includes(activeTab) ? "h-full" : "space-y-4 md:space-y-6")}>
+            <div className={activeTab === 'board' ? "h-full" : "space-y-4 md:space-y-6"}>
               {isRegisteringGuest ? (
                 <GuestProfileForm onSave={() => setIsRegisteringGuest(false)} onCancel={() => setIsRegisteringGuest(false)} />
               ) : (
-                <div className={cn(['board', 'board-v2'].includes(activeTab) ? "h-full" : "space-y-6")}>
+                <div className={activeTab === 'board' ? "h-full" : "space-y-6"}>
                   <Routes>
                     <Route path="overview" element={
                         <>
@@ -181,7 +179,6 @@ function DashboardContent() {
                       } />
                       
                       <Route path="board" element={<BookingBoard />} />
-                      <Route path="board-v2" element={<BookingBoardV2 />} />
                       <Route path="bookings" element={<BookingTable />} />
                       <Route path="rooms" element={<RoomInventory />} />
                       <Route path="guests" element={<Card className="border-none shadow-md"><CardContent className="pt-6"><GuestTable /></CardContent></Card>} />
