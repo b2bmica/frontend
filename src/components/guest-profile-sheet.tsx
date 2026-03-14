@@ -76,17 +76,21 @@ export function GuestProfileSheet({ guestId, onClose, onBookingClick }: GuestPro
   return (
     <Sheet open={!!guestId} onOpenChange={() => onClose()}>
       <SheetContent className="w-full sm:max-w-md p-0 overflow-hidden flex flex-col border-none shadow-2xl bg-slate-50">
-        <div className="p-6 bg-white border-b">
+        <div className="p-6 bg-white border-b flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-2xl bg-primary/5 flex items-center justify-center border-2 border-primary/10">
-              <UserCircle className="h-8 w-8 text-primary" />
+            <div className="h-14 w-14 rounded-2xl bg-indigo-50 flex items-center justify-center border-2 border-indigo-100/50 shadow-sm text-indigo-600">
+              <UserCircle className="h-9 w-9" />
             </div>
             <div>
-              <h2 className="text-xl font-black tracking-tight">{guest?.name || 'In-House Guest'}</h2>
-              <div className="flex items-center gap-2 mt-0.5">
-                <Badge variant="secondary" className="text-[9px] font-black uppercase tracking-widest px-2 h-5 bg-muted text-muted-foreground border-none">
-                  {guest?.nationality || 'IND'} • UID Verified
+              <h2 className="text-xl font-black tracking-tight text-slate-900">{guest?.name || 'In-House Guest'}</h2>
+              <div className="flex items-center gap-2 mt-1">
+                <Badge variant="secondary" className="text-[9px] font-black uppercase tracking-[0.15em] px-2 h-5 bg-indigo-50 text-indigo-700 border-indigo-100/50">
+                  {guest?.nationality || 'IND'}
                 </Badge>
+                <div className="flex items-center gap-1.5 px-2 h-5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100/50">
+                   <div className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse" />
+                   <span className="text-[9px] font-black uppercase tracking-widest">UID Verified</span>
+                </div>
               </div>
             </div>
           </div>
@@ -104,30 +108,40 @@ export function GuestProfileSheet({ guestId, onClose, onBookingClick }: GuestPro
                 {/* Stats Grid */}
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { label: 'Stay Logs', value: history.length, icon: History },
-                    { label: 'Room Nights', value: history.reduce((s: number, b: Booking) => s + Math.max(1, differenceInDays(new Date(b.checkout), new Date(b.checkin))), 0), icon: CalendarDays },
-                    { label: 'LTV Spend', value: `₹${(totalSpend/1000).toFixed(1)}k`, icon: CreditCard },
+                    { label: 'Stay Logs', value: history.length, icon: History, color: 'text-blue-500', bgColor: 'bg-blue-50' },
+                    { label: 'Room Nights', value: history.reduce((s: number, b: Booking) => s + Math.max(1, differenceInDays(new Date(b.checkout), new Date(b.checkin))), 0), icon: CalendarDays, color: 'text-indigo-500', bgColor: 'bg-indigo-50' },
+                    { label: 'LTV Spend', value: `₹${(totalSpend/1000).toFixed(1)}k`, icon: CreditCard, color: 'text-emerald-500', bgColor: 'bg-emerald-50' },
                   ].map(stat => (
-                    <div key={stat.label} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200/60 flex flex-col items-center text-center space-y-1">
-                      <stat.icon className="h-3.5 w-3.5 text-primary/40" />
-                      <div className="font-black text-sm tracking-tight">{stat.value}</div>
-                      <div className="text-[7px] font-black uppercase text-muted-foreground tracking-widest">{stat.label}</div>
+                    <div key={stat.label} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex flex-col items-center text-center space-y-2 group transition-all hover:border-slate-200">
+                      <div className={cn("p-2 rounded-xl transition-colors", stat.bgColor, stat.color)}>
+                        <stat.icon className="h-4 w-4" />
+                      </div>
+                      <div className="space-y-0.5">
+                        <div className="font-black text-sm tracking-tight text-slate-900">{stat.value}</div>
+                        <div className="text-[8px] font-black uppercase text-slate-400 tracking-widest">{stat.label}</div>
+                      </div>
                     </div>
                   ))}
                 </div>
 
                 {/* Contact Data */}
-                <div className="bg-white rounded-2xl border border-slate-200/60 p-4 divide-y">
-                   <div className="flex items-center justify-between pb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-xl bg-slate-50 text-slate-400"><Phone className="h-3.5 w-3.5" /></div>
-                        <span className="text-xs font-bold">{guest.phone}</span>
+                <div className="bg-white rounded-2xl border border-slate-100 p-4 divide-y divide-slate-50 shadow-sm">
+                   <div className="flex items-center justify-between pb-3.5">
+                      <div className="flex items-center gap-3.5">
+                        <div className="h-9 w-9 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center"><Phone className="h-4 w-4" /></div>
+                        <div className="space-y-0.5">
+                          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Primary Phone</p>
+                          <span className="text-xs font-black text-slate-800 tracking-tight">{guest.phone}</span>
+                        </div>
                       </div>
-                      <Badge className="text-[9px] font-black bg-emerald-50 text-emerald-600 border-none">PRIMARY</Badge>
+                      <div className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-600 text-[8px] font-black tracking-widest border border-emerald-100">PRIMARY</div>
                    </div>
-                   <div className="flex items-center gap-3 pt-3">
-                      <div className="p-2 rounded-xl bg-slate-50 text-slate-400"><Mail className="h-3.5 w-3.5" /></div>
-                      <span className="text-xs font-bold truncate max-w-[200px]">{guest.email || 'Email not linked'}</span>
+                   <div className="flex items-center gap-3.5 pt-3.5">
+                      <div className="h-9 w-9 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center"><Mail className="h-4 w-4" /></div>
+                      <div className="space-y-0.5 min-w-0">
+                        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400">Email Address</p>
+                        <span className="text-xs font-black text-slate-800 tracking-tight truncate block max-w-[220px]">{guest.email || 'Not Provided'}</span>
+                      </div>
                    </div>
                 </div>
 
@@ -135,7 +149,7 @@ export function GuestProfileSheet({ guestId, onClose, onBookingClick }: GuestPro
                 <div className="space-y-4">
                   <div className="flex items-center justify-between px-1">
                     <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-2">
-                       <History className="h-3.5 w-3.5" /> Chronological Stay History
+                       <History className="h-3.5 w-3.5 text-indigo-400" /> Chronological Stay History
                     </h3>
                   </div>
 
@@ -158,30 +172,35 @@ export function GuestProfileSheet({ guestId, onClose, onBookingClick }: GuestPro
                           <div 
                             key={b._id} 
                             onClick={() => { if (onBookingClick) onBookingClick(b); }}
-                            className="bg-white rounded-2xl border border-slate-200/60 p-5 shadow-sm hover:shadow-md transition-shadow group cursor-pointer"
+                            className="bg-white rounded-[22px] border border-slate-100 p-4 shadow-sm hover:shadow-md transition-all group cursor-pointer relative overflow-hidden active:scale-[0.98]"
                           >
-                            <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-start justify-between mb-3 relative z-10">
                               <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center font-black text-slate-400 group-hover:text-primary transition-colors">
+                                <div className="h-9 w-9 rounded-xl bg-slate-50 flex items-center justify-center font-black text-[11px] text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors border border-slate-100">
                                   #{room?.roomNumber || '??'}
                                 </div>
-                                <div>
-                                  <p className="text-xs font-black">{room?.roomType || 'Stay Log'}</p>
-                                  <p className="text-[9px] font-black uppercase text-muted-foreground/60 tracking-tighter">
-                                    {format(new Date(b.checkin), 'dd MMM')} - {format(new Date(b.checkout), 'dd MMM yyyy')} • {nights}N
+                                <div className="space-y-0.5">
+                                  <p className="text-[13px] font-black text-slate-900 tracking-tight">{room?.roomType || 'Stay Log'}</p>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                                    {format(new Date(b.checkin), 'dd MMM')} – {format(new Date(b.checkout), 'dd MMM yyyy')}
                                   </p>
                                 </div>
                               </div>
-                              <Badge className={cn("text-[8px] font-black uppercase tracking-tighter border-none h-5 px-2", config.bgColor, config.color)}>
+                              <div className={cn("px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-tighter border shadow-sm", config.bgColor, config.color, "border-current/10")}>
                                 {config.label}
-                              </Badge>
+                              </div>
                             </div>
                             
-                            <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                               <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                  <Globe className="h-3 w-3" /> {b.bookingSource || 'Direct'}
+                            <div className="flex items-center justify-between pt-3 border-t border-slate-50 relative z-10">
+                               <div className="flex items-center gap-4">
+                                 <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    <Globe className="h-3 w-3" /> {b.bookingSource || 'Direct'}
+                                 </div>
+                                 <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                    <CalendarDays className="h-3 w-3" /> {nights}N
+                                 </div>
                                </div>
-                               <div className="text-sm font-black text-primary tracking-tighter">
+                               <div className="text-base font-black text-slate-900 tracking-tighter">
                                   ₹{((room?.price || 0) * nights).toLocaleString('en-IN')}
                                </div>
                             </div>
@@ -193,9 +212,14 @@ export function GuestProfileSheet({ guestId, onClose, onBookingClick }: GuestPro
                 </div>
               </motion.div>
             ) : (
-              <div className="py-24 text-center">
-                 <AlertCircle className="h-12 w-12 mx-auto text-slate-200 mb-4" />
-                 <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Data Link Severed</p>
+              <div className="py-24 text-center space-y-4">
+                 <div className="h-20 w-20 rounded-full bg-slate-50 flex items-center justify-center mx-auto border-4 border-white shadow-xl">
+                   <AlertCircle className="h-10 w-10 text-slate-200" />
+                 </div>
+                 <div className="space-y-1">
+                   <p className="text-sm font-black text-slate-900 uppercase tracking-widest">Intelligence Link Severed</p>
+                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Please re-establish connection to synchronize</p>
+                 </div>
               </div>
             )}
           </AnimatePresence>

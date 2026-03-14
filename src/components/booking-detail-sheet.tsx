@@ -11,6 +11,7 @@ import {
   Users,
   Printer,
   Trash2,
+  AlertCircle,
   CheckCircle2,
   ChevronRight,
   ChevronDown,
@@ -609,28 +610,31 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                                 size="lg" 
                                 variant="default"
                                 onClick={() => setShowBalanceSettle(true)}
-                                className="w-full h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/10 active:scale-95 group"
+                                className="w-full h-9 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-[0.1em] transition-all shadow-md shadow-emerald-500/10 active:scale-95 group border-none"
                               >
                                 Settle Balance
-                                <ChevronRight className="ml-2 h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
+                                <ChevronRight className="ml-1.5 h-3 w-3 group-hover:translate-x-1 transition-transform" />
                               </Button>
                             ) : (
-                               <div className="flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-200">
-                                 <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest text-center">Select Payment Method</p>
-                                 <div className="flex items-center gap-1.5 p-1.5 rounded-[18px] bg-emerald-600 shadow-lg shadow-emerald-100">
+                               <div className="flex flex-col gap-2.5 animate-in fade-in zoom-in-95 duration-200">
+                                 <div className="flex items-center justify-between px-1">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Select Method</p>
+                                    <button onClick={() => setShowBalanceSettle(false)} className="text-slate-300 hover:text-slate-500 transition-colors"><X className="h-3 w-3" /></button>
+                                 </div>
+                                 <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-50 border border-slate-100">
                                    {['cash', 'card', 'upi'].map((m) => (
                                     <button
                                       key={m}
+                                      disabled={isActioning}
                                       onClick={() => {
                                         if(isGroupBooking) handleGroupSettle(m);
                                         else handleAction((id) => updateBooking(id, { advancePayment: (bookingData!.advancePayment || 0) + activeStats.balance, paymentMethod: m as any }), true);
                                       }}
-                                      className="flex-1 h-8.5 text-[10px] font-black uppercase rounded-[12px] bg-white text-emerald-700 shadow-sm hover:translate-y-[-1px] active:translate-y-[0px] transition-all"
+                                      className="flex-1 h-7 text-[9px] font-black uppercase rounded-lg bg-white text-slate-600 border border-slate-100 shadow-sm hover:translate-y-[-1px] hover:text-emerald-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                                     >
-                                      {m}
+                                      {isActioning ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : m}
                                     </button>
                                   ))}
-                                  <button onClick={() => setShowBalanceSettle(false)} className="px-2.5 text-white/70 hover:text-white transition-colors"><X className="h-4 w-4" /></button>
                                 </div>
                                </div>
                             )}
@@ -734,7 +738,7 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
               {(bookingData!.status === 'reserved' || bookingData!.status === 'checked-in' || ((bookingData!.reservationType === 'block' || bookingData!.bookingType === 'block') && bookingData!.status !== 'cancelled')) && (
                 <Button
                   variant="outline"
-                  className="w-10 h-10 p-0 rounded-xl border-2 text-slate-400 border-slate-100 hover:border-slate-300 hover:text-slate-600 transition-all active:scale-95 shrink-0"
+                  className="w-10 h-10 p-0 rounded-xl border-2 text-slate-400 border-slate-50 hover:border-indigo-100 hover:bg-indigo-50/50 hover:text-indigo-600 transition-all active:scale-95 shrink-0 shadow-sm"
                   onClick={() => setShowEditModal(true)}
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -743,25 +747,25 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
 
               {bookingData!.status === 'reserved' && (bookingData!.reservationType === 'booking' || bookingData!.bookingType === 'booking' || (!bookingData!.reservationType && !bookingData!.bookingType)) && (
                 <Button
-                  className="flex-1 h-full rounded-xl font-black bg-blue-600 hover:bg-blue-700 text-[10px] uppercase tracking-wider shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                  className="flex-1 h-full rounded-xl font-black bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] uppercase tracking-[0.1em] shadow-lg shadow-indigo-200 transition-all active:scale-95 flex items-center justify-center gap-2 border-none"
                   onClick={() => {
                      if(isGroupBooking) setShowGroupActionConfirm('check-in');
                      else handleInitialCheckIn();
                   }}
                   disabled={isActioning || groupActionLoading}
                 >
-                  {isActioning || groupActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />}
+                  {isActioning || groupActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
                   Check-in {isGroupBooking ? 'Group' : 'Guest'}
                 </Button>
               )}
 
               {(bookingData!.reservationType === 'enquiry' || bookingData!.bookingType === 'enquiry') && (
                 <Button
-                  className="flex-1 h-full rounded-xl font-black bg-emerald-600 hover:bg-emerald-700 text-[10px] uppercase tracking-wider shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+                  className="flex-1 h-full rounded-xl font-black bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] uppercase tracking-[0.1em] shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2 border-none"
                   onClick={handleConvertEnquiry}
                   disabled={isActioning}
                 >
-                  {isActioning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />}
+                  {isActioning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                   Confirm & Convert
                 </Button>
               )}
@@ -770,61 +774,64 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                 <div className="flex-1 flex gap-2 min-w-0">
                   {!showPaymentSelection ? (
                       <Button
+                        disabled={isActioning}
                         className={cn(
-                          "flex-1 h-full rounded-xl font-black text-[10px] sm:text-[11px] uppercase tracking-wider truncate shadow-lg transition-all active:scale-95",
+                          "flex-1 h-full rounded-xl font-black text-[10px] uppercase tracking-[0.1em] truncate shadow-md transition-all active:scale-95 border-none",
                           activeStats.balance <= 0
-                            ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20"
-                            : "border-orange-200 text-orange-600 hover:bg-orange-600 hover:text-white"
+                            ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200"
+                            : "bg-orange-500 hover:bg-orange-600 text-white shadow-orange-200"
                         )}
-                        variant={activeStats.balance <= 0 ? "default" : "outline"}
                         onClick={() => {
                           if (activeStats.balance <= 0) {
                             if (isGroupBooking) setShowGroupActionConfirm('check-out');
-                            else handleAction((id) => updateBooking(id, { status: 'checked-out' }), true);
+                            else handleAction((id) => checkOut(id), true);
                           } else {
                             setShowPaymentSelection(true);
                           }
                         }}
                       >
-                         {activeStats.balance <= 0 ? (isGroupBooking ? 'Checkout Group' : 'Checkout Now') : (isGroupBooking ? 'Settle & Checkout Group' : 'Settle & Checkout')}
+                         {isActioning ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                         ) : (
+                            <>
+                              <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                              {activeStats.balance <= 0 ? (isGroupBooking ? 'Checkout Group' : 'Checkout Now') : (isGroupBooking ? 'Settle & Checkout Group' : 'Settle & Checkout')}
+                            </>
+                         )}
                       </Button>
                   ) : (
                     <div className={cn(
-                      "flex-1 flex items-center gap-1 rounded-xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden h-10 px-1",
-                      isSettled ? "bg-emerald-500 text-white justify-center" : "bg-orange-600"
+                      "flex-1 flex items-center p-1 rounded-xl animate-in fade-in zoom-in-95 duration-200 h-10 border shadow-sm",
+                      isSettled ? "bg-emerald-500 text-white justify-center border-none" : "bg-white border-slate-100"
                     )}>
                       {isSettled ? (
                         <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
                           <CheckCircle2 className="h-4 w-4" /> Account Settled
                         </div>
-                      ) : isActioning ? (
-                        <div className="flex items-center gap-2 px-3 text-white">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          <span className="text-[9px] font-black uppercase tracking-widest opacity-80">Processing...</span>
-                        </div>
                       ) : (
-                        <>
+                        <div className="flex items-center gap-1.5 w-full">
                           {['cash', 'card', 'upi'].map((m) => (
                             <button
                               key={m}
+                              disabled={isActioning}
                               onClick={() => {
                                 if (isGroupBooking) {
                                    handleGroupManagementAction('settle-checkout', m);
                                 } else {
                                    handleAction((id) => updateBooking(id, { 
                                      status: 'checked-out', 
-                                     advancePayment: activeStats.totalAmount, 
+                                     advancePayment: (bookingData!.advancePayment || 0) + activeStats.balance, 
                                      paymentMethod: m as 'cash' | 'card' | 'upi'
                                    }), true);
                                 }
                               }}
-                              className="flex-1 h-8 text-[9px] font-black uppercase rounded-lg transition-all active:scale-95 bg-white text-orange-600 shadow-sm hover:translate-y-[-1px]"
+                              className="flex-1 h-8 text-[9px] font-black uppercase rounded-lg transition-all active:scale-95 bg-slate-50 text-slate-600 hover:bg-orange-50 hover:text-orange-600 flex items-center justify-center gap-1.5"
                             >
-                              {m}
+                              {isActioning ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : m}
                             </button>
                           ))}
-                          <button onClick={() => setShowPaymentSelection(false)} className="px-1.5 text-white/70 hover:text-white transition-colors"><X className="h-3.5 w-3.5" /></button>
-                        </>
+                          <button onClick={() => setShowPaymentSelection(false)} className="px-2 text-slate-300 hover:text-slate-500 transition-colors"><X className="h-3.5 w-3.5" /></button>
+                        </div>
                       )}
                     </div>
                   )}
@@ -833,12 +840,13 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
 
               {bookingData!.status !== 'cancelled' && bookingData!.status !== 'checked-out' && !showPaymentSelection && (
                 <Button 
+                  disabled={isActioning}
                   variant="outline" 
-                  className="w-10 h-10 p-0 rounded-xl border-2 border-red-50 text-red-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 shrink-0 transition-all active:scale-95"
+                  className="w-10 h-10 p-0 rounded-xl border-2 border-slate-50 text-red-400 hover:bg-red-50 hover:text-red-500 hover:border-red-100 shrink-0 transition-all active:scale-95 shadow-sm"
                   onClick={() => setShowCancelConfirm(true)}
                   title={(bookingData!.reservationType === 'block' || bookingData!.bookingType === 'block') ? 'Release Block' : 'Cancel'}
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  {isActioning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                 </Button>
               )}
             </div>
@@ -896,47 +904,82 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
         </Dialog>
 
         <Dialog open={showDirtyRoomPrompt} onOpenChange={setShowDirtyRoomPrompt}>
-          <DialogContent className="sm:max-w-[360px] rounded-2xl">
-            <DialogHeader><DialogTitle className="font-black text-center">Room is Dirty</DialogTitle><DialogDescription className="text-center">Would you like to mark it as clean and proceed?</DialogDescription></DialogHeader>
-            <DialogFooter className="gap-2">
-              <Button variant="ghost" onClick={() => setShowDirtyRoomPrompt(false)}>No</Button>
-              <Button className="bg-emerald-600 text-white" onClick={handleCheckInWithCleanup}>Mark Clean & Check-in</Button>
-            </DialogFooter>
+          <DialogContent className="sm:max-w-[360px] rounded-[28px] p-0 overflow-hidden border-none shadow-2xl">
+            <div className="p-8 space-y-6 text-center">
+              <div className="h-16 w-16 rounded-3xl bg-amber-50 text-amber-500 flex items-center justify-center mx-auto border-4 border-white shadow-xl rotate-3">
+                <AlertCircle className="h-8 w-8" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-black tracking-tight text-slate-900">Room is Dirty</h2>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter leading-relaxed px-4">
+                  Arrival ready check failed. Would you like to <span className="text-emerald-500">Auto-Clean</span> and proceed with check-in?
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <Button 
+                  variant="outline" 
+                  className="rounded-xl font-bold border-slate-100 text-slate-400 h-11 hover:bg-slate-50 uppercase text-[9px] tracking-widest transition-all"
+                  onClick={() => setShowDirtyRoomPrompt(false)}
+                >
+                  Hold On
+                </Button>
+                <Button 
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black h-11 shadow-lg shadow-emerald-500/10 border-none transition-all active:scale-95 uppercase text-[9px] tracking-widest" 
+                  onClick={handleCheckInWithCleanup}
+                >
+                  Mark Clean
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
 
         <Dialog open={!!showGroupActionConfirm} onOpenChange={(v) => { if(!v) setShowGroupActionConfirm(null); }}>
-          <DialogContent className="sm:max-w-[400px] rounded-2xl">
-            <DialogHeader>
-              <DialogTitle className="font-black text-center text-xl">
-                 {showGroupActionConfirm === 'check-in' && 'Group Check-in'}
-                 {showGroupActionConfirm === 'check-out' && 'Group Checkout'}
-              </DialogTitle>
-              <DialogDescription className="text-center mt-2">
-                 You are about to {showGroupActionConfirm === 'check-in' ? 'check-in' : 'check-out'} <strong>ALL eligible rooms</strong> in "{bookingData!.groupName}".
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter className="gap-2 sm:gap-3 mt-4 flex flex-col sm:flex-row items-center justify-center">
-              <Button 
-                className={cn("w-full sm:w-[200px] rounded-xl font-black text-white h-11 shadow-lg transition-all active:scale-95", showGroupActionConfirm === 'check-in' ? "bg-blue-600 hover:bg-blue-700 shadow-blue-500/20" : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20")}
-                onClick={() => {
-                   if (showGroupActionConfirm) handleGroupManagementAction(showGroupActionConfirm);
-                }}
-              >
-                Proceed With Entire Group
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full sm:w-fit px-6 rounded-xl font-bold border-slate-200 hover:bg-slate-50 text-slate-500 h-11 border-2 transition-all active:scale-95"
-                onClick={() => {
-                   setShowGroupActionConfirm(null);
-                   if (showGroupActionConfirm === 'check-in') handleInitialCheckIn();
-                   if (showGroupActionConfirm === 'check-out') handleAction((id) => updateBooking(id, { status: 'checked-out' }), true);
-                }}
-              >
-                Just This Room
-              </Button>
-            </DialogFooter>
+          <DialogContent className="sm:max-w-[400px] rounded-[28px] p-0 overflow-hidden border-none shadow-2xl bg-white">
+            <div className="p-8 space-y-6">
+              <div className="flex flex-col items-center text-center space-y-4">
+                <div className={cn(
+                  "h-16 w-16 rounded-3xl flex items-center justify-center border-4 border-white shadow-xl -rotate-3 transition-transform hover:rotate-0 duration-300",
+                  showGroupActionConfirm === 'check-in' ? "bg-indigo-50 text-indigo-600" : "bg-emerald-50 text-emerald-600"
+                )}>
+                   <Users className="h-8 w-8" />
+                </div>
+                <div className="space-y-1.5">
+                  <h2 className="text-2xl font-black tracking-tight text-slate-900">
+                     {showGroupActionConfirm === 'check-in' ? 'Group Check-in' : 'Group Checkout'}
+                  </h2>
+                  <p className="text-[11px] font-black uppercase text-slate-400 tracking-[0.05em] px-4 leading-relaxed">
+                     You are about to {showGroupActionConfirm === 'check-in' ? 'check-in' : 'check-out'} <span className={cn("font-black", showGroupActionConfirm === 'check-in' ? "text-indigo-500" : "text-emerald-500")}>ALL {bookings.filter(b => b.groupId === bookingData!.groupId).length} eligible rooms</span> in "{bookingData!.groupName}".
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 pt-2">
+                <Button 
+                  className={cn(
+                    "w-full rounded-2xl font-black text-white h-12 shadow-xl transition-all active:scale-95 text-[11px] uppercase tracking-widest border-none", 
+                    showGroupActionConfirm === 'check-in' ? "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20" : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20"
+                  )}
+                  onClick={() => {
+                     if (showGroupActionConfirm) handleGroupManagementAction(showGroupActionConfirm);
+                  }}
+                >
+                  Proceed With Entire Group
+                  <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="w-full rounded-2xl font-bold border-slate-100 hover:bg-slate-50 text-slate-500 h-10 transition-all active:scale-95 text-[10px] uppercase tracking-widest"
+                  onClick={() => {
+                     setShowGroupActionConfirm(null);
+                     if (showGroupActionConfirm === 'check-in') handleInitialCheckIn();
+                     if (showGroupActionConfirm === 'check-out') handleAction((id) => updateBooking(id, { status: 'checked-out' }), true);
+                  }}
+                >
+                  Just This Room
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       </SheetContent>
