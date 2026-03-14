@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 
-const STATUS_TABS = ['all', 'dirty', 'clean', 'occupied'] as const;
+const STATUS_TABS = ['all', 'dirty', 'clean'] as const;
 
 const STATUS_META: Record<string, { label: string; badge: string; bar: string }> = {
   clean:    { label: 'Clean',    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',  bar: 'bg-emerald-500' },
@@ -22,9 +22,9 @@ const STATUS_META: Record<string, { label: string; badge: string; bar: string }>
 };
 
 const TRANSITIONS: Record<string, { label: string; newStatus: string }[]> = {
-  dirty:    [{ label: 'Mark Clean',    newStatus: 'clean'    }, { label: 'Mark Occupied', newStatus: 'occupied' }],
+  dirty:    [{ label: 'Mark Clean',    newStatus: 'clean'    }],
   occupied: [{ label: 'Mark Dirty',    newStatus: 'dirty'    }, { label: 'Mark Clean',    newStatus: 'clean'    }],
-  clean:    [{ label: 'Mark Occupied', newStatus: 'occupied' }, { label: 'Mark Dirty',    newStatus: 'dirty'    }],
+  clean:    [{ label: 'Mark Dirty',    newStatus: 'dirty'    }],
 };
 
 export function HousekeepingBoard() {
@@ -97,8 +97,8 @@ export function HousekeepingBoard() {
       </div>
 
       {/* Summary KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {(['clean', 'dirty', 'occupied'] as const).map(s => {
+      <div className="grid grid-cols-2 gap-3">
+        {(['clean', 'dirty'] as const).map(s => {
           const m = STATUS_META[s];
           return (
             <button
@@ -197,7 +197,7 @@ export function HousekeepingBoard() {
 
                 {/* Rate */}
                 <div className="px-4 text-xs font-black text-slate-700 text-right">
-                  ₹{room.price.toLocaleString()}
+                  ₹{room.price.toLocaleString('en-IN')}
                 </div>
 
                 {/* Action dropdown */}

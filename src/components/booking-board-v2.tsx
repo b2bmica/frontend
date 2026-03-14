@@ -6,6 +6,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Loader2, Search, ChevronLeft, ChevronRight, ChevronDown, Bed, X, ShieldCheck, ArrowRight, Lock, Globe, User, Info, Users, Timer, Clock } from 'lucide-react';
 import { useBookings, type Booking, type Room } from '../context/booking-context';
+import { useAuth } from '../context/auth-context';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
 import { BookingModal } from '@/components/booking-modal';
@@ -37,8 +38,7 @@ const getStatusColor = (status: string, bookingType?: string, reservationType?: 
   const base = 'shadow-md border pointer-events-auto transition-colors duration-200';
   switch (status) {
     case 'checked-in':  return cn(base, 'bg-blue-600 text-white border-blue-700 shadow-blue-500/20 hover:bg-blue-700');
-    case 'reserved':
-    case 'confirmed':   return cn(base, 'bg-emerald-600 text-white border-emerald-700 shadow-emerald-500/20 hover:bg-emerald-700');
+    case 'reserved':    return cn(base, 'bg-emerald-600 text-white border-emerald-700 shadow-emerald-500/20 hover:bg-emerald-700');
     case 'checked-out': return cn(base, 'bg-orange-500 text-white border-orange-600 shadow-orange-500/20 hover:bg-orange-600');
     case 'cancelled':   return cn(base, 'bg-slate-100 text-slate-400 border-slate-200 opacity-60');
     default:            return cn(base, 'bg-white text-slate-800 border-slate-200 hover:bg-slate-50');
@@ -68,6 +68,8 @@ const getGuest = (b: Booking) =>
 
 export function BookingBoard() {
   const { bookings, rooms, loading, updateBooking, refreshBookings } = useBookings();
+  const { hotel } = useAuth();
+  const taxConfig = hotel?.settings?.taxConfig;
   const boardRef = useRef<HTMLDivElement>(null);
   const boardContentRef = useRef<HTMLDivElement>(null);
   const isResizingRef = useRef(false);
@@ -86,6 +88,7 @@ export function BookingBoard() {
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
   const [viewMode] = useState<'today' | 'week' | 'month'>('week');
   const [resizingId, setResizingId] = useState<string | null>(null);
+  const [navDirection, setNavDirection] = useState<number>(0); // -1 for prev, 1 for next
   const [isUpdating, setIsUpdating] = useState(false);
   const [useNewPrice, setUseNewPrice] = useState(true);
   const [pendingUpdate, setPendingUpdate] = useState<{
@@ -213,8 +216,22 @@ export function BookingBoard() {
   // All bookings matching search/status filters globally (ignoring date window)
   const globalMatches = useMemo(() => {
     return bookings.filter(b => {
+      const type = b.reservationType || b.bookingType || 'booking';
+      const isExpired = type === 'enquiry' && b.enquiryExpiresAt && new Date(b.enquiryExpiresAt) < new Date();
+      const isCancelled = b.status === 'cancelled';
+
+      // Always include these as they become notifications/alerts on the grid
+      if (isCancelled || isExpired) {
+        // Still apply search if present
+        const guestName = getGuest(b)?.name || '';
+        const room = rooms.find(r => r._id === getBookingRoomId(b));
+        const roomNum = room?.roomNumber || '';
+        const bId = b._id || '';
+        if (search && !guestName.toLowerCase().includes(search.toLowerCase()) && !roomNum.toLowerCase().includes(search.toLowerCase()) && !bId.toLowerCase().includes(search.toLowerCase())) return false;
+        return true;
+      }
+
       if (statusFilter !== 'all') {
-        const type = b.reservationType || b.bookingType || 'booking';
         if (statusFilter === 'enquiry') {
           if (type !== 'enquiry') return false;
           // Filter out expired when looking at active enquiries
@@ -297,6 +314,9 @@ export function BookingBoard() {
       'checked-in':  bookings.filter(b => b.status === 'checked-in').length,
       'checked-out': bookings.filter(b => b.status === 'checked-out').length,
       'cancelled':   bookings.filter(b => b.status === 'cancelled').length,
+      'enquiry':     bookings.filter(b => (b.reservationType || b.bookingType) === 'enquiry' && (!b.enquiryExpiresAt || new Date(b.enquiryExpiresAt) >= new Date())).length,
+      'expired-hold': bookings.filter(b => (b.reservationType || b.bookingType) === 'enquiry' && b.enquiryExpiresAt && new Date(b.enquiryExpiresAt) < new Date()).length,
+      'block':       bookings.filter(b => (b.reservationType || b.bookingType) === 'block').length,
     };
     
     const roomCounts = {
@@ -382,7 +402,7 @@ export function BookingBoard() {
     if (isValidDay && isValidRoom) {
       const targetDay = addDays(startOfDay(weekStart), dayIndexFinal);
       const targetRoom = activeRooms[roomIndexFinal];
-      const duration = differenceInDays(new Date(booking.checkout), new Date(booking.checkin));
+      const duration = differenceInDays(startOfDay(parseISO(booking.checkout)), startOfDay(parseISO(booking.checkin)));
       const newCheckin = format(targetDay, 'yyyy-MM-dd');
       const newCheckout = format(addDays(targetDay, duration), 'yyyy-MM-dd');
       const currentCheckin = format(new Date(booking.checkin), 'yyyy-MM-dd');
@@ -464,13 +484,33 @@ export function BookingBoard() {
   const periodLabel = `${format(weekStart, "MMM dd")} – ${format(addDays(weekStart, DAYS - 1), "MMM dd, yyyy")}`;
 
   const handleCardDragStart = (e: React.PointerEvent<HTMLDivElement>, booking: Booking) => {
+    // We allow selection (clicking) for all cards, but only dragging/resizing for editable ones
     const isEnquiry = (booking.reservationType || booking.bookingType) === 'enquiry';
     const isEditable = (booking.status !== 'checked-out' && booking.status !== 'cancelled') || isEnquiry || (booking.bookingType === 'block');
-    if (!isEditable) return;
-    if (isResizingRef.current || isDraggingRef.current) return;
+
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     const target = e.target as HTMLElement;
     if (target.closest('[data-resize-handle]')) return;
+
+    // Even if not editable, we want to allow clicking to view details
+    if (!isEditable) {
+      const sX = e.clientX;
+      const sY = e.clientY;
+      const startT = Date.now();
+      
+      const onUp = (ue: PointerEvent) => {
+        window.removeEventListener('pointerup', onUp);
+        const dist = Math.hypot(ue.clientX - sX, ue.clientY - sY);
+        const duration = Date.now() - startT;
+        if (dist < 10 && duration < 300) {
+          setSelectedBooking(booking);
+        }
+      };
+      window.addEventListener('pointerup', onUp);
+      return;
+    }
+
+    if (isResizingRef.current || isDraggingRef.current) return;
 
     const cardEl = e.currentTarget as HTMLDivElement;
     const isTouch = e.pointerType === 'touch' || e.pointerType === 'pen';
@@ -533,27 +573,15 @@ export function BookingBoard() {
       const gridW = numCols * COLUMN_WIDTH;
       const gridH = activeRooms.length * ROW_HEIGHT;
       
-      // Calculate where the pointer is RELATIVE to the grid content
       const contentX = meX - rect.left;
       const contentY = meY - rect.top;
 
-      // Clamp the pointer coordinates so it stays within the grid area
-      // X: Starts from ROOM_COL and extends gridW
-      // Y: Starts from 48px (header) and extends gridH
       const clampedContentX = Math.max(ROOM_COL, Math.min(ROOM_COL + gridW, contentX));
       const clampedContentY = Math.max(48, Math.min(48 + gridH, contentY));
 
-      // Re-calculate dx/dy based on clamped content coordinates
-      // The original content coordinates at start were:
-      const initialContentX = startX - (boardContentRef.current.getBoundingClientRect().left + (initialScrollL - (boardRef.current?.scrollLeft || 0)));
-      // Wait, let's just use the current rect and current scroll to find displacement.
-      // displacement = current_clamped_x - initial_x (both in screen or both in content)
-      // Displace = current_clamped_content_x - initial_content_x (at start)
-      
       const dx = clampedContentX - (startX - rect.left + (initialScrollL - (boardRef.current?.scrollLeft || 0)));
       const dy = clampedContentY - (startY - rect.top + (initialScrollT - (boardRef.current?.scrollTop || 0)));
 
-      // Ghost Calculation
       const dayIdxRaw = (clampedContentX - ROOM_COL) / COLUMN_WIDTH - dragGrabOffsetDaysRef.current;
       const dayIdx    = Math.round(Math.max(0, Math.min(numCols - 1, dayIdxRaw)));
       const roomIdx   = Math.max(0, Math.min(activeRooms.length - 1, Math.floor((clampedContentY - 48) / ROW_HEIGHT)));
@@ -577,33 +605,50 @@ export function BookingBoard() {
        }
 
        if (longPressReady || dragging) {
-         if (!dragging) {
-           dragging = true;
-           isDraggingRef.current = true;
-         }
-         
-         if (frameId) cancelAnimationFrame(frameId);
-         frameId = requestAnimationFrame(() => updateUI(me.clientX, me.clientY));
+          if (!dragging) {
+            dragging = true;
+            isDraggingRef.current = true;
+          }
+          
+          if (frameId) cancelAnimationFrame(frameId);
+          frameId = requestAnimationFrame(() => updateUI(me.clientX, me.clientY));
 
-         // Auto-scroll
-         if (boardRef.current) {
-           const rect = boardRef.current.getBoundingClientRect();
-           const edge = 50;
-           let sX = 0, sY = 0;
-           
-           if (me.clientX < rect.left + edge + ROOM_COL) sX = -8;
-           else if (me.clientX > rect.right - edge) sX = 8;
-           
-           if (me.clientY < rect.top + edge) sY = -8;
-           else if (me.clientY > rect.bottom - edge) sY = 8;
-           
-           if (sX !== 0 || sY !== 0) {
-             boardRef.current.scrollLeft += sX;
-             boardRef.current.scrollTop += sY;
-             updateUI(me.clientX, me.clientY);
-           }
-         }
-       }
+          // Smooth Proportional Auto-scroll
+          if (boardRef.current) {
+            const rect = boardRef.current.getBoundingClientRect();
+            const edgeH = isMobile ? 40 : 60;
+            const edgeV = 45;
+            let sX = 0, sY = 0;
+            
+            if (me.clientX < rect.left + edgeH + (isMobile ? 0 : ROOM_COL)) {
+               const dist = (rect.left + edgeH + (isMobile ? 0 : ROOM_COL)) - me.clientX;
+               sX = -Math.min(10, dist / 4);
+            } else if (me.clientX > rect.right - edgeH) {
+               const dist = me.clientX - (rect.right - edgeH);
+               sX = Math.min(10, dist / 4);
+            }
+            
+            if (me.clientY < rect.top + edgeV + 48) {
+               const dist = (rect.top + edgeV + 48) - me.clientY;
+               sY = -Math.min(10, dist / 4);
+            } else if (me.clientY > rect.bottom - edgeV) {
+               const dist = me.clientY - (rect.bottom - edgeV);
+               sY = Math.min(10, dist / 4);
+            }
+            
+            if (sX !== 0 || sY !== 0) {
+              const b = boardRef.current;
+              if (sX < 0 && b.scrollLeft > 0) b.scrollLeft += sX;
+              else if (sX > 0 && b.scrollLeft < b.scrollWidth - b.clientWidth) b.scrollLeft += sX;
+              
+              if (sY < 0 && b.scrollTop > 0) b.scrollTop += sY;
+              else if (sY > 0 && b.scrollTop < b.scrollHeight - b.clientHeight) b.scrollTop += sY;
+
+              if (frameId) cancelAnimationFrame(frameId);
+              frameId = requestAnimationFrame(() => updateUI(me.clientX, me.clientY));
+            }
+          }
+        }
     };
 
     const onUp = (ue: PointerEvent) => {
@@ -685,7 +730,7 @@ export function BookingBoard() {
       const daysDelta = Math.round(dx / COLUMN_WIDTH);
       if (moved && daysDelta !== 0) {
         const origIn = startOfDay(parseISO(booking.checkin));
-        const newCO = format(addDays(origIn, differenceInDays(parseISO(booking.checkout), origIn) + daysDelta), 'yyyy-MM-dd');
+        const newCO = format(addDays(origIn, differenceInDays(startOfDay(parseISO(booking.checkout)), startOfDay(origIn)) + daysDelta), 'yyyy-MM-dd');
         if (newCO > booking.checkin) {
           setPendingUpdate({
             booking,
@@ -750,7 +795,10 @@ export function BookingBoard() {
             {/* Navigation (Centered) */}
             <div className="flex items-center justify-center gap-2">
               <Button variant="outline" size="sm" className={cn("h-9 px-3 rounded-xl border-slate-200 bg-white shadow-sm font-bold text-xs", isLandscape && "h-8 px-2")}
-                onClick={() => setWeekStart(addDays(weekStart, -7))}>
+                onClick={() => {
+                  setNavDirection(-1);
+                  setWeekStart(addDays(weekStart, -7));
+                }}>
                 <ChevronLeft className="h-4 w-4 mr-1" /> {(isMobile || isLandscape) ? '' : 'Prev'}
               </Button>
               
@@ -772,7 +820,11 @@ export function BookingBoard() {
                         className="h-10 rounded-xl font-bold border-slate-200" 
                         value={format(weekStart, 'yyyy-MM-dd')}
                         onChange={(e) => {
-                          if (e.target.value) setWeekStart(startOfDay(new Date(e.target.value)));
+                          if (e.target.value) {
+                            const newDate = startOfDay(new Date(e.target.value));
+                            setNavDirection(newDate > weekStart ? 1 : -1);
+                            setWeekStart(newDate);
+                          }
                         }}
                       />
                     </div>
@@ -781,13 +833,17 @@ export function BookingBoard() {
               </div>
 
               <Button variant="outline" size="sm" className={cn("h-9 px-3 rounded-xl border-slate-200 bg-white shadow-sm font-bold text-xs", isLandscape && "h-8 px-2")}
-                onClick={() => setWeekStart(addDays(weekStart, 7))}>
+                onClick={() => {
+                  setNavDirection(1);
+                  setWeekStart(addDays(weekStart, 7));
+                }}>
                 {(isMobile || isLandscape) ? '' : 'Next'} <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
 
             {/* View Toggle Pill (Removed per user request) */}
-            <div className="hidden md:flex justify-end" />
+            {/* Status Legend Tags in Top Right */}
+
           </div>
 
           {!isLandscape && (
@@ -852,17 +908,25 @@ export function BookingBoard() {
                 })}
               </div>
 
-              <div className="flex items-center gap-3 pt-2 border-t border-slate-100/50">
-                <span className="text-[9px] font-bold tracking-[0.15em] text-slate-400 uppercase">Room:</span>
-                {[
-                  { dot: 'bg-emerald-500', label: 'Clean' },
-                  { dot: 'bg-amber-400', label: 'Dirty' },
-                ].map(({ dot, label }) => (
-                  <span key={label} className="flex items-center gap-1.5">
-                    <span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />
-                    <span className="text-[10px] font-medium text-slate-400 tracking-tight">{label}</span>
-                  </span>
-                ))}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-100/50">
+                <div className="flex items-center gap-3">
+                  <span className="text-[9px] font-bold tracking-[0.15em] text-slate-400 uppercase">Room Cleanliness:</span>
+                  {[
+                    { dot: 'bg-emerald-500', label: 'Clean' },
+                    { dot: 'bg-amber-400', label: 'Dirty' },
+                  ].map(({ dot, label }) => (
+                    <span key={label} className="flex items-center gap-1.5">
+                      <span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />
+                      <span className="text-[10px] font-medium text-slate-400 tracking-tight">{label}</span>
+                    </span>
+                  ))}
+                </div>
+                {isMobile && (
+                   <div className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">Alerts Active</span>
+                   </div>
+                )}
               </div>
             </>
           )}
@@ -888,31 +952,44 @@ export function BookingBoard() {
               >
                 Rooms
               </div>
-              {viewMode === 'today' ? (
-                // Hour headers for Today View
-                timeline.map((hourDate: Date) => (
-                  <div key={hourDate.toISOString()} className="flex flex-col items-center justify-center border-r flex-shrink-0 bg-white/50" style={{ width: COLUMN_WIDTH, height: 48 }}>
-                    <span className="text-[10px] font-black tracking-widest opacity-40">{format(hourDate, 'HH:00')}</span>
-                  </div>
-                ))
-              ) : timeline.map((day: Date) => (
-                <div key={day.toISOString()}
-                  className={cn(
-                    "flex flex-col items-center justify-center border-r flex-shrink-0 transition-colors",
-                    isSameDay(day, new Date()) ? "bg-primary/[0.04] text-primary" : "text-slate-500"
-                  )}
-                  style={{ width: COLUMN_WIDTH, height: 48, minWidth: COLUMN_WIDTH }}>
-                  <span style={{ fontSize: (isMobile || viewMode === 'month') ? 7 : 9 }} className="font-black tracking-[0.1em] opacity-40 mb-0.5 leading-none">{format(day, 'EEE')}</span>
-                  <span className={cn(
-                    "font-black tracking-tight leading-none",
-                    isSameDay(day, new Date()) ? "bg-primary text-white rounded-full flex items-center justify-center shadow-lg shadow-primary/30" : "",
-                    (isMobile || viewMode === 'month') ? "text-[10px]" : "text-xs"
-                  )}
-                  style={isSameDay(day, new Date()) ? { width: (isMobile || viewMode === 'month') ? 22 : 28, height: (isMobile || viewMode === 'month') ? 22 : 28 } : {}}>
-                    {format(day, 'dd')}
-                  </span>
-                </div>
-              ))}
+              <div className="flex-1 min-w-0 overflow-hidden relative">
+                <AnimatePresence mode="popLayout" initial={false}>
+                  <motion.div
+                    key={weekStart.toISOString()}
+                    initial={{ x: navDirection * 50, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: -navDirection * 50, opacity: 0 }}
+                    transition={{ type: "spring", stiffness: 350, damping: 35, mass: 1 }}
+                    className="flex"
+                    style={{ width: timeline.length * COLUMN_WIDTH }}
+                  >
+                    {viewMode === 'today' ? (
+                      timeline.map((hourDate: Date) => (
+                        <div key={hourDate.toISOString()} className="flex flex-col items-center justify-center border-r flex-shrink-0 bg-white/50" style={{ width: COLUMN_WIDTH, height: 48 }}>
+                          <span className="text-[10px] font-black tracking-widest opacity-40">{format(hourDate, 'HH:00')}</span>
+                        </div>
+                      ))
+                    ) : timeline.map((day: Date) => (
+                      <div key={day.toISOString()}
+                        className={cn(
+                          "flex flex-col items-center justify-center border-r flex-shrink-0 transition-colors",
+                          isSameDay(day, new Date()) ? "bg-primary/[0.04] text-primary" : "text-slate-500"
+                        )}
+                        style={{ width: COLUMN_WIDTH, height: 48, minWidth: COLUMN_WIDTH }}>
+                        <span style={{ fontSize: (isMobile || viewMode === 'month') ? 7 : 9 }} className="font-black tracking-[0.1em] opacity-40 mb-0.5 leading-none">{format(day, 'EEE')}</span>
+                        <span className={cn(
+                          "font-black tracking-tight leading-none",
+                          isSameDay(day, new Date()) ? "bg-primary text-white rounded-full flex items-center justify-center shadow-lg shadow-primary/30" : "",
+                          (isMobile || viewMode === 'month') ? "text-[10px]" : "text-xs"
+                        )}
+                        style={isSameDay(day, new Date()) ? { width: (isMobile || viewMode === 'month') ? 22 : 28, height: (isMobile || viewMode === 'month') ? 22 : 28 } : {}}>
+                          {format(day, 'dd')}
+                        </span>
+                      </div>
+                    ))}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
             </div>
 
             {/* Grid Area with smooth week-swap animation */}
@@ -933,434 +1010,416 @@ export function BookingBoard() {
                 );
               })()}
 
-              <AnimatePresence mode="popLayout" initial={false}>
-                <motion.div
-                  key={weekStart.toISOString()}
-                  initial={{ x: 20, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  exit={{ x: -20, opacity: 0 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                  className="w-full"
-                >
-                  {activeRooms.map((room) => {
-                    const roomBookings = filteredBookings.filter(b => getBookingRoomId(b) === room._id);
-                    return (
-                      <div 
-                        key={room._id}
-                        className="flex border-b group relative hover:bg-white transition-colors" 
-                        style={{ height: ROW_HEIGHT }}
-                      >
-                         {/* Room label: OCCUPIED STATUS Indicators */}
-                          <div className="sticky left-0 z-30 bg-white/95 backdrop-blur-sm border-r flex flex-col justify-center px-3.5 shrink-0 transition-all group-hover:bg-slate-50 shadow-[6px_0_15px_-5px_rgba(0,0,0,0.06)] relative overflow-hidden" style={{ width: ROOM_COL }}>
-                             <div className="flex items-center justify-between mb-0.5">
-                                <div className="flex items-center gap-1.5">
-                                   <div className={cn("w-1.5 h-1.5 rounded-full", room.status === 'clean' ? 'bg-emerald-500' : 'bg-amber-400')} />
-                                   <div className="text-[12px] font-bold tracking-tight text-slate-700">Room {room.roomNumber}</div>
-                                </div>
-                                {getRoomOccupancy(room._id) && (
-                                   <Clock className="h-3 w-3 text-blue-500 animate-pulse shrink-0" />
-                                )}
-                             </div>
-                             
-                             <div className="text-[9px] font-medium text-slate-400 truncate tracking-tight">{room.roomType}</div>
-                             
-                             <div className="absolute bottom-1.5 right-2 text-[9px] font-medium text-slate-500">
-                                ₹{room.price}
-                             </div>
+              <div className="flex">
+                {/* Sticky Room Labels Sidebar - Outside motion for perfect stickiness */}
+                <div className="z-30 shrink-0 sticky left-0 bg-white/95 backdrop-blur-sm shadow-[4px_0_10px_-2px_rgba(0,0,0,0.05)]">
+                  {activeRooms.map((room) => (
+                    <div 
+                      key={`sidebar-${room._id}`}
+                      className={cn(
+                        "border-r border-b flex flex-col justify-center px-1.5 md:px-3.5 transition-all hover:bg-slate-50",
+                        isMobile && "px-1"
+                      )} 
+                      style={{ width: ROOM_COL, height: ROW_HEIGHT }}
+                    >
+                      <div className="flex flex-col md:flex-row md:items-center justify-between mb-0.5 gap-0.5 md:gap-1.5">
+                        <div className="flex items-center gap-1 md:gap-1.5">
+                          <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", room.status === 'clean' ? 'bg-emerald-500' : 'bg-amber-400')} />
+                          <div className="text-[10px] md:text-[12px] font-black tracking-tight text-slate-800 leading-none">
+                            RM {room.roomNumber}
                           </div>
+                        </div>
+                        {getRoomOccupancy(room._id) && (
+                          <Clock className="h-2.5 w-2.5 md:h-3 md:w-3 text-blue-500 animate-pulse shrink-0" />
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between mt-1 pt-1 border-t border-slate-50/50">
+                        <div className="text-[7px] md:text-[9px] font-bold text-slate-400 truncate tracking-tight opacity-70 uppercase">
+                          {room.roomType}
+                        </div>
+                        <div className="text-[9px] md:text-[10px] font-black text-primary/60 tracking-tighter">
+                          ₹{room.price?.toLocaleString('en-IN') || '0'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
+                <div className="flex-1 min-w-0 overflow-hidden relative">
+                  <AnimatePresence mode="popLayout" initial={false}>
+                    <motion.div
+                      key={weekStart.toISOString()}
+                      initial={{ x: navDirection * 50, opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      exit={{ x: -navDirection * 50, opacity: 0 }}
+                      transition={{ type: "spring", stiffness: 350, damping: 35, mass: 1 }}
+                      className="flex-1 min-w-0"
+                      style={{ width: timeline.length * COLUMN_WIDTH }}
+                    >
+                    {activeRooms.map((room) => {
+                      const roomBookings = filteredBookings.filter(b => getBookingRoomId(b) === room._id);
+                      return (
+                        <div 
+                          key={room._id}
+                          className="flex border-b group relative hover:bg-white transition-colors" 
+                          style={{ height: ROW_HEIGHT }}
+                        >
+                           {/* Today Marker */}
+                           {viewMode === 'today' && (
+                             <div className="absolute top-0 bottom-0 bg-red-500/20 w-0.5 z-20 pointer-events-none" style={{ left: currentTimePos }}>
+                               <div className="bg-red-500 text-[8px] font-black text-white px-1.5 py-0.5 rounded shadow-lg absolute -top-1 -translate-x-1/2 whitespace-nowrap ring-2 ring-white animate-pulse">NOW</div>
+                             </div>
+                           )}
+                           
+                           <div className="flex relative flex-1 min-w-0">
+                             {timeline.map((item: Date, idx) => {
+                               const itemTime = item.getTime();
+                               const bookingAtCell = roomBookings.find(b => {
+                                 if (b.status === 'cancelled' || b.status === 'checked-out') return false;
+                                 const startDT = parseISO(`${b.checkin}T${b.checkinTime || '14:00'}:00`);
+                                 const endDT = parseISO(`${b.checkout}T${b.checkoutTime || '11:00'}:00`);
+                                 
+                                 if (viewMode === 'today') {
+                                   return itemTime >= startDT.getTime() && itemTime < endDT.getTime();
+                                 } else {
+                                   const bS = startOfDay(parseISO(b.checkin)).getTime();
+                                   const bE = startOfDay(parseISO(b.checkout)).getTime();
+                                   return itemTime >= bS && itemTime < bE;
+                                 }
+                               });
 
-                         {/* Grid cells */}
-                         {viewMode === 'today' && (
-                           <div className="absolute top-0 bottom-0 bg-red-500/20 w-0.5 z-20 pointer-events-none" style={{ left: ROOM_COL + currentTimePos }}>
-                             <div className="bg-red-500 text-[8px] font-black text-white px-1.5 py-0.5 rounded shadow-lg absolute -top-1 -translate-x-1/2 whitespace-nowrap ring-2 ring-white animate-pulse">NOW</div>
-                           </div>
-                         )}
-                         
-                         <div className="flex relative flex-1 min-w-0">
-                           {timeline.map((item: Date, idx) => {
-                             const itemTime = item.getTime();
-                             const bookingAtCell = roomBookings.find(b => {
-                               if (b.status === 'cancelled' || b.status === 'checked-out') return false;
-                               const startDT = parseISO(`${b.checkin}T${b.checkinTime || '14:00'}:00`);
-                               const endDT = parseISO(`${b.checkout}T${b.checkoutTime || '11:00'}:00`);
-                               
-                               if (viewMode === 'today') {
-                                 return itemTime >= startDT.getTime() && itemTime < endDT.getTime();
-                               } else {
-                                 const bS = startOfDay(parseISO(b.checkin)).getTime();
-                                 const bE = startOfDay(parseISO(b.checkout)).getTime();
-                                 const day = startOfDay(item).getTime();
-                                 return day >= bS && day < bE;
-                               }
-                             });
+                               const isDayBooked = !!bookingAtCell;
+                               const isWeekend = item.getDay() === 0 || item.getDay() === 6;
 
-                             const isDayBooked = !!bookingAtCell;
-                              const isBookingHovered = bookingAtCell && hoveredBookingId === bookingAtCell._id && hoveredRoomId === room._id;
-                              const isBookingSelected = bookingAtCell && selectedBooking?._id === bookingAtCell._id;
-                              const isActive = isBookingHovered || isBookingSelected;
+                               return (
+                                 <div
+                                   key={idx}
+                                   className={cn(
+                                     "border-r relative transition-colors duration-150 shrink-0",
+                                     isWeekend && !isDayBooked && "bg-slate-50/30",
+                                     hoveredRoomId === room._id && "bg-slate-50/50",
+                                     !isDayBooked && "hover:bg-primary/5 cursor-crosshair"
+                                   )}
+                                   style={{ width: COLUMN_WIDTH }}
+                                   onMouseEnter={() => {
+                                     if (isDayBooked) {
+                                       setHoveredBookingId(bookingAtCell._id);
+                                       setHoveredRoomId(room._id);
+                                     }
+                                   }}
+                                   onMouseLeave={() => {
+                                     setHoveredBookingId(null);
+                                     setHoveredRoomId(null);
+                                   }}
 
-                             const nextDay = timeline[idx + 1];
-                             const isNextInSameBooking = nextDay && bookingAtCell && (() => {
-                                const endDt = parseISO(`${bookingAtCell.checkout}T${bookingAtCell.checkoutTime || '11:00'}:00`);
-                                return nextDay.getTime() < endDt.getTime();
-                             })();
+                                   onClick={() => handleCellClick(room._id, item)}
+                                 />
+                               );
+                             })}
 
-                             return (
-                               <div key={item.toISOString()}
-                                 className={cn(
-                                   "transition-all duration-150 flex-shrink-0 relative z-10",
-                                   !isNextInSameBooking && "border-r",
-                                   viewMode !== 'today' && isSameDay(item, new Date()) && "bg-primary/[0.04] z-10",
-                                   isDayBooked ? (isActive ? "bg-slate-200/50 cursor-pointer" : "bg-slate-50/10 cursor-pointer hover:bg-slate-100/50") : 
-                                   (dragTarget && dragTarget.roomId === room._id && isSameDay(dragTarget.date, item) ? "bg-primary/20 ring-2 ring-primary/40 ring-inset z-20" : 
-                                   (item < startOfDay(new Date()) ? "bg-slate-50/40 cursor-not-allowed" : "cursor-pointer hover:bg-primary/[0.04]"))
-                                 )}
-                                 style={{ width: COLUMN_WIDTH }}
-                                 onMouseEnter={() => {
-                                   if (isDayBooked) {
-                                     setHoveredBookingId(bookingAtCell._id);
-                                     setHoveredRoomId(room._id);
+                             {/* Booking cards overlay for this room */}
+                             {(() => {
+                                 const isExpiredEnquiry = (b: Booking) =>
+                                   (b.reservationType || b.bookingType) === 'enquiry' &&
+                                   !!b.enquiryExpiresAt && new Date(b.enquiryExpiresAt) < new Date();
+
+                                 const roomBookingsAll = filteredBookings.filter(b => getBookingRoomId(b) === room._id);
+                                 
+                                 const statusPriority: Record<string, number> = { 'checked-in': 5, 'confirmed': 4, 'reserved': 3, 'checked-out': 2 };
+
+                                 const sorted = [...roomBookingsAll].sort((a, b) => {
+                                    const isExpA = isExpiredEnquiry(a);
+                                    const isExpB = isExpiredEnquiry(b);
+                                    if (isExpA !== isExpB) return isExpA ? 1 : -1;
+                                    if (a.status === 'cancelled' && b.status !== 'cancelled') return 1;
+                                    if (a.status !== 'cancelled' && b.status === 'cancelled') return -1;
+                                   const pA = statusPriority[a.status] || 0;
+                                   const pB = statusPriority[b.status] || 0;
+                                   if (pA !== pB) return pB - pA;
+                                   const durA = differenceInDays(parseISO(a.checkout), parseISO(a.checkin));
+                                   const durB = differenceInDays(parseISO(b.checkout), parseISO(b.checkin));
+                                   if (durA !== durB) return durB - durA;
+                                   return parseISO(a.checkin).getTime() - parseISO(b.checkin).getTime();
+                                 });
+
+                                 const cancelledByDay: Record<string, Booking[]> = {};
+                                 const expiredByDay: Record<string, Booking[]> = {};
+                                 const checkedOutOverlappedByDay: Record<string, Booking[]> = {};
+
+                                 const visibleCards: { primary: Booking, others: Booking[] }[] = [];
+                                 sorted.forEach(b => {
+                                   const isExp = isExpiredEnquiry(b);
+                                   if (b.status === 'cancelled') {
+                                     const key = startOfDay(parseISO(b.checkin)).toISOString();
+                                     if (!cancelledByDay[key]) cancelledByDay[key] = [];
+                                     cancelledByDay[key].push(b);
+                                     return;
                                    }
-                                 }}
-                                 onMouseLeave={() => {
-                                   setHoveredBookingId(null);
-                                   setHoveredRoomId(null);
-                                 }}
+                                   if (isExp) {
+                                     const key = startOfDay(parseISO(b.checkin)).toISOString();
+                                     if (!expiredByDay[key]) expiredByDay[key] = [];
+                                     expiredByDay[key].push(b);
+                                     return;
+                                   }
 
-                                 onClick={() => handleCellClick(room._id, item)}
-                               />
-                             );
-                           })}
+                                   const bS = parseISO(b.checkin);
+                                   const bE = parseISO(b.checkout);
+                                   const group = visibleCards.find(g => [g.primary, ...g.others].some(m => bS < parseISO(m.checkout) && bE > parseISO(m.checkin)));
+                                   
+                                   if (group) {
+                                     if (b.status === 'checked-out') {
+                                       const key = startOfDay(parseISO(b.checkin)).toISOString();
+                                       if (!checkedOutOverlappedByDay[key]) checkedOutOverlappedByDay[key] = [];
+                                       checkedOutOverlappedByDay[key].push(b);
+                                     } else {
+                                       group.others.push(b);
+                                     }
+                                   } else {
+                                     visibleCards.push({ primary: b, others: [] });
+                                   }
+                                 });
 
-                           {/* Booking cards overlay for this room */}
-                           {(() => {
-                               const isExpiredEnquiry = (b: Booking) =>
-                                 (b.reservationType || b.bookingType) === 'enquiry' &&
-                                 !!b.enquiryExpiresAt && new Date(b.enquiryExpiresAt) < new Date();
+                                 const cardsJsx = visibleCards.map(({ primary: booking, others }) => {
+                                   const calculateLayoutValue = () => {
+                                     if (viewMode === 'today') {
+                                       const todayStart = startOfDay(weekStart);
+                                       const todayEnd = addDays(todayStart, 1);
+                                       const startDT = parseISO(`${booking.checkin}T${booking.checkinTime || '14:00'}:00`);
+                                       const endDT = parseISO(`${booking.checkout}T${booking.checkoutTime || '11:00'}:00`);
+                                       if (endDT < todayStart || startDT >= todayEnd) return null;
+                                       const ciHours = Math.max(0, (startDT.getTime() - todayStart.getTime()) / 3600000);
+                                       const coHours = Math.min(24, (endDT.getTime() - todayStart.getTime()) / 3600000);
+                                       const dur = coHours - ciHours;
+                                       return { left: (ciHours * COLUMN_WIDTH), width: Math.max(20, dur * COLUMN_WIDTH) };
+                                     } else {
+                                       const bCI = startOfDay(parseISO(booking.checkin));
+                                       const bCO = startOfDay(parseISO(booking.checkout));
+                                       const wS  = startOfDay(weekStart);
+                                       const pE  = addDays(wS, DAYS);
+                                       if (bCO <= wS || bCI >= pE) return null;
+                                       const visibleCI = bCI < wS ? wS : bCI;
+                                       const visibleCO = bCO > pE ? pE : bCO;
+                                       const startOffset = differenceInDays(visibleCI, wS);
+                                       const visibleDuration = Math.max(0, differenceInDays(visibleCO, visibleCI));
+                                       return { 
+                                          left: startOffset * COLUMN_WIDTH + (visibleCI > bCI ? 0 : 1), 
+                                          width: Math.max(COLUMN_WIDTH - 2, (visibleDuration * COLUMN_WIDTH) - (visibleCI > bCI ? 0 : 1) - (visibleCO < bCO ? 0 : 1))
+                                       };
+                                     }
+                                   };
 
-                               const activeBookings = roomBookings.filter(b => b.status !== 'cancelled' && !isExpiredEnquiry(b));
-                               const cancelledBookings = roomBookings.filter(b => b.status === 'cancelled');
-                               const expiredEnquiries = roomBookings.filter(b => isExpiredEnquiry(b));
-                               const statusPriority: Record<string, number> = { 'checked-in': 5, 'confirmed': 4, 'reserved': 3, 'checked-out': 2 };
+                                   const layout = calculateLayoutValue();
+                                   if (!layout) return null;
+                                   const isResizing = resizingId === booking._id;
+                                   const isExpired = isExpiredEnquiry(booking);
+                                   const isEnquiry = (booking.reservationType || booking.bookingType) === 'enquiry';
+                                   const isBlock = booking.bookingType === 'block' || booking.reservationType === 'block';
+                                   const isSolid = ['checked-in', 'confirmed', 'reserved', 'checked-out'].includes(booking.status);
+                                   const isEditable = (booking.status !== 'checked-out' && booking.status !== 'cancelled') || isEnquiry || isBlock;
+                                   const isToday = isSameDay(parseISO(booking.checkin), new Date());
 
-                               const sorted = [...activeBookings].sort((a, b) => {
-                                 const pA = statusPriority[a.status] || 0;
-                                 const pB = statusPriority[b.status] || 0;
-                                 if (pA !== pB) return pB - pA;
-                                 const durA = differenceInDays(parseISO(a.checkout), parseISO(a.checkin));
-                                 const durB = differenceInDays(parseISO(b.checkout), parseISO(b.checkin));
-                                 if (durA !== durB) return durB - durA;
-                                 return parseISO(a.checkin).getTime() - parseISO(b.checkin).getTime();
-                               });
+                                   return (
+                                     <motion.div
+                                       key={booking._id}
+                                       data-booking-card
+                                       initial={false}
+                                       animate={isResizing ? {} : { left: layout.left, width: layout.width }}
+                                       className={cn(
+                                         "absolute top-2 bottom-2 rounded-xl text-white select-none group/card cursor-pointer active:scale-[0.99] transition-all",
+                                         getStatusColor(booking.status, booking.bookingType, booking.reservationType, isExpired),
+                                         (hoveredBookingId === booking._id || booking.status === 'cancelled') ? "z-30 opacity-100" : "z-10 opacity-90 hover:opacity-100 hover:z-20",
+                                         hoveredGroupId === booking.groupId && booking.groupId && "ring-2 ring-white ring-offset-2 ring-offset-primary shadow-xl scale-[1.02]",
+                                         isResizing && "ring-2 ring-primary ring-offset-2 z-50 opacity-100 scale-[1.02] shadow-2xl"
+                                       )}
+                                       onPointerDown={(e) => handleCardDragStart(e, booking)}
+                                       onMouseEnter={() => {
+                                         setHoveredBookingId(booking._id);
+                                         if (booking.groupId) setHoveredGroupId(booking.groupId);
+                                       }}
+                                       onMouseLeave={() => {
+                                         setHoveredBookingId(null);
+                                         setHoveredGroupId(null);
+                                       }}
+                                     >
+                                       <div className="p-1 px-1.5 md:p-2.5 h-full flex flex-col justify-between relative overflow-hidden">
+                                         {/* Background gradient for depth */}
+                                         <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
 
-                               const visibleCards: { primary: Booking, others: Booking[] }[] = [];
-                               sorted.forEach(b => {
-                                 const bS = parseISO(b.checkin);
-                                 const bE = parseISO(b.checkout);
-                                 const group = visibleCards.find(g => [g.primary, ...g.others].some(m => bS < parseISO(m.checkout) && bE > parseISO(m.checkin)));
-                                 if (group) group.others.push(b); else visibleCards.push({ primary: b, others: [] });
-                               });
+                                         {isToday && isSolid && booking.status !== 'checked-out' && (
+                                           <div className="absolute top-0 right-0 w-12 h-12 -mr-6 -mt-6 bg-white/20 blur-2xl rounded-full" />
+                                         )}
 
-                                // Track cancelled bookings by checkin day for badge rendering
-                                const cancelledByDay: Record<string, Booking[]> = {};
-                                cancelledBookings.forEach(b => {
-                                   const key = startOfDay(parseISO(b.checkin)).toISOString();
-                                   if (!cancelledByDay[key]) cancelledByDay[key] = [];
-                                   cancelledByDay[key].push(b);
-                                });
-
-                               // Track expired enquiries by checkin day for badge rendering
-                               const expiredByDay: Record<string, Booking[]> = {};
-                               expiredEnquiries.forEach(b => {
-                                  const key = startOfDay(parseISO(b.checkin)).toISOString();
-                                  if (!expiredByDay[key]) expiredByDay[key] = [];
-                                  expiredByDay[key].push(b);
-                               });
-
-                              const cardsJsx = visibleCards.map(({ primary: booking, others }) => {
-                                const isDayUse = booking.checkin === booking.checkout;
-                                
-                                const calculateLayout = () => {
-                                  if (viewMode === 'today') {
-                                    const todayStart = startOfDay(weekStart);
-                                    const todayEnd = addDays(todayStart, 1);
-                                    const startDT = parseISO(`${booking.checkin}T${booking.checkinTime || '14:00'}:00`);
-                                    const endDT = parseISO(`${booking.checkout}T${booking.checkoutTime || '11:00'}:00`);
-                                    if (endDT < todayStart || startDT >= todayEnd) return null;
-                                    const ciHours = Math.max(0, (startDT.getTime() - todayStart.getTime()) / 3600000);
-                                    const coHours = Math.min(24, (endDT.getTime() - todayStart.getTime()) / 3600000);
-                                    const dur = coHours - ciHours;
-                                    return { left: (ciHours * COLUMN_WIDTH), width: Math.max(20, dur * COLUMN_WIDTH) };
-                                  } else {
-                                    const bCI = startOfDay(parseISO(booking.checkin));
-                                    const bCO = startOfDay(parseISO(booking.checkout));
-                                    const wS  = startOfDay(weekStart);
-                                    const pE  = addDays(wS, DAYS);
-                                    
-                                    if (bCO <= wS || bCI >= pE) return null;
-
-                                    const visibleCI = bCI < wS ? wS : bCI;
-                                    const visibleCO = bCO > pE ? pE : bCO;
-                                    
-                                    const startOffset = differenceInDays(visibleCI, wS);
-                                    const visibleDuration = Math.max(0, differenceInDays(visibleCO, visibleCI));
-                                    
-                                    return { 
-                                       left: startOffset * COLUMN_WIDTH + (visibleCI > bCI ? 0 : 1), 
-                                       width: Math.max(COLUMN_WIDTH - 2, (visibleDuration * COLUMN_WIDTH) - (visibleCI > bCI ? 0 : 1) - (visibleCO < bCO ? 0 : 1))
-                                    };
-                                  }
-                                };
-
-                                const layout = calculateLayout();
-                                if (!layout) return null;
-
-                                 const isHovered = hoveredBookingId === booking._id && hoveredRoomId === room._id;
-
-                                const isSelected = selectedBooking?._id === booking._id;
-                                const isSolid = ['checked-in', 'reserved', 'confirmed'].includes(booking.status);
-                                const isEnquiry = (booking.reservationType || booking.bookingType) === 'enquiry';
-                                const isBlock = (booking.reservationType || booking.bookingType) === 'block';
-                                const isExpired = isEnquiry && booking.enquiryExpiresAt && new Date(booking.enquiryExpiresAt) < new Date();
-                                const isWalkin = booking.bookingSource?.toLowerCase().includes('walk');
-                                const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled' || isBlock;
-
-                                return (
-                                  <motion.div
-                                    key={booking._id}
-                                    data-booking-card={booking._id}
-                                    className={cn(
-                                       "absolute rounded-xl flex flex-col justify-center transition-all duration-200 group/card cursor-pointer md:cursor-grab active:cursor-grabbing will-change-[transform,width,left,opacity]",
-                                       isExpired 
-                                         ? "top-[25%] bottom-[25%] opacity-60 hover:opacity-100 z-10" 
-                                         : "top-[6px] bottom-[6px] border-2",
-                                       getStatusColor(booking.status, booking.bookingType, booking.reservationType, !!isExpired),
-                                       (isHovered || isSelected) ? "z-30 opacity-100 ring-2 ring-white/50 shadow-2xl" : (!isExpired ? "z-10" : ""),
-                                       isSelected && "ring-primary/40 ring-4 border-primary/20"
-                                    )}
-                                    style={{ 
-                                      left: layout.left, 
-                                      width: isExpired ? 80 : layout.width, 
-                                      touchAction: 'none' 
-                                    }}
-                                    onPointerDown={(e) => handleCardDragStart(e, booking)}
-                                    onMouseEnter={() => {
-                                      setHoveredBookingId(booking._id);
-                                      setHoveredRoomId(room._id);
-                                    }}
-                                    onMouseLeave={() => {
-                                      setHoveredBookingId(null);
-                                      setHoveredRoomId(null);
-                                    }}
-
-                                  >
-                                    <div className={cn("p-1.5 h-full flex items-center justify-between min-w-0 overflow-hidden", isExpired && "opacity-80")}>
-                                      {isExpired ? (
-                                        <div className="flex items-center gap-1.5 w-full">
-                                          <div className="text-[9px] font-black uppercase tracking-tighter truncate flex-1">
-                                            {getGuest(booking)?.name || 'EXP'}
-                                          </div>
-                                          <div className="shrink-0 bg-red-100 text-red-600 border border-red-200 px-1 py-0.5 rounded text-[6px] font-black uppercase">EXP</div>
-                                        </div>
-                                      ) : (
-                                        <div className="flex flex-col justify-between h-full w-full">
-                                          <div className="flex items-start justify-between gap-1 overflow-visible">
-                                            <div className="min-w-0 flex-1">
-                                              <div 
-                                                className="relative z-[60] pointer-events-auto cursor-pointer h-fit mb-1 group/name max-w-full w-fit"
-                                                onClick={(e) => {
-                                                  e.preventDefault();
-                                                  e.stopPropagation();
-                                                  const guest = getGuest(booking);
-                                                  const gid = guest?._id || (guest as any)?.id;
-                                                  if (gid) {
-                                                    setSelectedGuestId(gid as string);
-                                                  }
-                                                }}
-                                                onPointerDown={(e) => {
-                                                  e.stopPropagation();
-                                                }}
+                                         <div className="flex justify-between items-start gap-1">
+                                           <div className="flex flex-col min-w-0">
+                                            {isBlock ? (
+                                              <button
+                                                className="flex items-center gap-1 cursor-pointer pointer-events-auto active:scale-95 transition-transform"
+                                                onClick={(e) => { e.stopPropagation(); setSelectedBooking(booking); }}
+                                                onPointerDown={(e) => e.stopPropagation()}
                                               >
-                                                <span className="inline-block text-[10px] md:text-[11px] font-black uppercase tracking-tighter truncate transition-all duration-200 group-hover/name:border-b-2 border-current pb-[0.5px] leading-tight max-w-full">
-                                                  {getGuest(booking)?.name || (booking.bookingType === 'block' ? 'ROOM BLOCKED' : 'NO GUEST')}
+                                                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-slate-800/80 text-white border border-slate-700/50 shadow-sm">
+                                                  <Lock className="h-2 w-2 shrink-0 opacity-70" />
+                                                  <span className="text-[8px] md:text-[10px] font-black uppercase tracking-tight leading-none">Blocked</span>
+                                                </div>
+                                                
+                                              </button>
+                                            ) : (
+                                              <div
+                                                className="group/name flex items-center gap-1 cursor-pointer pointer-events-auto"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setSelectedGuestId(getGuest(booking)?._id || null);
+                                                }}
+                                                onPointerDown={(e) => e.stopPropagation()}
+                                              >
+                                                <span className="inline-block text-[9px] md:text-[11px] font-bold uppercase tracking-tighter truncate transition-all duration-200 group-hover/name:border-b-2 border-current pb-[0.5px] leading-tight max-w-full">
+                                                  {getGuest(booking)?.name || 'NO GUEST'}
                                                 </span>
                                               </div>
-
-                                            </div>
-
-                                            {/* Others Indicator */}
-                                            {others.length > 0 ? (
-                                              <div className="z-10 shrink-0 pointer-events-auto" onClick={e => e.stopPropagation()}>
-                                                <Popover>
-                                                  <PopoverTrigger asChild>
-                                                    <button className={cn(
-                                                      "px-1.5 py-0.5 rounded-md font-bold shadow-sm transition-all active:scale-95 text-[8px]",
-                                                      isSolid
-                                                        ? "bg-white/20 hover:bg-white/30 text-white border border-white/20"
-                                                        : "bg-slate-100 ring-1 ring-slate-200 text-slate-500 hover:bg-slate-200"
-                                                    )}>
-                                                      +{others.length}
-                                                    </button>
-                                                  </PopoverTrigger>
-                                                  <PopoverContent className="w-64 p-2 rounded-xl shadow-xl border z-40">
-                                                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 p-2 border-b">Others {others.length}</p>
-                                                    <div className="space-y-1 mt-1">
-                                                      {others.map(o => (
-                                                        <button key={o._id} className="w-full p-2.5 hover:bg-slate-50 rounded-xl text-left flex items-center justify-between group/o" onClick={() => setSelectedBooking(o)}>
-                                                          <span className="text-[10px] font-black text-slate-900">{getGuest(o)?.name || 'Guest'}</span>
-                                                          <div className={cn("w-2 h-2 rounded-full", getStatusColor(o.status, o.bookingType, o.reservationType))} />
-                                                        </button>
-                                                      ))}
-                                                    </div>
-                                                  </PopoverContent>
-                                                </Popover>
-                                              </div>
-                                            ) : (isEnquiry || isBlock) && booking.enquiryExpiresAt ? (
-                                              <div className={cn(
-                                                "shrink-0 flex items-center gap-1 h-5 px-2 rounded-full text-[8px] font-black shadow-sm transition-all",
-                                                isExpired 
-                                                  ? "bg-red-500 text-white border-red-600 border" 
-                                                  : "bg-amber-100 border-amber-200 text-amber-700 border animate-pulse"
-                                              )}>
-                                                {isExpired ? (
-                                                  "EXPIRED"
-                                                ) : (
-                                                  <>
-                                                    <Timer className="h-2.5 w-2.5" />
-                                                    {formatCountdown(booking.enquiryExpiresAt)}
-                                                  </>
-                                                )}
-                                              </div>
-
-                                            ) : isDayUse ? (
-                                              <div className="shrink-0 bg-white border border-slate-200 shadow-sm text-slate-800 font-black text-[7px] md:text-[8px] uppercase tracking-tighter px-1.5 py-0.5 rounded-sm">DAY USE</div>
-                                            ) : null}
-                                          </div>
-
-                                          {/* Bottom Row */}
-                                          <div className="flex items-end justify-between gap-1 mt-1">
-                                            <div className="flex gap-1 items-center min-w-0">
-                                              {isEnquiry && <div className="px-1 py-0.5 rounded bg-amber-400 text-[6px] font-black text-white uppercase tracking-widest">Enquiry</div>}
-                                              {isBlock && <div className="px-1 py-0.5 rounded bg-slate-900 text-[6px] font-black text-white uppercase tracking-widest">Blocked</div>}
-                                            </div>
-                                            {!isBlock && !isEnquiry && (
-                                              <div className="shrink-0 rounded-md bg-white/20 p-[2px] w-4 h-4 flex items-center justify-center text-white border border-white/10 forced-colors:hidden">
-                                                {isWalkin ? <User className="h-2.5 w-2.5" /> : <Globe className="h-2.5 w-2.5" />}
-                                              </div>
                                             )}
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                    
-                                    {/* Resize handle */}
-                                    {isEditable && (
-                                      <div 
-                                        data-resize-handle 
-                                        onPointerDown={(e) => handleResizeDragStart(e, booking, room)}
-                                        className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize flex items-center justify-center group-hover/card:opacity-100 opacity-0 transition-opacity"
-                                      >
-                                        <div className="h-5 w-1 rounded-full bg-white/40" />
-                                      </div>
-                                    )}
-                                  </motion.div>
-                                );
-                              });
+                                           
+                                           {isEnquiry && !isExpired && booking.enquiryExpiresAt && (
+                                              <div className="flex items-center gap-1 text-[7px] md:text-[8px] font-bold text-amber-600/80 uppercase">
+                                                <Timer className="h-2 w-2" />
+                                                {formatCountdown(booking.enquiryExpiresAt)}
+                                              </div>
+                                           )}
+                                           </div>
 
-                               // Unified badge rendering: per column, show can/exp tags at bottom side by side
-                               const allDayKeys = new Set([...Object.keys(cancelledByDay), ...Object.keys(expiredByDay)]);
-                               const badgesJsx = Array.from(allDayKeys).map(iso => {
-                                 const dD = new Date(iso);
-                                 const off = differenceInDays(startOfDay(dD), startOfDay(weekStart));
-                                 if (off < 0 || off >= DAYS) return null;
-                                 const canList = cancelledByDay[iso] || [];
-                                 const expList = expiredByDay[iso] || [];
-                                 const totalCount = canList.length + expList.length;
-                                 return (
-                                   <div key={`badges-${iso}`} className="absolute top-3 z-40 flex items-center gap-0.5 justify-end px-1 pointer-events-none" style={{ left: off * COLUMN_WIDTH, width: COLUMN_WIDTH }}>
-                                     {totalCount === 1 ? (
-                                       expList.length === 1 ? (
-                                         <button
-                                           title="View expired hold details"
-                                           className="bg-red-50 ring-1 ring-red-200 text-red-500 text-[8px] px-1.5 py-0.5 rounded-md font-bold shadow-sm hover:bg-red-100 hover:ring-red-300 transition-all active:scale-95 whitespace-nowrap pointer-events-auto"
-                                           onClick={(e) => { e.stopPropagation(); setSelectedBooking(expList[0]); }}
-                                         >+1</button>
+                                           <div className="flex items-center gap-1 shrink-0 pointer-events-auto">
+                                             {/* Status Tags in Top Right of Card */}
+                                             <div className="flex gap-1 items-center">
+                                                {isEnquiry && <div className="px-1 py-0.5 rounded-sm bg-amber-400/20 text-[6px] font-black text-amber-600 uppercase tracking-tighter border border-amber-400/30">ENQ</div>}
+                                                
+                                             </div>
+
+                                             {others.length > 0 && booking.status !== 'checked-out' && (
+                                               <div onClick={e => e.stopPropagation()}>
+                                                 <Popover>
+                                                   <PopoverTrigger asChild>
+                                                     <button className={cn(
+                                                       "px-1 py-0.5 md:px-1.5 md:py-0.5 rounded-md font-bold shadow-sm transition-all active:scale-95 text-[8px]",
+                                                       isSolid ? "bg-white/20 hover:bg-white/30 text-white border border-white/20" : "bg-slate-100 ring-1 ring-slate-200 text-slate-500 hover:bg-slate-200"
+                                                     )}>
+                                                       +{others.length}
+                                                     </button>
+                                                   </PopoverTrigger>
+                                                   <PopoverContent className="w-56 p-2 rounded-xl z-[400] shadow-2xl border-none">
+                                                     <p className="text-[9px] font-black text-slate-400 p-2 border-b uppercase tracking-widest text-center">Overlapping Stays</p>
+                                                     <div className="mt-1 space-y-0.5 max-h-[250px] overflow-y-auto pr-1">
+                                                       {others.map(o => (
+                                                         <button key={o._id} onClick={() => setSelectedBooking(o)} className="w-full p-2 hover:bg-slate-50 rounded-lg flex justify-between items-center text-left group">
+                                                           <div className="flex-1 min-w-0">
+                                                             <p className="text-[10px] font-bold text-slate-700 truncate">{getGuest(o)?.name || 'Guest'}</p>
+                                                             <p className="text-[8px] text-slate-400 capitalize">{o.status} · {format(parseISO(o.checkout), 'MMM dd')}</p>
+                                                           </div>
+                                                           <div className={cn("w-2 h-2 rounded-full", getStatusColor(o.status, o.bookingType, o.reservationType, false))} />
+                                                         </button>
+                                                       ))}
+                                                     </div>
+                                                   </PopoverContent>
+                                                 </Popover>
+                                               </div>
+                                             )}
+                                           </div>
+                                         </div>
+
+                                         <div className="flex items-end justify-between gap-1">
+                                           <div className="flex flex-col gap-0.5 md:gap-1 items-start min-w-0">
+                                             {booking.groupName && (
+                                                 <div className="flex items-center opacity-100 max-w-full">
+                                                   <span className="text-[8px] md:text-[11px] font-black uppercase tracking-tight truncate max-w-[50px] md:max-w-[120px] bg-black/10 px-1 md:px-2 py-0.5 rounded-sm md:rounded-md border border-black/5 flex items-center gap-1">
+                                                     <Users className="h-2 w-2 md:h-2.5 md:w-2.5 text-current/80 shrink-0" />
+                                                     {booking.groupName}
+                                                   </span>
+                                                 </div>
+                                               )}
+                                           </div>
+                                         </div>
+                                       </div>
+                                       {isEditable && (
+                                         <div data-resize-handle onPointerDown={(e) => handleResizeDragStart(e, booking, room)} className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize flex items-center justify-center group-hover/card:opacity-100 opacity-0 transition-opacity">
+                                           <div className="h-5 w-1 rounded-full bg-white/40" />
+                                         </div>
+                                       )}
+                                     </motion.div>
+                                   );
+                                 });
+
+                                 const allDayKeys = new Set([...Object.keys(cancelledByDay), ...Object.keys(expiredByDay), ...Object.keys(checkedOutOverlappedByDay)]);
+                                 const badgesJsx = Array.from(allDayKeys).map(iso => {
+                                   const dD = new Date(iso);
+                                   const off = differenceInDays(startOfDay(dD), startOfDay(weekStart));
+                                   if (off < 0 || off >= DAYS) return null;
+                                   const canList = cancelledByDay[iso] || [];
+                                   const expList = expiredByDay[iso] || [];
+                                   const outList = checkedOutOverlappedByDay[iso] || [];
+                                   const totalCount = canList.length + expList.length + outList.length;
+
+                                   return (
+                                     <div key={`badges-${iso}`} className="absolute top-3 z-40 flex items-center gap-0.5 justify-end px-1 pointer-events-none" style={{ left: off * COLUMN_WIDTH, width: COLUMN_WIDTH }}>
+                                       {totalCount === 1 ? (
+                                         expList.length === 1 ? (
+                                           <button title="Expired Hold" className="bg-red-50 ring-1 ring-red-200 text-red-500 text-[8px] px-1.5 py-0.5 rounded-md font-bold shadow-sm hover:bg-red-100 transition-all pointer-events-auto" onClick={(e) => { e.stopPropagation(); setSelectedBooking(expList[0]); }}>+1</button>
+                                         ) : outList.length === 1 ? (
+                                           <button title="Checked Out" className="bg-orange-50 ring-1 ring-orange-200 text-orange-500 text-[8px] px-1.5 py-0.5 rounded-md font-bold shadow-sm hover:bg-orange-100 transition-all pointer-events-auto" onClick={(e) => { e.stopPropagation(); setSelectedBooking(outList[0]); }}>+1</button>
+                                         ) : (
+                                           <button title="Cancelled" className="bg-slate-100 ring-1 ring-slate-200 text-slate-500 text-[8px] px-1.5 py-0.5 rounded-md font-bold shadow-sm hover:bg-slate-200 transition-all pointer-events-auto" onClick={(e) => { e.stopPropagation(); setSelectedBooking(canList[0]); }}>+1</button>
+                                         )
                                        ) : (
                                          <Popover>
                                            <PopoverTrigger asChild>
-                                             <button
-                                               className="bg-slate-100 ring-1 ring-slate-200 text-slate-500 text-[8px] px-1.5 py-0.5 rounded-md font-bold shadow-sm hover:bg-slate-200 transition-colors whitespace-nowrap pointer-events-auto"
-                                               onClick={e => e.stopPropagation()}
-                                             >+1</button>
-
+                                             <button className="bg-white ring-1 ring-slate-200 text-slate-600 text-[8px] px-1.5 py-0.5 rounded-md font-bold shadow-sm hover:bg-slate-50 transition-all pointer-events-auto" onClick={e => e.stopPropagation()}>+{totalCount}</button>
                                            </PopoverTrigger>
-                                           <PopoverContent className="w-56 p-2 rounded-xl z-[400] shadow-2xl border-none">
-                                             <p className="text-[9px] font-black text-slate-400 p-2 border-b uppercase tracking-widest">Cancelled</p>
-                                             <div className="mt-1 space-y-0.5">
-                                               {canList.map(o => (
-                                                 <button key={o._id} onClick={() => setSelectedBooking(o)} className="w-full p-2 hover:bg-slate-50 rounded-lg flex justify-between items-center text-left group">
-                                                   <div className="flex flex-col gap-0.5 min-w-0">
-                                                     <span className="text-[10px] font-bold line-through text-slate-400 truncate group-hover:text-slate-600 transition-colors">{getGuest(o)?.name || 'Guest'}</span>
-                                                     <span className="text-[8px] text-slate-300">{format(parseISO(o.checkin), 'MMM dd')} – {format(parseISO(o.checkout), 'MMM dd')}</span>
+                                           <PopoverContent className="w-56 p-2 rounded-xl z-[400] shadow-2xl border border-slate-100">
+                                             <p className="text-[10px] font-black text-slate-400 p-2 border-b uppercase tracking-widest text-center">Day Notifications · {totalCount}</p>
+                                             <div className="mt-1 space-y-0.5 max-h-[300px] overflow-y-auto pr-1 scrollbar-hide">
+                                               {outList.map((o: Booking) => (
+                                                 <button key={o._id} className="w-full p-2.5 hover:bg-orange-50/50 rounded-xl text-left flex justify-between items-center group/out" onClick={() => setSelectedBooking(o)}>
+                                                   <div className="flex-1 min-w-0 mr-2">
+                                                     <p className="text-[10px] font-black text-orange-600 truncate">{getGuest(o)?.name || 'Guest'}</p>
+                                                     <p className="text-[8px] text-slate-400 font-bold">Checked Out · {format(parseISO(o.checkout), 'MMM dd')}</p>
                                                    </div>
-                                                   <div className="w-2 h-2 rounded-full bg-slate-300 shrink-0 group-hover:bg-slate-400 transition-colors" />
+                                                   <div className="text-[7px] font-black text-orange-400 bg-orange-100/50 px-1 rounded uppercase">out</div>
+                                                 </button>
+                                               ))}
+                                               {expList.map((o: Booking) => (
+                                                 <button key={o._id} className="w-full p-2.5 hover:bg-red-50/50 rounded-xl text-left flex justify-between items-center group/exp" onClick={() => setSelectedBooking(o)}>
+                                                   <div className="flex-1 min-w-0 mr-2">
+                                                     <p className="text-[10px] font-black text-red-500 truncate">{getGuest(o)?.name || 'Guest'}</p>
+                                                     <p className="text-[8px] text-slate-400 font-bold">Hold Expired · {format(parseISO(o.checkin), 'MMM dd')}</p>
+                                                   </div>
+                                                   <div className="text-[7px] font-black text-red-400 bg-red-100/50 px-1 rounded uppercase">exp</div>
+                                                 </button>
+                                               ))}
+                                               {canList.map((o: Booking) => (
+                                                 <button key={o._id} className="w-full p-2.5 hover:bg-slate-50 rounded-xl text-left flex justify-between items-center group/can" onClick={() => setSelectedBooking(o)}>
+                                                   <div className="flex-1 min-w-0 mr-2">
+                                                     <p className="text-[10px] font-bold line-through text-slate-400 truncate">{getGuest(o)?.name || 'Guest'}</p>
+                                                     <p className="text-[8px] text-slate-300 font-bold">Cancelled · {format(parseISO(o.checkin), 'MMM dd')}</p>
+                                                   </div>
+                                                   <div className="w-2 h-2 rounded-full bg-slate-300" />
                                                  </button>
                                                ))}
                                              </div>
                                            </PopoverContent>
                                          </Popover>
-                                       )
-                                     ) : (
-                                       <Popover>
-                                         <PopoverTrigger asChild>
-                                           <button
-                                             title="View multiple notifications"
-                                             className="bg-slate-100 ring-1 ring-slate-200 text-slate-600 text-[8px] px-1.5 py-0.5 rounded-md font-bold shadow-sm hover:bg-slate-200 transition-all active:scale-95 whitespace-nowrap pointer-events-auto"
-                                             onClick={e => e.stopPropagation()}
-                                           >
-                                             +{totalCount}
-                                           </button>
-                                         </PopoverTrigger>
-                                         <PopoverContent className="w-56 p-2 rounded-xl z-[400] shadow-2xl border-none">
-                                           <p className="text-[9px] font-black text-slate-400 p-2 border-b uppercase tracking-widest">Day Alerts · {totalCount}</p>
-                                           <div className="mt-1 space-y-0.5 max-h-[300px] overflow-y-auto pr-1">
-                                             {expList.map(o => (
-                                               <button key={o._id} className="w-full p-2 hover:bg-red-50/50 rounded-lg text-left flex justify-between items-center group/exp" onClick={() => setSelectedBooking(o)}>
-                                                 <div className="flex flex-col gap-0.5 min-w-0">
-                                                   <span className="text-[10px] font-bold text-red-500 truncate">{getGuest(o)?.name || 'Guest'}</span>
-                                                   <span className="text-[8px] text-slate-400">Hold Expired • {format(parseISO(o.checkin), 'MMM dd')} {o.checkinTime ? `@ ${o.checkinTime}` : ''}</span>
+                                       )}
+                                     </div>
+                                   );
+                                 });
 
-                                                 </div>
-                                                 <div className="text-[7px] font-black text-red-400 bg-red-100/50 px-1 rounded uppercase group-hover/exp:bg-red-200 transition-colors">exp</div>
-                                               </button>
-                                             ))}
-                                             {canList.map(o => (
-                                               <button key={o._id} className="w-full p-2 hover:bg-slate-50 rounded-lg flex justify-between items-center text-left group/can" onClick={() => setSelectedBooking(o)}>
-                                                 <div className="flex flex-col gap-0.5 min-w-0">
-                                                   <span className="text-[10px] font-bold text-slate-500 truncate line-through opacity-60 group-hover/can:opacity-100 transition-opacity">{getGuest(o)?.name || 'Guest'}</span>
-                                                   <span className="text-[8px] text-slate-400">Cancelled • {format(parseISO(o.checkin), 'MMM dd')}</span>
-                                                 </div>
-                                                 <div className="text-[7px] font-black text-slate-400 bg-slate-100 px-1 rounded uppercase group-hover/can:bg-slate-200 transition-colors">can</div>
-                                               </button>
-                                             ))}
-                                           </div>
-                                         </PopoverContent>
-                                       </Popover>
-                                     )}
-                                   </div>
-                                 );
-                               });
-
-                              return [...cardsJsx, ...badgesJsx];
-                           })()}
-                         </div>
-                      </div>
-                    );
-                  })}
-                </motion.div>
-              </AnimatePresence>
+                               return [...cardsJsx, ...badgesJsx];
+                             })()}
+                           </div>
+                          </div>
+                        );
+                      })}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
             </div>
+          </div>
             {/* Bottom spacer */}
             <div className="h-8 w-full pointer-events-none" />
           </div>
@@ -1368,7 +1427,7 @@ export function BookingBoard() {
       </div>
 
       <BookingModal isOpen={isModalOpen || !!editingBooking} onClose={() => { setIsModalOpen(false); setEditingBooking(null); }}
-        selectedRoomId={selectedRoomId} selectedDate={selectedDate} initialBooking={editingBooking || undefined} />
+        selectedRoomId={selectedRoomId} selectedDate={selectedDate} initialBooking={editingBooking || undefined} isEditingGroup={!!editingBooking?.groupId} />
       <BookingDetailSheet booking={selectedBooking} onClose={() => setSelectedBooking(null)} onOpenGuest={(id) => setSelectedGuestId(id)} />
       <GuestProfileSheet 
         guestId={selectedGuestId} 
@@ -1425,39 +1484,66 @@ export function BookingBoard() {
                  </div>
               </div>
             </div>
-
-            {pendingUpdate && pendingUpdate.details.oldPrice !== pendingUpdate.details.newPrice && (
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col gap-2">
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Room Price Change</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-slate-400 line-through decoration-slate-300">₹{pendingUpdate.details.oldPrice}</span>
-                    <ArrowRight className="h-2.5 w-2.5 text-slate-300" />
-                    <span className="text-[11px] font-black text-emerald-600">₹{pendingUpdate.details.newPrice}</span>
-                  </div>
-                </div>
-                <button 
-                  type="button"
-                  onClick={() => setUseNewPrice(!useNewPrice)}
-                  className={cn(
-                    "flex items-center gap-2 px-3 py-2 rounded-xl border transition-all",
-                    useNewPrice 
-                      ? "bg-emerald-600 border-emerald-500 text-white shadow-md shadow-emerald-500/10" 
-                      : "bg-white border-slate-200 text-slate-600"
-                  )}
-                >
-                  <div className={cn(
-                    "w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-all",
-                    useNewPrice ? "bg-white border-transparent" : "bg-slate-100 border-slate-300"
-                  )}>
-                    {useNewPrice && <div className="w-1.5 h-1.5 rounded-full bg-emerald-600" />}
-                  </div>
-                  <span className="text-[10px] font-black uppercase tracking-tight">
-                    {useNewPrice ? "Apply New Room Price" : "Keep Original Price"}
-                  </span>
-                </button>
-              </div>
-            )}
+            {pendingUpdate && (() => {
+                          const isResizeChange = pendingUpdate.type === 'resize';
+                          const nights = pendingUpdate.details.nightsDelta || 0;
+                          const origNights = differenceInDays(startOfDay(parseISO(pendingUpdate.details.oldCheckout)), startOfDay(parseISO(pendingUpdate.details.oldCheckin)));
+                          const newNights = differenceInDays(startOfDay(parseISO(pendingUpdate.details.newCheckout)), startOfDay(parseISO(pendingUpdate.details.newCheckin)));
+                          const oldPricePerNight = pendingUpdate.details.oldPrice || 0;
+                          const newPricePerNight = isResizeChange ? oldPricePerNight : (pendingUpdate.details.newPrice || 0);
+                          const oldSubtotal = origNights * oldPricePerNight;
+                          const newSubtotal = newNights * newPricePerNight;
+                          const gstRate = taxConfig?.enabled ? ((taxConfig.cgst || 0) + (taxConfig.sgst || 0)) : 0;
+                          const oldGst = gstRate > 0 ? Math.round(oldSubtotal * gstRate / 100) : 0;
+                          const newGst = gstRate > 0 ? Math.round(newSubtotal * gstRate / 100) : 0;
+                          const oldTotal = oldSubtotal + oldGst;
+                          const newTotal = newSubtotal + newGst;
+                          const roomPriceChanged = pendingUpdate.details.oldPrice !== pendingUpdate.details.newPrice;
+                          const amountChanged = oldTotal !== newTotal || origNights !== newNights;
+                          if (!roomPriceChanged && !amountChanged) return null;
+                          return (
+                            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col gap-2.5">
+                              <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider px-1">Amount Breakdown</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="bg-white rounded-xl p-2.5 border border-slate-100 text-center">
+                                  <p className="text-[8px] font-black uppercase text-slate-400 tracking-widest mb-1.5">Before</p>
+                                  <p className="text-[9px] font-bold text-slate-400">{origNights}n × ₹{oldPricePerNight.toLocaleString('en-IN')}</p>
+                                  {oldGst > 0 && <p className="text-[8px] text-orange-400">+GST {gstRate}% = ₹{oldGst.toLocaleString('en-IN')}</p>}
+                                  <p className="text-sm font-black text-slate-600 mt-1">₹{oldTotal.toLocaleString('en-IN')}</p>
+                                </div>
+                                <div className="bg-primary/5 rounded-xl p-2.5 border border-primary/20 text-center">
+                                  <p className="text-[8px] font-black uppercase text-primary/60 tracking-widest mb-1.5">After</p>
+                                  <p className="text-[9px] font-bold text-primary/70">{newNights}n × ₹{newPricePerNight.toLocaleString('en-IN')}</p>
+                                  {newGst > 0 && <p className="text-[8px] text-orange-500">+GST {gstRate}% = ₹{newGst.toLocaleString('en-IN')}</p>}
+                                  <p className="text-sm font-black text-primary mt-1">₹{newTotal.toLocaleString('en-IN')}</p>
+                                </div>
+                              </div>
+                              {roomPriceChanged && (
+                                <button 
+                                  type="button"
+                                  onClick={() => setUseNewPrice(!useNewPrice)}
+                                  className={cn(
+                                    "flex items-center gap-2 px-3 py-2 rounded-xl border transition-all",
+                                    useNewPrice 
+                                      ? "bg-emerald-600 border-emerald-500 text-white shadow-md shadow-emerald-500/10" 
+                                      : "bg-white border-slate-200 text-slate-600"
+                                  )}
+                                >
+                                  <div className={cn(
+                                    "w-3.5 h-3.5 rounded-full border flex items-center justify-center transition-all",
+                                    useNewPrice ? "bg-white border-transparent" : "bg-slate-100 border-slate-300"
+                                  )}>
+                                    {useNewPrice && <div className="w-1.5 h-1.5 rounded-full bg-emerald-600" />}
+                                  </div>
+                                  <span className="text-[10px] font-black uppercase tracking-tight">
+                                    {useNewPrice ? `Apply new price (₹${pendingUpdate.details.newPrice.toLocaleString('en-IN')}/n)` : `Keep original (₹${pendingUpdate.details.oldPrice.toLocaleString('en-IN')}/n)`}
+                                  </span>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })()}
+            
 
             {pendingUpdate?.details.changeText && (() => {
                const text = pendingUpdate.details.changeText;
@@ -1469,6 +1555,11 @@ export function BookingBoard() {
                
                const label = isExtend ? 'Extend Stay' : isReduce ? 'Shorten Stay' : 'Shift Booking';
                const sublabel = isMove ? text : `${Math.abs(nights || 0)} night${Math.abs(nights || 0) !== 1 ? 's' : ''} ${nights && nights > 0 ? 'added' : 'removed'}`;
+               
+               const totalPriceDelta = Math.abs((nights || 0) * (pendingUpdate?.details.oldPrice || 0));
+               const priceDeltaText = isResize && totalPriceDelta > 0 
+                 ? `Amount ${nights && nights > 0 ? 'increased' : 'decreased'} by ₹${totalPriceDelta.toLocaleString('en-IN')}`
+                 : '';
                
                return (
                  <div className={cn(
@@ -1483,9 +1574,19 @@ export function BookingBoard() {
                    )}>
                      {label}
                    </span>
-                   <span className="text-[10px] font-bold text-slate-500 text-center">
-                     {sublabel.replace('Confirmed', 'Reserved')}
-                   </span>
+                   <div className="flex flex-col gap-0.5">
+                      <span className="text-[10px] font-bold text-slate-500 text-center">
+                        {sublabel.replace('Confirmed', 'Reserved')}
+                      </span>
+                      {priceDeltaText && (
+                        <span className={cn(
+                          "text-[9px] font-black uppercase tracking-tight",
+                          isExtend ? "text-emerald-600" : "text-amber-600"
+                        )}>
+                          {priceDeltaText}
+                        </span>
+                      )}
+                    </div>
                  </div>
                );
             })()}
@@ -1529,3 +1630,4 @@ export function BookingBoard() {
     </>
   );
 }
+

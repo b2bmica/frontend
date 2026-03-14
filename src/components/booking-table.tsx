@@ -370,7 +370,7 @@ export function BookingTable() {
                       <TableCell className="text-sm">{format(new Date(booking.checkout), 'dd MMM yy')}</TableCell>
                       <TableCell>{statusBadge(booking)}</TableCell>
                       <TableCell className="text-right font-medium">
-                        {(booking.reservationType === 'block' || booking.bookingType === 'block') ? '—' : `₹${amount.toLocaleString()}`}
+                        {(booking.reservationType === 'block' || booking.bookingType === 'block') ? '—' : `₹${amount.toLocaleString('en-IN')}`}
                       </TableCell>
                       <TableCell>
                         {actioningId === booking._id ? (
@@ -562,7 +562,7 @@ export function BookingTable() {
                 <div className="flex flex-col items-end">
                    <span className="text-[9px] font-bold text-slate-300 uppercase leading-none mb-0.5">Total Revenue</span>
                    <span className="text-base font-black text-slate-900 tracking-tighter">
-                      {(booking.reservationType === 'block' || booking.bookingType === 'block') ? '—' : `₹${amount.toLocaleString()}`}
+                      {(booking.reservationType === 'block' || booking.bookingType === 'block') ? '—' : `₹${amount.toLocaleString('en-IN')}`}
                    </span>
                 </div>
               </div>
@@ -584,6 +584,7 @@ export function BookingTable() {
         isOpen={!!editingBooking} 
         onClose={() => setEditingBooking(null)} 
         initialBooking={editingBooking || undefined} 
+        isEditingGroup={!!editingBooking?.groupId}
       />
       <GuestProfileSheet 
         guestId={selectedGuestId} 

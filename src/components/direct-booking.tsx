@@ -171,7 +171,7 @@ export function DirectBookingEngine() {
                       <div className="flex items-end justify-between mt-4">
                         <div>
                           <p className="text-[10px] text-muted-foreground uppercase font-black">Per night</p>
-                          <p className="text-2xl font-black text-primary">₹{room.price.toLocaleString()}</p>
+                          <p className="text-2xl font-black text-primary">₹{room.price.toLocaleString('en-IN')}</p>
                         </div>
                         <Button 
                           onClick={() => { setSelectedRoom(room); setStep(3); }} 
@@ -246,7 +246,7 @@ export function DirectBookingEngine() {
                             <div className="pt-4 border-t border-white/10">
                                <div className="flex justify-between items-center">
                                   <span className="font-bold">Total</span>
-                                  <span className="text-2xl font-black">₹{((selectedRoom?.price || 0) * 4).toLocaleString()}</span>
+                                  <span className="text-2xl font-black">₹{((selectedRoom?.price || 0) * 4).toLocaleString('en-IN')}</span>
                                </div>
                             </div>
                          </div>

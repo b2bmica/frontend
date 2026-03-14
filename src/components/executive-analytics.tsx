@@ -93,7 +93,7 @@ export function ExecutiveAnalytics() {
     { title: 'Total Revenue', value: `₹${(stats.revenue / 1000).toFixed(1)}K`, icon: IndianRupee, color: 'text-emerald-500' },
     { title: 'Live Occupancy', value: `${stats.occupancy}%`, icon: Target, color: 'text-blue-500' },
     { title: 'Traveler Base', value: stats.guests.toString(), icon: Users, color: 'text-purple-500' },
-    { title: 'RevPAR', value: `₹${stats.revPar.toLocaleString()}`, icon: TrendingUp, color: 'text-orange-500' },
+    { title: 'RevPAR', value: `₹${stats.revPar.toLocaleString('en-IN')}`, icon: TrendingUp, color: 'text-orange-500' },
   ];
 
   return (
@@ -223,7 +223,7 @@ export function ExecutiveAnalytics() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-black text-xs">₹{room?.price?.toLocaleString() || '0'}</p>
+                        <p className="font-black text-xs">₹{room?.price?.toLocaleString('en-IN') || '0'}</p>
                         <Badge variant="outline" className="text-[7px] font-black uppercase tracking-tighter h-4 border-emerald-100 text-emerald-600 bg-white">IN-HOUSE</Badge>
                       </div>
                     </div>

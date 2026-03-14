@@ -173,6 +173,17 @@ class ApiClient {
     return this.request<unknown[]>(`/bookings/availability?checkin=${checkin}&checkout=${checkout}`);
   }
 
+  async getGroupBookings(groupId: string) {
+    return this.request<{ group: any; bookings: any[] }>(`/bookings/group/${groupId}`);
+  }
+
+  async updateGroupMetadata(groupId: string, data: any) {
+    return this.request<any>(`/bookings/group/${groupId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
   // Guests
   async getGuests(params?: { page?: number; limit?: number }) {
     const query = new URLSearchParams();

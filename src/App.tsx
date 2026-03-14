@@ -22,68 +22,25 @@ import { LandingPage } from './components/landing-page'
 // Lazy Loading Components
 const GuestTable = lazy(() => import('./components/guest-table').then(module => ({ default: module.GuestTable })))
 const GuestProfileForm = lazy(() => import('./components/guest-profile-form').then(module => ({ default: module.GuestProfileForm })))
-const FolioView = lazy(() => import('./components/folio-view').then(module => ({ default: module.FolioView })))
 const BookingBoard = lazy(() => import('./components/booking-board-v2').then(module => ({ default: module.BookingBoard })))
 const HousekeepingBoard = lazy(() => import('./components/housekeeping-board').then(module => ({ default: module.HousekeepingBoard })))
 const MaintenanceTickets = lazy(() => import('./components/maintenance-tickets').then(module => ({ default: module.MaintenanceTickets })))
 const DirectBookingEngine = lazy(() => import('./components/direct-booking').then(module => ({ default: module.DirectBookingEngine })))
 const HotelSettings = lazy(() => import('./components/hotel-settings').then(module => ({ default: module.HotelSettings })))
-const PerformanceReport = lazy(() => import('./components/performance-report').then(module => ({ default: module.PerformanceReport })))
+const AnalyticsDashboard = lazy(() => import('./components/analytics-dashboard').then(module => ({ default: module.AnalyticsDashboard })))
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
-  overview: { title: 'Stats & Overview', subtitle: 'Overview of operations and key metrics.' },
   board: { title: 'Calendar View', subtitle: 'Visual timeline of all room reservations.' },
   bookings: { title: 'Registrations', subtitle: 'Complete list of current and past reservations.' },
   rooms: { title: 'Room List', subtitle: 'Manage your rooms, types, rates and availability.' },
   guests: { title: 'Guest History', subtitle: 'Manage your visitor records and stay history.' },
-  folio: { title: 'Payments & Folio', subtitle: 'Manage guest charges, payments and tax invoices.' },
-  reports: { title: 'Performance Report', subtitle: 'Detailed breakdown of financial collections.' },
   housekeeping: { title: 'Housekeeping', subtitle: 'Coordinate cleaning tasks and room status.' },
   maintenance: { title: 'Maintenance', subtitle: 'Manage repair tickets and facility upkeep.' },
+  analytics: { title: 'Analytics', subtitle: 'Advanced performance insights and financial reports.' },
   settings: { title: 'Hotel Settings', subtitle: 'Configure hotel information and Indian tax settings.' },
 }
 
-function DashboardStats() {
-  const { bookings, rooms } = useBookings()
-  const activeBookings = bookings.filter(b => b.status !== 'cancelled')
-  const checkedIn = bookings.filter(b => b.status === 'checked-in')
-  
-  // Calculate revenue from room price × nights
-  const totalRevenue = activeBookings.reduce((sum, b) => {
-    const room = typeof b.roomId === 'object' ? b.roomId : null
-    const nights = Math.max(1, Math.ceil((new Date(b.checkout).getTime() - new Date(b.checkin).getTime()) / (1000 * 60 * 60 * 24)))
-    const rate = b.roomPrice || room?.price || 0
-    return sum + (rate * nights)
-  }, 0)
-  
-  const occupancyRate = rooms.length > 0 ? Math.round((checkedIn.length / rooms.length) * 100) : 0
 
-  const stats = [
-    { title: "Total Bookings", value: activeBookings.length.toString(), change: `${bookings.filter(b => b.status === 'reserved').length} upcoming`, icon: Calendar, color: "text-blue-500" },
-    { title: "Occupancy", value: `${occupancyRate}%`, change: `${checkedIn.length} of ${rooms.length} rooms`, icon: Bed, color: "text-green-500" },
-    { title: "Checked In", value: checkedIn.length.toString(), change: "active guests", icon: Users, color: "text-purple-500" },
-    { title: "Revenue", value: `₹${totalRevenue.toLocaleString()}`, change: "total bookings", icon: TrendingUp, color: "text-orange-500" },
-  ]
-
-  return (
-    <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-      {stats.map((stat) => (
-        <Card key={stat.title} className="hover:shadow-lg transition-all border-none shadow-md">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-             <CardTitle className="text-xs sm:text-sm font-bold uppercase tracking-wider text-muted-foreground">{stat.title}</CardTitle>
-             <stat.icon className={`h-4 w-4 ${stat.color}`} />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl sm:text-2xl font-black">{stat.value}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-               <span className="text-green-500 font-bold">{stat.change}</span>
-            </p>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  )
-}
 
 function DashboardContent() {
   const { hotel, logout } = useAuth()
@@ -136,7 +93,7 @@ function DashboardContent() {
         }
       }}>
         <div className={cn("flex flex-col", activeTab === 'board' ? "h-full p-0" : "gap-4 md:gap-6 pt-4 md:pt-6 pb-20")}>
-          {activeTab !== 'board' && (
+          {activeTab !== 'board' && activeTab !== 'maintenance' && activeTab !== 'housekeeping' && (
             <div className="mb-2 px-4 md:px-6">
               <h2 className="text-2xl font-black tracking-tight text-slate-900">{currentPage.title}</h2>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{currentPage.subtitle}</p>
@@ -160,32 +117,14 @@ function DashboardContent() {
               ) : (
                 <div className={activeTab === 'board' ? "h-full" : "space-y-6"}>
                   <Routes>
-                    <Route path="overview" element={
-                        <>
-                          <DashboardStats />
-                          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                            <Card className="col-span-full lg:col-span-4 border-none shadow-md">
-                              <CardHeader><CardTitle>Live Operations</CardTitle></CardHeader>
-                              <CardContent><BookingTable /></CardContent>
-                            </Card>
-                            <Card className="col-span-full lg:col-span-3 border-none shadow-md">
-                              <CardHeader><CardTitle>Room Status</CardTitle></CardHeader>
-                              <CardContent className="space-y-6">
-                                 <RoomStatusBars />
-                              </CardContent>
-                            </Card>
-                          </div>
-                        </>
-                      } />
                       
                       <Route path="board" element={<BookingBoard />} />
                       <Route path="bookings" element={<BookingTable />} />
                       <Route path="rooms" element={<RoomInventory />} />
                       <Route path="guests" element={<Card className="border-none shadow-md"><CardContent className="pt-6"><GuestTable /></CardContent></Card>} />
-                      <Route path="folio" element={<FolioView bookingId={bookings[0]?._id} />} />
                       <Route path="maintenance" element={<MaintenanceTickets />} />
                       <Route path="housekeeping" element={<HousekeepingBoard />} />
-                      <Route path="reports" element={<PerformanceReport />} />
+                      <Route path="analytics" element={<AnalyticsDashboard />} />
                       <Route path="settings" element={<HotelSettings />} />
                       <Route path="*" element={<Navigate to="/dashboard/board" replace />} />
                   </Routes>
@@ -199,32 +138,7 @@ function DashboardContent() {
   )
 }
 
-function RoomStatusBars() {
-  const { rooms } = useBookings()
-  const types = ['Standard', 'Deluxe', 'Suite', 'Penthouse', 'Presidential']
-  return (
-    <>
-      {types.map(type => {
-        const typeRooms = rooms.filter(r => r.roomType === type)
-        const occupied = typeRooms.filter(r => r.status === 'occupied').length
-        const pct = typeRooms.length > 0 ? Math.round((occupied / typeRooms.length) * 100) : 0
-        if (typeRooms.length === 0) return null
-        return (
-          <div key={type} className="space-y-2">
-            <div className="flex justify-between text-xs font-bold">
-              <span>{type} ({occupied}/{typeRooms.length})</span>
-              <span>{pct}%</span>
-            </div>
-            <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-              <div className="h-full bg-primary transition-all duration-500 rounded-full" style={{ width: `${pct}%` }} />
-            </div>
-          </div>
-        )
-      })}
-      {rooms.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No rooms added yet</p>}
-    </>
-  )
-}
+
 
 
 

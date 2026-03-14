@@ -120,7 +120,7 @@ export function CashierReport() {
                 </div>
                 <div className="mt-3 md:mt-4">
                   <p className="text-[8px] md:text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight">{stat.label}</p>
-                  <p className="text-sm md:text-2xl font-black mt-1 tracking-tight">₹{Math.round(stat.value).toLocaleString()}</p>
+                  <p className="text-sm md:text-2xl font-black mt-1 tracking-tight">₹{Math.round(stat.value).toLocaleString('en-IN')}</p>
                 </div>
               </CardContent>
             </Card>
@@ -169,7 +169,7 @@ export function CashierReport() {
                             </Badge>
                           </div>
                         </TableCell>
-                        <TableCell className="text-right font-black text-xs">₹{tx.amount.toLocaleString()}</TableCell>
+                        <TableCell className="text-right font-black text-xs">₹{tx.amount.toLocaleString('en-IN')}</TableCell>
                       </TableRow>
                     ))
                   )}
@@ -197,7 +197,7 @@ export function CashierReport() {
                          </Badge>
                       </div>
                       <div className="text-right">
-                         <p className="text-sm font-black text-slate-900">₹{tx.amount.toLocaleString()}</p>
+                         <p className="text-sm font-black text-slate-900">₹{tx.amount.toLocaleString('en-IN')}</p>
                          <p className="text-[9px] font-medium text-slate-400">{tx.time}</p>
                       </div>
                    </div>

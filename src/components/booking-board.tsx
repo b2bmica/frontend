@@ -1157,7 +1157,7 @@ export function BookingBoard() {
                                     <div className={cn("p-1.5 h-full flex items-center justify-between min-w-0 overflow-hidden", isExpired && "opacity-80")}>
                                       {isExpired ? (
                                         <div className="flex items-center gap-1.5 w-full">
-                                          <div className="text-[9px] font-black uppercase tracking-tighter truncate flex-1">
+                                          <div className="text-[9px] font-bold uppercase tracking-tighter truncate flex-1">
                                             {getGuest(booking)?.name || 'EXP'}
                                           </div>
                                           <div className="shrink-0 bg-red-100 text-red-600 border border-red-200 px-1 py-0.5 rounded text-[6px] font-black uppercase">EXP</div>
@@ -1166,7 +1166,7 @@ export function BookingBoard() {
                                         <div className="flex flex-col justify-between h-full w-full">
                                           <div className="flex items-start justify-between gap-1 overflow-visible">
                                             <div className="min-w-0 flex-1">
-                                              <div className="text-[10px] md:text-[11px] font-black uppercase tracking-tighter truncate leading-none mb-0.5">
+                                              <div className="text-[10px] md:text-[11px] font-bold uppercase tracking-tighter truncate leading-none mb-0.5">
                                                 {getGuest(booking)?.name || 'ROOM BLOCKED'}
                                               </div>
                                               {(booking.adults || booking.children) && !isBlock && (

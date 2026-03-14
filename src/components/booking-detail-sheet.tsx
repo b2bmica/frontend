@@ -13,6 +13,8 @@ import {
   Trash2,
   CheckCircle2,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Loader2,
   X,
   Pencil,
@@ -36,7 +38,7 @@ interface BookingDetailSheetProps {
 
 export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDetailSheetProps) {
   const { hotel } = useAuth();
-  const { cancelBooking, checkIn, checkOut, updateBooking, rooms, updateRoomStatus, bookings } = useBookings();
+  const { cancelBooking, checkIn, checkOut, updateBooking, rooms, updateRoomStatus, bookings, guests } = useBookings();
   
   const [isActioning, setIsActioning] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -47,13 +49,21 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
   const [showDirtyRoomPrompt, setShowDirtyRoomPrompt] = useState(false);
   const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
   const [groupActionLoading, setGroupActionLoading] = useState(false);
+  const [cancelWholeGroup, setCancelWholeGroup] = useState(false);
+  const [isEditingGroup, setIsEditingGroup] = useState(false);
+  const [showGroupActionConfirm, setShowGroupActionConfirm] = useState<'check-in' | 'check-out' | null>(null);
+  const [showFinancialBreakdown, setShowFinancialBreakdown] = useState(false);
 
   // Reset internal navigation when the primary booking prop changes
   useEffect(() => {
     setActiveBookingId(null);
+    setShowBalanceSettle(false);
+    setShowPaymentSelection(false);
+    setShowFinancialBreakdown(false);
   }, [booking?._id]);
   // ─── Hooks (Must be above early return) ───────────────────────────────────
   const currentBooking = activeBookingId ? bookings.find(b => b._id === activeBookingId) : booking;
+  const isGroupBooking = !!currentBooking?.groupId;
   const [now, setNow] = useState(Date.now());
 
   // Live countdown update
@@ -72,13 +82,14 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
   const room = liveRoom || bookingRoom; 
   const guest = useMemo(() => {
     if (!currentBooking) return null;
-    return typeof currentBooking.guestId === 'object' ? currentBooking.guestId : null;
-  }, [currentBooking]);
+    if (typeof currentBooking.guestId === 'object') return currentBooking.guestId;
+    return guests.find(g => g._id === currentBooking.guestId) || null;
+  }, [currentBooking, guests]);
 
   const sortedGroupRooms = useMemo(() => {
     if (!currentBooking?.isGroup || !currentBooking.groupId) return [];
     return bookings
-      .filter(b => b.groupId === currentBooking.groupId)
+      .filter(b => b.groupId === currentBooking.groupId && b.status !== 'cancelled' && b.status !== 'expired')
       .sort((a, b) => {
         const rA = typeof a.roomId === 'object' ? a.roomId.roomNumber : rooms.find(r => r._id === a.roomId)?.roomNumber || '';
         const rB = typeof b.roomId === 'object' ? b.roomId.roomNumber : rooms.find(r => r._id === b.roomId)?.roomNumber || '';
@@ -115,11 +126,58 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
       roomPrice: rp,
       baseSubtotal: bs,
       extraAdults: ea,
-      extraPersonCharge: ep
+      extraPersonCharge: ep,
+      advancePayment: currentBooking.advancePayment || 0
     };
   }, [currentBooking, room, hotel?.settings?.taxConfig]);
 
   const { taxAmount, totalAmount, balance, nights, roomPrice, baseSubtotal, extraAdults, extraPersonCharge } = priceStats;
+
+  const groupPriceStats = useMemo(() => {
+    if (!isGroupBooking) return null;
+    let groupBase = 0, groupExtra = 0, groupAdvance = 0, groupTotal = 0, groupTax = 0;
+    
+    sortedGroupRooms.forEach(b => {
+      const n = Math.max(1, differenceInDays(new Date(b.checkout), new Date(b.checkin)));
+      const rp = b.roomPrice || rooms.find(r => r._id === (typeof b.roomId === 'object' ? b.roomId._id : b.roomId))?.price || 0;
+      const bs = rp * n;
+      const ea = Math.max(0, (b.adults || 0) - (b.baseOccupancy || 2));
+      const ep = ea * (b.extraPersonPrice || 0) * n;
+      const sub = bs + ep;
+      
+      let tax = 0;
+      const tc = hotel?.settings?.taxConfig;
+      if (tc?.enabled && tc.cgst !== undefined && tc.sgst !== undefined && sub > 0) {
+        tax = (sub * (tc.cgst || 0) / 100) + (sub * (tc.sgst || 0) / 100);
+      }
+      const total = sub + tax;
+      
+      groupBase += bs;
+      groupExtra += ep;
+      groupAdvance += (b.advancePayment || 0);
+      groupTax += tax;
+      groupTotal += total;
+    });
+
+    return {
+      baseSubtotal: groupBase,
+      extraPersonCharge: groupExtra,
+      taxAmount: groupTax,
+      totalAmount: groupTotal,
+      advancePayment: groupAdvance,
+      balance: groupTotal - groupAdvance
+    };
+  }, [isGroupBooking, sortedGroupRooms, rooms, hotel?.settings?.taxConfig]);
+
+  const activeStats = groupPriceStats || priceStats;
+
+  const displaySpecialRequests = useMemo(() => {
+    if (!currentBooking?.specialRequests) return null;
+    let text = currentBooking.specialRequests;
+    text = text.replace(/GROUP:[^.]*\.\s*/g, '');
+    text = text.replace(/Room Guest:[^.]*\.\s*/g, '');
+    return text.trim() || null;
+  }, [currentBooking?.specialRequests]);
 
   const getEffectiveStatus = () => {
     const type = currentBooking?.reservationType || currentBooking?.bookingType;
@@ -188,6 +246,40 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
     }
   };
 
+  const handleGroupSettle = async (method: string) => {
+    setGroupActionLoading(true);
+    try {
+      const payments = [];
+      for (const b of sortedGroupRooms) {
+         const n = Math.max(1, differenceInDays(new Date(b.checkout), new Date(b.checkin)));
+         const rp = b.roomPrice || rooms.find(r => r._id === (typeof b.roomId === 'object' ? b.roomId._id : b.roomId))?.price || 0;
+         const bs = rp * n;
+         const ea = Math.max(0, (b.adults || 0) - (b.baseOccupancy || 2));
+         const ep = ea * (b.extraPersonPrice || 0) * n;
+         const sub = bs + ep;
+         let tax = 0;
+         const tc = hotel?.settings?.taxConfig;
+         if (tc?.enabled && tc.cgst !== undefined && tc.sgst !== undefined && sub > 0) {
+           tax = (sub * (tc.cgst || 0) / 100) + (sub * (tc.sgst || 0) / 100);
+         }
+         const total = sub + tax;
+         const bal = total - (b.advancePayment || 0);
+         
+         if (bal > 0) {
+           payments.push(updateBooking(b._id, { advancePayment: (b.advancePayment || 0) + bal, paymentMethod: method as 'cash' | 'card' | 'upi' }));
+         }
+      }
+      await Promise.all(payments);
+      setIsSettled(true);
+      await new Promise(r => setTimeout(r, 1500));
+      setIsSettled(false);
+      setShowBalanceSettle(false);
+    } catch (e) {
+      console.error(e);
+    }
+    setGroupActionLoading(false);
+  };
+
   const handleInitialCheckIn = () => {
     if (room?.status === 'dirty') {
       setShowDirtyRoomPrompt(true);
@@ -224,384 +316,514 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
 
   const taxConfig = hotel?.settings?.taxConfig;
 
+  const handleGroupManagementAction = async (type: 'check-in' | 'check-out' | 'settle-checkout', method?: string) => {
+    setGroupActionLoading(true);
+    try {
+      if (type === 'check-in') {
+        const toCheckIn = sortedGroupRooms.filter(b => b.status === 'reserved');
+        await Promise.all(toCheckIn.map(b => updateBooking(b._id, { status: 'checked-in' })));
+      } else if (type === 'check-out') {
+        const toCheckOut = sortedGroupRooms.filter(b => b.status === 'checked-in');
+        await Promise.all(toCheckOut.map(b => updateBooking(b._id, { status: 'checked-out' })));
+      } else if (type === 'settle-checkout') {
+        const payments = [];
+        for (const b of sortedGroupRooms) {
+           const n = Math.max(1, differenceInDays(new Date(b.checkout), new Date(b.checkin)));
+           const rp = b.roomPrice || rooms.find(r => r._id === (typeof b.roomId === 'object' ? b.roomId._id : b.roomId))?.price || 0;
+           const bs = rp * n;
+           const ea = Math.max(0, (b.adults || 0) - (b.baseOccupancy || 2));
+           const ep = ea * (b.extraPersonPrice || 0) * n;
+           const sub = bs + ep;
+           let tax = 0;
+           const tc = hotel?.settings?.taxConfig;
+           if (tc?.enabled && tc.cgst !== undefined && tc.sgst !== undefined && sub > 0) {
+             tax = (sub * (tc.cgst || 0) / 100) + (sub * (tc.sgst || 0) / 100);
+           }
+           const total = sub + tax;
+           const bal = total - (b.advancePayment || 0);
+           
+           payments.push(updateBooking(b._id, { 
+              advancePayment: (b.advancePayment || 0) + Math.max(0, bal), 
+              paymentMethod: method as 'cash' | 'card' | 'upi',
+              status: 'checked-out'
+           }));
+        }
+        await Promise.all(payments);
+      }
+      
+      setShowGroupActionConfirm(null);
+      if (type === 'settle-checkout') {
+         setIsSettled(true);
+         await new Promise(r => setTimeout(r, 1500));
+         setIsSettled(false);
+         setShowPaymentSelection(false);
+      }
+      onClose();
+    } catch (e) {
+      console.error(e);
+    }
+    setGroupActionLoading(false);
+  };
+
   return (
     <Sheet open={!!booking} onOpenChange={() => { onClose(); setActiveBookingId(null); }}>
-      <SheetContent className="w-full sm:max-w-md p-0 overflow-hidden flex flex-col border-none shadow-2xl">
-        {/* Compact Header */}
-        <div className="p-6 border-b bg-muted/20">
-          {bookingData.isGroup && (
-            <div className="mb-4 p-3 bg-primary/5 rounded-2xl border border-primary/10">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <LinkIcon className="h-3.5 w-3.5 text-primary" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">Group Booking</span>
-                </div>
-                <div className="flex gap-1">
-                   {/* Group Bulk Actions Trigger */}
-                   {bookingData.status === 'reserved' && (
-                     <Button size="icon" variant="ghost" disabled={groupActionLoading} className="h-6 w-6 rounded-md hover:bg-emerald-100 hover:text-emerald-700" title="Check-in All" onClick={() => handleBulkAction(checkIn, sortedGroupRooms.filter(b => b.status === 'reserved'))}>
-                       {groupActionLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-                     </Button>
-                   )}
-                   {bookingData.status === 'checked-in' && balance <= 0 && (
-                     <Button size="icon" variant="ghost" disabled={groupActionLoading} className="h-6 w-6 rounded-md hover:bg-blue-100 hover:text-blue-700" title="Checkout All" onClick={() => handleBulkAction(checkOut, sortedGroupRooms.filter(b => b.status === 'checked-in'))}>
-                       {groupActionLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                     </Button>
-                   )}
-                </div>
-              </div>
-              <h3 className="text-sm font-black text-slate-800 mb-2 truncate" title={bookingData.groupName}>{bookingData.groupName}</h3>
-              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
-                {sortedGroupRooms.map(gb => {
-                  const rNum = typeof gb.roomId === 'object' ? gb.roomId.roomNumber : rooms.find(r => r._id === gb.roomId)?.roomNumber;
-                  const isActive = (activeBookingId === gb._id) || (!activeBookingId && gb._id === booking?._id);
-                  return (
-                    <button
-                      key={gb._id}
-                      onClick={() => setActiveBookingId(gb._id)}
-                      className={cn(
-                        "px-2 py-1 rounded-lg text-[10px] font-black border-2 transition-all shrink-0",
-                        isActive
-                          ? "bg-primary text-white border-primary shadow-sm"
-                          : "bg-white text-slate-400 border-slate-100 hover:border-primary/30 hover:text-primary"
+      <SheetContent className="w-full sm:max-w-2xl lg:max-w-4xl p-0 overflow-hidden flex flex-col border-none shadow-2xl bg-white focus:outline-none">
+        <div className="flex-1 overflow-y-auto scrollbar-hide print:hidden bg-slate-50/10">
+          <div className="grid grid-cols-1 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
+            {/* Left Panel: Primary Details (3/5 width) */}
+            <div className="lg:col-span-3 p-5 sm:p-6 space-y-6">
+              
+              {/* Header Info */}
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col gap-2 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary" className="bg-slate-100 text-slate-500 border-none text-[10px] font-black uppercase tracking-widest px-2.5 h-6">
+                         #{bookingData._id?.slice(-6).toUpperCase()}
+                      </Badge>
+                      {isGroupBooking && (
+                        <Badge className="bg-indigo-600 text-white border-none text-[9px] font-black uppercase h-6 px-2.5 shadow-sm shadow-indigo-200">Group</Badge>
                       )}
-                    >
-                      Room {rNum}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {bookingData.reservationType === 'enquiry' || bookingData.bookingType === 'enquiry' ? (
-            <div className={cn("mb-4 p-3 rounded-2xl border flex items-center justify-between", isEnquiryExpired ? "bg-red-50 border-red-100" : "bg-amber-50 border-amber-100")}>
-              <div className="flex items-center gap-2">
-                <Clock className={cn("h-4 w-4", isEnquiryExpired ? "text-red-500" : "text-amber-500")} />
-                <div>
-                  <p className={cn("text-[9px] font-black uppercase tracking-widest", isEnquiryExpired ? "text-red-600" : "text-amber-600")}>
-                    {isEnquiryExpired ? 'Hold Period Expired' : 'Tentative Hold'}
-                  </p>
-                  <p className="text-[10px] font-bold text-slate-500">
-                    {isEnquiryExpired ? 'Hold ended on' : 'Auto-release in'}: <span className="text-slate-900">{isEnquiryExpired ? format(new Date(bookingData.enquiryExpiresAt!), 'MMM dd, HH:mm') : formatCountdownStr(bookingData.enquiryExpiresAt!)}</span>
-                  </p>
-                </div>
-              </div>
-              {!isEnquiryExpired && (
-                <Badge className="bg-amber-500 text-white font-black text-[9px] animate-pulse">LIVE</Badge>
-              )}
-            </div>
-          ) : (isBlock) && (
-            <div className="mb-4 p-5 rounded-[24px] bg-slate-950 text-white flex items-start gap-4 shadow-xl shadow-slate-200 border-b-4 border-slate-800">
-              <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0 border border-white/5">
-                <Lock className="h-5 w-5 text-white" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Block Reason</p>
-                <p className="text-base font-bold text-white leading-tight">
-                  {bookingData.blockReason || 'General Maintenance'}
-                </p>
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 border-primary/20 text-primary">
-                Ref: #{bookingData._id?.slice(-6).toUpperCase()}
-              </Badge>
-              {(bookingData.bookingType === 'enquiry' || bookingData.bookingType === 'block') && (
-                <Badge className={cn("text-[9px] font-black uppercase tracking-widest px-2", bookingData.bookingType === 'enquiry' ? "bg-amber-100 text-amber-700 hover:bg-amber-100" : "bg-slate-100 text-slate-700 hover:bg-slate-100")}>
-                  {bookingData.bookingType}
-                </Badge>
-              )}
-            </div>
-            <div className={cn("px-2.5 py-0.5 rounded-full text-[10px] font-black capitalize tracking-tighter flex items-center gap-1.5", config.color, config.bgColor)}>
-              <config.icon className="h-3 w-3" /> {config.label}
-            </div>
-          </div>
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-black tracking-tight flex items-center gap-2">
-                 {(bookingData.reservationType === 'block' || bookingData.bookingType === 'block') ? 'Room Block' : 
-                  (bookingData.reservationType === 'enquiry' || bookingData.bookingType === 'enquiry') ? 'Enquiry Details' : 
-                  'Booking Details'}
-              </h2>
-            </div>
-            <div className="flex flex-col gap-1.5 mt-1">
-              <h3 className="text-base font-bold text-muted-foreground flex items-center gap-2">
-                 Room {room?.roomNumber || '[Deleted]'} <span className="text-muted-foreground/30 font-normal">/</span> {room?.roomType || 'Asset Removed'}
-              </h3>
-              <p className="text-muted-foreground font-medium text-xs flex items-center gap-2">
-                {nights > 0 ? `${nights} Night${nights > 1 ? 's' : ''}` : 'Day Use'} • {format(new Date(bookingData.checkin), 'MMM dd')} - {format(new Date(bookingData.checkout), 'MMM dd')}
-              </p>
-            </div>
-            
-            <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-x-4 gap-y-1 flex-wrap mt-2 pt-2 border-t border-slate-100">
-               {bookingData.createdAt && (
-                 <div className="flex items-center gap-1.5">
-                   <Clock className="h-2.5 w-2.5 text-slate-400" /> {bookingData.reservationType === 'block' ? 'Blocked on' : 'Booked on'}: <span className="text-slate-900 font-extrabold">{format(new Date(bookingData.createdAt), 'dd MMM, HH:mm')}</span>
-                 </div>
-               )}
-               {bookingData.createdBy && (
-                 <div className="flex items-center gap-1.5 font-black">
-                   <ShieldCheck className="h-3 w-3 text-primary" /> 
-                   Staff: <span className="text-slate-900">{typeof bookingData.createdBy === 'object' ? bookingData.createdBy.name : 'System'}</span>
-                 </div>
-               )}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide print:hidden">
-          {/* Guest Information */}
-          {(bookingData.reservationType !== 'block' && bookingData.bookingType !== 'block') && (
-            <div className="space-y-3">
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground px-1">
-                {bookingData.reservationType === 'enquiry' ? 'Enquirer Details' : 'Traveler Details'}
-              </h3>
-              <button 
-                onClick={() => { if (guest?._id && onOpenGuest) onOpenGuest(guest._id); }}
-                className="w-full p-4 rounded-2xl bg-muted/30 border border-primary/5 group transition-all hover:bg-white hover:shadow-md hover:border-primary/20 flex items-center gap-4 text-left"
-              >
-                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                  <User className="h-5 w-5" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-bold text-base tracking-tight group-hover:text-primary group-hover:underline underline-offset-4 transition-all">{guest?.name || 'Guest'}</p>
-                  <p className="text-[11px] text-muted-foreground font-bold tracking-tight">{guest?.phone} · {guest?.email || 'No email'}</p>
-                </div>
-                <div className="h-8 w-8 rounded-full group-hover:bg-muted flex items-center justify-center transition-colors">
-                  <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
-                </div>
-              </button>
-            </div>
-          )}
-
-          <Separator className="opacity-50" />
-
-          {/* Billing Summary */}
-          {(bookingData.reservationType !== 'block' && bookingData.bookingType !== 'block') && (
-            <div className="space-y-3">
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground px-1">Financial Data</h3>
-              <div className="rounded-2xl bg-card border shadow-sm p-5 space-y-4">
-                <div className="space-y-2.5">
-                  <div className="flex justify-between text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                    <span>Base Rate ({nights}N × ₹{roomPrice.toLocaleString()})</span>
-                    <span className="text-foreground">₹{baseSubtotal.toLocaleString()}</span>
+                    </div>
+                    <h2 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 leading-tight">
+                      {isBlock ? 'Room Block' : isEnquiry ? 'Enquiry Hold' : 'Booking Details'}
+                    </h2>
                   </div>
-                  {extraAdults > 0 && (
-                    <div className="flex justify-between text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                      <span>Extra Person ({extraAdults} × ₹{bookingData.extraPersonPrice})</span>
-                      <span className="text-foreground">+ ₹{extraPersonCharge.toLocaleString()}</span>
+                  <div className="flex items-center gap-2 shrink-0 pt-1">
+                    <div className={cn(
+                      "px-2.5 py-1 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm border h-8",
+                      config.color, config.bgColor, "border-white/20"
+                    )}>
+                      <config.icon className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline-block">{config.label}</span>
                     </div>
-                  )}
-                  {taxConfig?.enabled && (
-                    <div className="flex justify-between text-[11px] font-bold text-orange-600 uppercase tracking-wider">
-                      <span>GST (CGST {taxConfig.cgst}% + SGST {taxConfig.sgst}%)</span>
-                      <span>+ ₹{taxAmount.toLocaleString()}</span>
-                    </div>
-                  )}
-                  {bookingData.advancePayment > 0 && (
-                    <div className="flex justify-between text-[11px] font-bold text-emerald-600 uppercase tracking-wider">
-                      <span>Advance Payment</span>
-                      <span>- ₹{bookingData.advancePayment.toLocaleString()}</span>
-                    </div>
-                  )}
-                </div>
-                <Separator />
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-[9px] font-black uppercase text-muted-foreground opacity-60">Closing Balance</p>
-                    <p className={cn("text-2xl font-black tracking-tighter", balance <= 0 ? 'text-emerald-600' : 'text-primary')}>
-                      ₹{balance.toLocaleString()}
-                    </p>
+                    <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
-                  {!isEnquiryExpired && balance > 0 ? (
-                    <div className="flex items-center gap-2">
-                      {!showBalanceSettle ? (
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => setShowBalanceSettle(true)}
-                          className="text-[10px] font-black uppercase tracking-widest h-8 px-4 border-emerald-200 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all shadow-sm"
-                        >
-                          Settle Balance
-                        </Button>
-                      ) : (
-                        <div className={cn(
-                          "flex items-center gap-1.5 p-1 rounded-xl animate-in fade-in slide-in-from-right-2 duration-300 min-h-10",
-                          isSettled ? "bg-emerald-500 text-white px-4" : "bg-emerald-600"
-                        )}>
-                          {isSettled ? (
-                            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest py-1">
-                              <CheckCircle2 className="h-4 w-4" /> Account Settled
-                            </div>
-                          ) : isActioning ? (
-                            <div className="flex items-center gap-3 px-3 py-1 text-white pr-4">
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              <span className="text-[9px] font-black uppercase tracking-widest opacity-80 whitespace-nowrap">Processing...</span>
-                            </div>
-                          ) : (
-                            <>
-                              <div className="flex bg-white/20 rounded-lg p-0.5 gap-0.5 relative overflow-hidden">
-                                {['cash', 'card', 'upi'].map((m) => (
-                                  <button
-                                    key={m}
-                                    onClick={() => {
-                                      handleAction((id) => updateBooking(id, { 
-                                        advancePayment: (bookingData.advancePayment || 0) + balance,
-                                        paymentMethod: m as 'cash' | 'card' | 'upi'
-                                      }), true);
-                                    }}
-                                    className="h-6 px-3 text-[8px] font-black uppercase rounded-md transition-all active:scale-95 bg-white text-emerald-600 shadow-sm hover:bg-white/90"
-                                  >
-                                    {m}
-                                  </button>
-                                ))}
-                              </div>
-                              <button 
-                                onClick={() => setShowBalanceSettle(false)} 
-                                className="p-1 text-white/60 hover:text-white ml-1"
-                              >
-                                <X className="h-3 w-3" />
-                              </button>
-                            </>
+                </div>
+
+                {/* Group Room Switcher */}
+                {isGroupBooking && (
+                  <div className="p-4 bg-white rounded-3xl border border-slate-100 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="h-7 w-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                          <Users className="h-3.5 w-3.5" />
+                        </div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Group: <span className="text-slate-900 ml-1">{bookingData.groupName}</span></p>
+                      </div>
+                      <Button 
+                        size="sm" variant="ghost" className="h-6 text-[9px] font-black text-indigo-600 hover:bg-indigo-50 px-2 rounded-lg"
+                        onClick={() => { setIsEditingGroup(true); setShowEditModal(true); }}
+                      >
+                        <Pencil className="h-2.5 w-2.5 mr-1" /> Edit Group
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {sortedGroupRooms.map(gb => {
+                        const rNum = typeof gb.roomId === 'object' ? gb.roomId.roomNumber : rooms.find(r => r._id === gb.roomId)?.roomNumber;
+                        const isActive = (activeBookingId === gb._id) || (!activeBookingId && gb._id === booking?._id);
+                        return (
+                          <button
+                            key={gb._id}
+                            onClick={() => setActiveBookingId(gb._id)}
+                            className={cn(
+                              "px-3 py-1.5 rounded-xl text-[10px] font-black transition-all border-2",
+                              isActive
+                                ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-100"
+                                : "bg-white border-slate-100 text-slate-400 hover:border-slate-300"
+                            )}
+                          >
+                            #{rNum}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Main Stay Detail Card */}
+                <div className="bg-white rounded-3xl border border-slate-100 p-4 sm:p-5 shadow-sm space-y-4 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full -mr-16 -mt-16 z-0" />
+                  
+                  <div className="flex items-start justify-between relative z-10">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-900 font-black text-xs">
+                        {room?.roomNumber}
+                      </div>
+                      <div>
+                        <h3 className="text-base font-black text-slate-900 leading-none mb-1">{room?.roomType}</h3>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Selected Unit</span>
+                          {!isBlock && (
+                            <div className="h-1 w-1 rounded-full bg-slate-200" />
                           )}
+                          {!isBlock && (
+                            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest bg-indigo-50 px-1.5 rounded">{bookingData.planType} Plan</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3 relative z-10">
+                    <div className="flex-1 bg-slate-50 p-3.5 rounded-2xl space-y-1">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">Check-in</p>
+                      <div className="flex items-baseline gap-2">
+                        <p className="text-sm font-black text-slate-900">{format(new Date(bookingData.checkin), 'dd MMM')}</p>
+                        <p className="text-[11px] font-bold text-slate-500 whitespace-nowrap">{bookingData.checkinTime}</p>
+                      </div>
+                    </div>
+                    <div className="flex-1 bg-slate-50 p-3.5 rounded-2xl space-y-1">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">Check-out</p>
+                      <div className="flex items-baseline gap-2">
+                        <p className="text-sm font-black text-slate-900">{format(new Date(bookingData.checkout), 'dd MMM')}</p>
+                        <p className="text-[11px] font-bold text-slate-500 whitespace-nowrap">{bookingData.checkoutTime}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-50 relative z-10">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-1.5 whitespace-nowrap">
+                         <Timer className="h-3.5 w-3.5 text-slate-400" />
+                         <span className="text-xs font-black text-slate-700">{nights} {nights === 1 ? 'Night' : 'Nights'}</span>
+                      </div>
+                      {!isBlock && (
+                        <div className="flex items-center gap-1.5 whitespace-nowrap">
+                           <Users className="h-3.5 w-3.5 text-slate-400" />
+                           <span className="text-xs font-black text-slate-700">{bookingData.adults}A + {bookingData.children}C</span>
                         </div>
                       )}
                     </div>
-                  ) : (
-                    <Badge variant="outline" className={cn("text-[10px] font-black uppercase tracking-tight h-7 px-3 border-emerald-200 text-emerald-700 bg-emerald-50/50", isEnquiryExpired && "border-red-200 text-red-600 bg-red-50")}>
-                      {isEnquiryExpired ? 'Enquiry Expired' : 'Full Amount Settled'}
-                    </Badge>
-                  )}
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 ml-auto">
+                       <Clock className="h-3.5 w-3.5" />
+                       <span className="whitespace-nowrap">Updated {bookingData.updatedAt ? format(new Date(bookingData.updatedAt), 'HH:mm') : '-'}</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
 
-          {(bookingData.specialRequests || (bookingData.planType === 'custom' && bookingData.planCustomText)) && (
-            <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-100/50 space-y-2">
-              <div className="flex items-center gap-2 text-amber-600">
-                <MessageSquare className="h-3.5 w-3.5" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Notes & Special Requests</span>
-              </div>
-              {bookingData.planType === 'custom' && bookingData.planCustomText && (
-                <p className="text-xs font-bold text-amber-900 bg-white/60 p-2 rounded-lg border border-amber-100">
-                  <span className="opacity-60 font-black mr-2">PLAN:</span> {bookingData.planCustomText}
-                </p>
-              )}
-              {bookingData.specialRequests && (
-                <p className="text-xs font-medium text-amber-800 leading-relaxed italic">"{bookingData.specialRequests}"</p>
-              )}
-            </div>
-          )}
+                {isEnquiry && (
+                  <div className={cn(
+                    "p-4 rounded-[20px] border flex items-center justify-between",
+                    isEnquiryExpired ? "bg-red-50 border-red-100 text-red-600" : "bg-amber-50 border-amber-100 text-amber-600"
+                  )}>
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "h-8 w-8 rounded-full flex items-center justify-center",
+                        isEnquiryExpired ? "bg-red-100" : "bg-amber-100"
+                      )}>
+                        <Clock className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest">{isEnquiryExpired ? 'Expired' : 'Expires In'}</p>
+                        <p className="text-xs font-black">{isEnquiryExpired ? 'Registration Closed' : formatCountdownStr(bookingData.enquiryExpiresAt!)}</p>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className={cn("border-current text-[8px] font-black")}>
+                      HOLD
+                    </Badge>
+                  </div>
+                )}
 
-          {!isBlock && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-2xl bg-muted/30 border border-primary/5 flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-background text-primary"><Users className="h-4 w-4" /></div>
-                <div><p className="text-[8px] font-black uppercase text-muted-foreground">Occupancy</p><p className="text-xs font-black">{bookingData.adults} Ad / {bookingData.children} Ch</p></div>
-              </div>
-              <div className="p-3 rounded-2xl bg-muted/30 border border-primary/5 flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-background text-primary"><IndianRupee className="h-4 w-4" /></div>
-                <div><p className="text-[8px] font-black uppercase text-muted-foreground">Source</p><p className="text-xs font-black capitalize">{bookingData.bookingSource}</p></div>
+                {isBlock && (
+                  <div className="p-4 rounded-[20px] bg-slate-900 text-white shadow-xl shadow-slate-200 flex items-center gap-4">
+                    <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center">
+                       <Lock className="h-5 w-5 text-white/60" />
+                    </div>
+                    <div className="flex-1">
+                       <p className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-0.5">Maintenance Context</p>
+                       <p className="text-sm font-black text-white">{bookingData.blockReason || 'General Maintenance'}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Traveler Card */}
+                {!isBlock && (
+                  <div className="space-y-2.5">
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">Primary Traveler</h3>
+                    <button 
+                      onClick={() => { if (guest?._id && onOpenGuest) onOpenGuest(guest._id); }}
+                      className="w-full p-3.5 rounded-2xl bg-white border border-slate-100 group transition-all hover:border-primary/30 hover:shadow-md flex items-center gap-3.5 text-left"
+                    >
+                      <div className="h-11 w-11 shrink-0 rounded-xl bg-primary/5 text-primary group-hover:bg-primary group-hover:text-white flex items-center justify-center transition-all">
+                        <User className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-slate-900 text-sm sm:text-base tracking-tight truncate">{guest?.name || 'Guest Details Missing'}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                           <p className="text-[11px] text-slate-400 font-bold tracking-tight">{guest?.phone || 'No phone'}</p>
+                           {guest?.email && <div className="h-1 w-1 rounded-full bg-slate-200" />}
+                           {guest?.email && <p className="text-[11px] text-slate-400 font-bold tracking-tight truncate max-w-[120px]">{guest.email}</p>}
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary transition-colors" />
+                    </button>
+                  </div>
+                )}
+                
+                {displaySpecialRequests && (
+                  <div className="p-4 rounded-[20px] bg-amber-50/50 border border-transparent text-amber-800 space-y-1 relative overflow-hidden">
+                     <div className="absolute top-0 left-0 w-1 h-full bg-amber-200" />
+                     <p className="flex items-center gap-2 font-black uppercase tracking-widest text-[10px] opacity-70">
+                       <MessageSquare className="h-3.5 w-3.5" /> Note
+                     </p>
+                     <p className="text-sm font-bold italic leading-relaxed">"{displaySpecialRequests}"</p>
+                  </div>
+                )}
               </div>
             </div>
-          )}
-        </div>
+
+            {/* Right Panel: Financials & Actions (2/5 width) */}
+            <div className="lg:col-span-2 p-5 sm:p-6 space-y-6 flex flex-col lg:h-full lg:overflow-y-auto bg-white border-l border-slate-50 shadow-[inset_1px_0_0_rgba(0,0,0,0.02)]">
+              {!isBlock && (
+                <div className="space-y-4 flex-1">
+                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">
+                    {isGroupBooking ? `Group Financials (${sortedGroupRooms.length} Units)` : 'Settlement Details'}
+                  </h3>
+                  <div className="rounded-[22px] bg-white border border-slate-100 shadow-xl shadow-slate-100/50 p-4.5 space-y-4">
+                      {/* Main Due Display - Refined for Space */}
+                      <div className="flex flex-col gap-4">
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.1em] flex items-center gap-1.5">
+                            <IndianRupee className="h-3 w-3" /> Net Balance Due
+                          </p>
+                          <div className="flex items-baseline gap-2">
+                             <span className={cn(
+                               "text-2xl sm:text-3xl font-black tracking-tighter tabular-nums leading-none",
+                               activeStats.balance <= 0 ? 'text-emerald-500' : 'text-slate-900'
+                             )}>
+                               ₹{activeStats.balance.toLocaleString('en-IN')}
+                             </span>
+                             {activeStats.balance > 0 && (
+                               <Badge variant="outline" className="text-[9px] font-black text-amber-600 border-amber-200 bg-amber-50 rounded-lg py-0">PENDING</Badge>
+                             )}
+                          </div>
+                        </div>
+
+                        {!isEnquiryExpired && bookingData.status !== 'cancelled' && activeStats.balance > 0 && (
+                          <div className="w-full">
+                            {!showBalanceSettle ? (
+                              <Button 
+                                size="lg" 
+                                variant="default"
+                                onClick={() => setShowBalanceSettle(true)}
+                                className="w-full h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/10 active:scale-95 group"
+                              >
+                                Settle Balance
+                                <ChevronRight className="ml-2 h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
+                              </Button>
+                            ) : (
+                               <div className="flex flex-col gap-3 animate-in fade-in zoom-in-95 duration-200">
+                                 <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest text-center">Select Payment Method</p>
+                                 <div className="flex items-center gap-1.5 p-1.5 rounded-[18px] bg-emerald-600 shadow-lg shadow-emerald-100">
+                                   {['cash', 'card', 'upi'].map((m) => (
+                                    <button
+                                      key={m}
+                                      onClick={() => {
+                                        if(isGroupBooking) handleGroupSettle(m);
+                                        else handleAction((id) => updateBooking(id, { advancePayment: (bookingData!.advancePayment || 0) + activeStats.balance, paymentMethod: m as any }), true);
+                                      }}
+                                      className="flex-1 h-8.5 text-[10px] font-black uppercase rounded-[12px] bg-white text-emerald-700 shadow-sm hover:translate-y-[-1px] active:translate-y-[0px] transition-all"
+                                    >
+                                      {m}
+                                    </button>
+                                  ))}
+                                  <button onClick={() => setShowBalanceSettle(false)} className="px-2.5 text-white/70 hover:text-white transition-colors"><X className="h-4 w-4" /></button>
+                                </div>
+                               </div>
+                            )}
+                          </div>
+                        )}
+                      {activeStats.balance <= 0 && (
+                        <div className="bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-xl flex items-center gap-2">
+                           <CheckCircle2 className="h-4 w-4" />
+                           <span className="text-[10px] font-black uppercase tracking-widest">Paid In Full</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <Separator className="bg-slate-50" />
+
+                    {/* Expandable Breakdown */}
+                    <div className="space-y-3">
+                       <button 
+                         onClick={() => setShowFinancialBreakdown(!showFinancialBreakdown)}
+                         className="flex items-center justify-between w-full group py-1"
+                       >
+                         <span className="text-[11px] font-black uppercase tracking-widest text-slate-500 group-hover:text-primary transition-colors">Cost Breakdown</span>
+                         {showFinancialBreakdown ? <ChevronUp className="h-4 w-4 text-slate-300" /> : <ChevronDown className="h-4 w-4 text-slate-300" />}
+                       </button>
+
+                       {showFinancialBreakdown && (
+                         <div className="space-y-3 pt-1 animate-in fade-in slide-in-from-top-2 duration-300">
+                           <div className="flex justify-between text-[11px] font-bold text-slate-600 uppercase tracking-widest bg-slate-50/50 p-2.5 rounded-xl">
+                             <span>Base Accomodation</span>
+                             <span>₹{activeStats.baseSubtotal.toLocaleString('en-IN')}</span>
+                           </div>
+                           {activeStats.extraPersonCharge > 0 && (
+                             <div className="flex justify-between text-[11px] font-bold text-slate-600 uppercase tracking-widest px-2.5">
+                               <span>Extra Pax Surcharge</span>
+                               <span>+ ₹{activeStats.extraPersonCharge.toLocaleString('en-IN')}</span>
+                             </div>
+                           )}
+                           {taxConfig?.enabled && (
+                             <div className="flex justify-between text-[11px] font-bold text-orange-500/80 uppercase tracking-widest px-2.5">
+                               <span>GST ({taxConfig.cgst + taxConfig.sgst}%)</span>
+                               <span>+ ₹{activeStats.taxAmount.toLocaleString('en-IN')}</span>
+                             </div>
+                           )}
+                           <div className="h-[1px] bg-slate-50 mx-2" />
+                           <div className="flex justify-between text-[11px] font-black text-slate-900 uppercase tracking-widest px-2.5">
+                             <span>Gross Total</span>
+                             <span>₹{(activeStats.totalAmount || 0).toLocaleString('en-IN')}</span>
+                           </div>
+                           {(activeStats.advancePayment || 0) > 0 && (
+                             <div className="flex justify-between text-[11px] font-black text-emerald-600 uppercase tracking-widest px-2.5">
+                               <span>Initial Advance</span>
+                               <span>- ₹{(activeStats.advancePayment || 0).toLocaleString('en-IN')}</span>
+                             </div>
+                           )}
+                         </div>
+                       )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+                {/* Internal History / Audit */}
+                <div className="space-y-3 pt-4 border-t border-slate-50">
+                   <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">Internal Reference</h3>
+                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
+                      <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50/50 border border-slate-100 transition-colors hover:bg-slate-50">
+                         <div className="h-7 w-7 shrink-0 rounded-lg bg-white border border-slate-100 flex items-center justify-center text-slate-400 shadow-sm">
+                            <Clock className="h-3 w-3" />
+                         </div>
+                         <div className="min-w-0">
+                            <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-0.5 whitespace-nowrap">Created On</p>
+                            <p className="text-[10px] font-bold text-slate-700 truncate">{bookingData.createdAt ? format(new Date(bookingData.createdAt!), 'dd MMM yyyy, HH:mm') : 'System Entry'}</p>
+                         </div>
+                      </div>
+                      <div className="flex items-center gap-3 p-3 rounded-2xl bg-white border border-slate-100 transition-colors hover:bg-slate-50">
+                         <div className="h-7 w-7 shrink-0 rounded-lg bg-primary/5 border border-primary/10 flex items-center justify-center text-primary shadow-sm">
+                            <ShieldCheck className="h-3 w-3" />
+                         </div>
+                         <div className="min-w-0">
+                            <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 mb-0.5 whitespace-nowrap">Authorised By</p>
+                            <p className="text-[10px] font-black text-slate-800 tracking-tight truncate">{typeof bookingData!.createdBy === 'object' ? (bookingData!.createdBy as any).name : 'System Manager'}</p>
+                         </div>
+                      </div>
+                    </div>
+                 </div>
+
+               {/* Quick Metadata */}
+               <div className="mt-auto pt-6 flex items-center gap-2 opacity-10 justify-center group grayscale hover:grayscale-0 transition-all text-slate-900/50">
+                  <Lock className="h-3 w-3" />
+                  <span className="text-[9px] font-black uppercase tracking-[0.4em]">Encrypted Data Store</span>
+               </div>
+              </div>
+            </div>
+          </div>
+
+
 
         {!isEnquiryExpired && (
-          <div className="p-4 bg-white border-t flex flex-col gap-2 relative z-10 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.03)]">
-            <div className="flex items-stretch gap-2 w-full h-11">
-              {(bookingData.status === 'reserved' || bookingData.status === 'checked-in' || ((bookingData.reservationType === 'block' || bookingData.bookingType === 'block') && bookingData.status !== 'cancelled')) && (
-                <Button 
+          <div className="p-3 bg-white border-t flex flex-col gap-2 relative z-10 shrink-0 shadow-[0_-4px_10px_rgba(0,0,0,0.03)]">
+            <div className="flex items-stretch gap-2 w-full h-10">
+              {(bookingData!.status === 'reserved' || bookingData!.status === 'checked-in' || ((bookingData!.reservationType === 'block' || bookingData!.bookingType === 'block') && bookingData!.status !== 'cancelled')) && (
+                <Button
                   variant="outline"
-                  className="w-11 h-11 p-0 rounded-xl border-2 text-slate-400 border-slate-100 hover:border-slate-300 hover:text-slate-600 transition-all active:scale-95 shrink-0"
+                  className="w-10 h-10 p-0 rounded-xl border-2 text-slate-400 border-slate-100 hover:border-slate-300 hover:text-slate-600 transition-all active:scale-95 shrink-0"
                   onClick={() => setShowEditModal(true)}
                 >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-              )}
-              
-              {bookingData.status === 'reserved' && (bookingData.reservationType === 'booking' || bookingData.bookingType === 'booking' || (!bookingData.reservationType && !bookingData.bookingType)) && (
-                <Button 
-                  className="flex-1 h-full rounded-xl font-black bg-blue-600 hover:bg-blue-700 text-[11px] uppercase tracking-wider shadow-lg shadow-blue-500/20 transition-all active:scale-95"
-                  onClick={handleInitialCheckIn}
-                  disabled={isActioning}
-                >
-                  {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                  Check-in Guest
+                  <Pencil className="h-3.5 w-3.5" />
                 </Button>
               )}
 
-              {(bookingData.reservationType === 'enquiry' || bookingData.bookingType === 'enquiry') && (
-                <Button 
-                  className="flex-1 h-full rounded-xl font-black bg-emerald-600 hover:bg-emerald-700 text-[11px] uppercase tracking-wider shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+              {bookingData!.status === 'reserved' && (bookingData!.reservationType === 'booking' || bookingData!.bookingType === 'booking' || (!bookingData!.reservationType && !bookingData!.bookingType)) && (
+                <Button
+                  className="flex-1 h-full rounded-xl font-black bg-blue-600 hover:bg-blue-700 text-[10px] uppercase tracking-wider shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+                  onClick={() => {
+                     if(isGroupBooking) setShowGroupActionConfirm('check-in');
+                     else handleInitialCheckIn();
+                  }}
+                  disabled={isActioning || groupActionLoading}
+                >
+                  {isActioning || groupActionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="mr-1.5 h-3.5 w-3.5" />}
+                  Check-in {isGroupBooking ? 'Group' : 'Guest'}
+                </Button>
+              )}
+
+              {(bookingData!.reservationType === 'enquiry' || bookingData!.bookingType === 'enquiry') && (
+                <Button
+                  className="flex-1 h-full rounded-xl font-black bg-emerald-600 hover:bg-emerald-700 text-[10px] uppercase tracking-wider shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
                   onClick={handleConvertEnquiry}
                   disabled={isActioning}
                 >
-                  {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                  {isActioning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />}
                   Confirm & Convert
                 </Button>
               )}
 
-              {bookingData.status === 'checked-in' && (
+              {bookingData!.status === 'checked-in' && (
                 <div className="flex-1 flex gap-2 min-w-0">
                   {!showPaymentSelection ? (
-                      <Button 
+                      <Button
                         className={cn(
-                          "flex-1 h-full rounded-xl font-black text-[11px] uppercase tracking-wider truncate shadow-lg transition-all active:scale-95",
-                          balance <= 0 
+                          "flex-1 h-full rounded-xl font-black text-[10px] sm:text-[11px] uppercase tracking-wider truncate shadow-lg transition-all active:scale-95",
+                          activeStats.balance <= 0
                             ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/20"
                             : "border-orange-200 text-orange-600 hover:bg-orange-600 hover:text-white"
                         )}
-                        variant={balance <= 0 ? "default" : "outline"}
+                        variant={activeStats.balance <= 0 ? "default" : "outline"}
                         onClick={() => {
-                          if (balance <= 0) {
-                            handleAction((id) => updateBooking(id, { status: 'checked-out' }), true);
+                          if (activeStats.balance <= 0) {
+                            if (isGroupBooking) setShowGroupActionConfirm('check-out');
+                            else handleAction((id) => updateBooking(id, { status: 'checked-out' }), true);
                           } else {
                             setShowPaymentSelection(true);
                           }
                         }}
                       >
-                        {balance <= 0 ? 'Checkout Now' : 'Settle & Checkout'}
+                         {activeStats.balance <= 0 ? (isGroupBooking ? 'Checkout Group' : 'Checkout Now') : (isGroupBooking ? 'Settle & Checkout Group' : 'Settle & Checkout')}
                       </Button>
                   ) : (
                     <div className={cn(
-                      "flex-1 flex items-center gap-2 rounded-xl animate-in slide-in-from-right-4 duration-300 overflow-hidden min-h-11",
+                      "flex-1 flex items-center gap-1 rounded-xl animate-in fade-in zoom-in-95 duration-200 overflow-hidden h-10 px-1",
                       isSettled ? "bg-emerald-500 text-white justify-center" : "bg-orange-600"
                     )}>
                       {isSettled ? (
-                        <div className="flex items-center gap-3 text-xs font-black uppercase tracking-widest py-2">
-                          <CheckCircle2 className="h-5 w-5" /> Account Settled
+                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+                          <CheckCircle2 className="h-4 w-4" /> Account Settled
                         </div>
                       ) : isActioning ? (
-                        <div className="flex items-center gap-3 px-4 py-2 text-white">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span className="text-[10px] font-black uppercase tracking-widest opacity-80">Processing...</span>
+                        <div className="flex items-center gap-2 px-3 text-white">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <span className="text-[9px] font-black uppercase tracking-widest opacity-80">Processing...</span>
                         </div>
                       ) : (
                         <>
-                          <div className="flex bg-white/20 rounded-lg p-0.5 gap-0.5 shrink-0 relative overflow-hidden ml-3">
-                            {['cash', 'card', 'upi'].map((m) => (
-                              <button
-                                key={m}
-                                onClick={() => {
-                                  handleAction((id) => updateBooking(id, { 
-                                    status: 'checked-out', 
-                                    advancePayment: totalAmount,
-                                    paymentMethod: m as 'cash' | 'card' | 'upi'
-                                  }), true);
-                                }}
-                                className="h-7 px-3 text-[9px] font-black uppercase rounded-md transition-all active:scale-95 bg-white text-orange-600 shadow-sm hover:bg-white/90"
-                              >
-                                {m}
-                              </button>
-                            ))}
-                          </div>
-                          <button onClick={() => setShowPaymentSelection(false)} className="text-white/60 hover:text-white ml-auto mr-3"><X className="h-4 w-4" /></button>
+                          {['cash', 'card', 'upi'].map((m) => (
+                            <button
+                              key={m}
+                              onClick={() => {
+                                if (isGroupBooking) {
+                                   handleGroupManagementAction('settle-checkout', m);
+                                } else {
+                                   handleAction((id) => updateBooking(id, { 
+                                     status: 'checked-out', 
+                                     advancePayment: activeStats.totalAmount, 
+                                     paymentMethod: m as 'cash' | 'card' | 'upi'
+                                   }), true);
+                                }
+                              }}
+                              className="flex-1 h-8 text-[9px] font-black uppercase rounded-lg transition-all active:scale-95 bg-white text-orange-600 shadow-sm hover:translate-y-[-1px]"
+                            >
+                              {m}
+                            </button>
+                          ))}
+                          <button onClick={() => setShowPaymentSelection(false)} className="px-1.5 text-white/70 hover:text-white transition-colors"><X className="h-3.5 w-3.5" /></button>
                         </>
                       )}
                     </div>
@@ -609,34 +831,66 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
                 </div>
               )}
 
-              {(bookingData.reservationType !== 'block' && bookingData.bookingType !== 'block' && bookingData.status !== 'cancelled') && (
-                <Button variant="outline" className="h-11 px-4 rounded-xl border-2 flex items-center justify-center gap-2 font-black active:scale-95" onClick={() => window.print()}>
-                  <Printer className="h-4 w-4" />
-                </Button>
-              )}
-
-              {bookingData.status !== 'cancelled' && bookingData.status !== 'checked-out' && !showPaymentSelection && (
+              {bookingData!.status !== 'cancelled' && bookingData!.status !== 'checked-out' && !showPaymentSelection && (
                 <Button 
                   variant="outline" 
-                  className="h-11 px-4 rounded-xl border-2 border-red-50 text-red-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200 shrink-0 transition-all active:scale-95 text-[10px] font-black uppercase"
+                  className="w-10 h-10 p-0 rounded-xl border-2 border-red-50 text-red-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 shrink-0 transition-all active:scale-95"
                   onClick={() => setShowCancelConfirm(true)}
+                  title={(bookingData!.reservationType === 'block' || bookingData!.bookingType === 'block') ? 'Release Block' : 'Cancel'}
                 >
-                  { (bookingData.reservationType === 'block' || bookingData.bookingType === 'block') ? 'Release Block' : 'Cancel' }
+                  <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               )}
             </div>
           </div>
         )}
 
-        <BookingModal isOpen={showEditModal} onClose={() => setShowEditModal(false)} initialBooking={bookingData || undefined} />
+        <BookingModal 
+          isOpen={showEditModal} 
+          onClose={() => {
+            setShowEditModal(false);
+            setIsEditingGroup(false);
+          }} 
+          initialBooking={bookingData || undefined}
+          isEditingGroup={isEditingGroup}
+        />
 
         {/* Dialogs */}
-        <Dialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
+        <Dialog open={showCancelConfirm} onOpenChange={(v) => { setShowCancelConfirm(v); if(!v) setCancelWholeGroup(false); }}>
           <DialogContent className="sm:max-w-[360px] rounded-2xl">
-            <DialogHeader><DialogTitle className="font-black">Cancel Booking?</DialogTitle><DialogDescription>This action cannot be undone.</DialogDescription></DialogHeader>
-            <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setShowCancelConfirm(false)}>Keep It</Button>
-              <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={() => { setShowCancelConfirm(false); handleAction(cancelBooking); }}>Yes, Cancel</Button>
+            <DialogHeader>
+              <DialogTitle className="font-black">Cancel {cancelWholeGroup ? 'Entire Group' : 'Booking'}?</DialogTitle>
+              <DialogDescription>This action cannot be undone.</DialogDescription>
+            </DialogHeader>
+            {(bookingData!.isGroup || bookingData!.groupId) && (
+              <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <input 
+                  type="checkbox" 
+                  id="cancelGroup" 
+                  checked={cancelWholeGroup} 
+                  onChange={(e) => setCancelWholeGroup(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+                />
+                <label htmlFor="cancelGroup" className="text-xs font-bold text-slate-700 cursor-pointer">
+                  Cancel all rooms in "{bookingData!.groupName}"
+                </label>
+              </div>
+            )}
+            <DialogFooter className="gap-2 mt-2">
+              <Button variant="outline" className="rounded-xl font-bold" onClick={() => setShowCancelConfirm(false)}>Keep It</Button>
+              <Button 
+                className="bg-red-600 hover:bg-red-700 text-white rounded-xl font-black" 
+                onClick={() => { 
+                  setShowCancelConfirm(false); 
+                  if (cancelWholeGroup && bookingData!.groupId) {
+                    handleBulkAction(cancelBooking, bookings.filter(b => b.groupId === bookingData!.groupId));
+                  } else {
+                    handleAction(cancelBooking);
+                  }
+                }}
+              >
+                Yes, Cancel {cancelWholeGroup ? 'All' : ''}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -647,6 +901,41 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
             <DialogFooter className="gap-2">
               <Button variant="ghost" onClick={() => setShowDirtyRoomPrompt(false)}>No</Button>
               <Button className="bg-emerald-600 text-white" onClick={handleCheckInWithCleanup}>Mark Clean & Check-in</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!showGroupActionConfirm} onOpenChange={(v) => { if(!v) setShowGroupActionConfirm(null); }}>
+          <DialogContent className="sm:max-w-[400px] rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="font-black text-center text-xl">
+                 {showGroupActionConfirm === 'check-in' && 'Group Check-in'}
+                 {showGroupActionConfirm === 'check-out' && 'Group Checkout'}
+              </DialogTitle>
+              <DialogDescription className="text-center mt-2">
+                 You are about to {showGroupActionConfirm === 'check-in' ? 'check-in' : 'check-out'} <strong>ALL eligible rooms</strong> in "{bookingData!.groupName}".
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-3 mt-4 flex flex-col sm:flex-row items-center justify-center">
+              <Button 
+                className={cn("w-full sm:w-[200px] rounded-xl font-black text-white h-11 shadow-lg transition-all active:scale-95", showGroupActionConfirm === 'check-in' ? "bg-blue-600 hover:bg-blue-700 shadow-blue-500/20" : "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20")}
+                onClick={() => {
+                   if (showGroupActionConfirm) handleGroupManagementAction(showGroupActionConfirm);
+                }}
+              >
+                Proceed With Entire Group
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full sm:w-fit px-6 rounded-xl font-bold border-slate-200 hover:bg-slate-50 text-slate-500 h-11 border-2 transition-all active:scale-95"
+                onClick={() => {
+                   setShowGroupActionConfirm(null);
+                   if (showGroupActionConfirm === 'check-in') handleInitialCheckIn();
+                   if (showGroupActionConfirm === 'check-out') handleAction((id) => updateBooking(id, { status: 'checked-out' }), true);
+                }}
+              >
+                Just This Room
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

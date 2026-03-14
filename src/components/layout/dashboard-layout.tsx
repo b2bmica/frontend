@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {
   Bed, Calendar, LayoutDashboard, Wrench, Home,
-  BookOpen, BarChart3, Wallet, Users,
+  BookOpen, BarChart3, Wallet, Users, TrendingUp,
 } from "lucide-react"
 
 const navItems = [
@@ -25,9 +25,7 @@ const navItems = [
   { title: "Housekeeping", id: "housekeeping", icon: Home },
   { title: "Maintenance", id: "maintenance", icon: Wrench },
   { title: "Rooms", id: "rooms", icon: Bed },
-  { title: "Reports", id: "reports", icon: BarChart3 },
-  { title: "Overview", id: "overview", icon: LayoutDashboard },
-  { title: "Folio", id: "folio", icon: Wallet },
+  { title: "Analytics", id: "analytics", icon: TrendingUp },
 ]
 
 export default function DashboardLayout({
@@ -115,7 +113,7 @@ export default function DashboardLayout({
                 className="rounded-lg font-bold uppercase text-[10px] tracking-widest px-3 h-8 shadow-sm transition-all active:scale-[0.95]"
               >
                 <Plus className="h-3.5 w-3.5 md:mr-1.5" />
-                <span className="hidden sm:inline">New Booking</span>
+                <span className="hidden sm:inline">Add new</span>
               </Button>
             )}
 

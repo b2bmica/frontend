@@ -182,7 +182,7 @@ export function GuestProfileSheet({ guestId, onClose, onBookingClick }: GuestPro
                                   <Globe className="h-3 w-3" /> {b.bookingSource || 'Direct'}
                                </div>
                                <div className="text-sm font-black text-primary tracking-tighter">
-                                  ₹{((room?.price || 0) * nights).toLocaleString()}
+                                  ₹{((room?.price || 0) * nights).toLocaleString('en-IN')}
                                </div>
                             </div>
                           </div>

@@ -360,7 +360,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                                           <p className="text-[10px] font-medium text-slate-400 uppercase tracking-widest mt-0.5">{new Date(c.date).toLocaleDateString()}</p>
                                        </div>
                                     </div>
-                                    <p className="font-bold text-sm text-slate-900">₹{c.amount.toLocaleString()}</p>
+                                    <p className="font-bold text-sm text-slate-900">₹{c.amount.toLocaleString('en-IN')}</p>
                                  </div>
                                ))}
                             </div>
@@ -377,7 +377,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                                           <p className="text-[9px] font-medium text-slate-400 uppercase tracking-widest mt-0.5">{format(new Date(c.date), 'dd MMM')}</p>
                                        </div>
                                     </div>
-                                    <p className="font-bold text-xs text-slate-900 ml-2 whitespace-nowrap">₹{c.amount.toLocaleString()}</p>
+                                    <p className="font-bold text-xs text-slate-900 ml-2 whitespace-nowrap">₹{c.amount.toLocaleString('en-IN')}</p>
                                  </div>
                                ))}
                             </div>
@@ -385,7 +385,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                             {financials.tax > 0 && (
                               <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50/50 border border-dashed border-slate-200">
                                  <p className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Service Tax (GST)</p>
-                                 <p className="text-[10px] md:text-xs font-bold text-slate-500 italic">₹{financials.tax.toLocaleString()}</p>
+                                 <p className="text-[10px] md:text-xs font-bold text-slate-500 italic">₹{financials.tax.toLocaleString('en-IN')}</p>
                               </div>
                             )}
                           </>
@@ -413,7 +413,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                                          </div>
                                        </div>
                                      </div>
-                                     <p className="font-bold text-sm text-emerald-600">+ ₹{p.amount.toLocaleString()}</p>
+                                     <p className="font-bold text-sm text-emerald-600">+ ₹{p.amount.toLocaleString('en-IN')}</p>
                                    </div>
                                  );
                                })}
@@ -437,7 +437,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
                                          <p className="text-[9px] font-medium text-emerald-600 uppercase tracking-widest mt-0.5">{format(new Date(p.date), 'dd MMM')}{p.note ? ' / ' + p.note : ''}</p>
                                        </div>
                                      </div>
-                                     <p className="font-bold text-xs text-emerald-600 ml-2 whitespace-nowrap">+ ₹{p.amount.toLocaleString()}</p>
+                                     <p className="font-bold text-xs text-emerald-600 ml-2 whitespace-nowrap">+ ₹{p.amount.toLocaleString('en-IN')}</p>
                                    </div>
                                  );
                                })}
@@ -452,22 +452,22 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
               <div className="bg-slate-900 rounded-3xl p-6 md:p-8 text-white space-y-8 shadow-xl">
                  <div className="space-y-1">
                     <p className="text-[10px] font-bold uppercase tracking-widest text-white/40">Balance Due</p>
-                    <h3 className="text-3xl font-bold">₹{financials.balance.toLocaleString()}</h3>
+                    <h3 className="text-3xl font-bold">₹{financials.balance.toLocaleString('en-IN')}</h3>
                  </div>
                  
                  <div className="space-y-4">
                     <div className="flex justify-between items-center text-xs">
                        <span className="font-medium text-white/40 uppercase tracking-widest">Revenue</span>
-                       <span className="font-bold">₹{financials.subtotal.toLocaleString()}</span>
+                       <span className="font-bold">₹{financials.subtotal.toLocaleString('en-IN')}</span>
                     </div>
                     <div className="flex justify-between items-center text-xs">
                        <span className="font-medium text-white/40 uppercase tracking-widest">Tax</span>
-                       <span className="font-bold">₹{financials.tax.toLocaleString()}</span>
+                       <span className="font-bold">₹{financials.tax.toLocaleString('en-IN')}</span>
                     </div>
                     <Separator className="bg-white/10" />
                     <div className="flex justify-between items-center text-xs text-emerald-400">
                        <span className="font-bold uppercase tracking-widest">Paid</span>
-                       <span className="font-bold">- ₹{financials.paid.toLocaleString()}</span>
+                       <span className="font-bold">- ₹{financials.paid.toLocaleString('en-IN')}</span>
                     </div>
                  </div>
 
@@ -617,7 +617,7 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
               {financials.charges.map((c: { id: string; amount: number; description: string }) => (
                 <tr key={c.id} className="border-b border-slate-50">
                   <td className="py-2 font-medium">{c.description}</td>
-                  <td className="py-2 text-right font-bold">₹{c.amount.toLocaleString()}</td>
+                  <td className="py-2 text-right font-bold">₹{c.amount.toLocaleString('en-IN')}</td>
                 </tr>
               ))}
             </tbody>
@@ -625,23 +625,23 @@ export function FolioView({ bookingId: initialBookingId }: { bookingId?: string 
           <div className="ml-auto w-48 space-y-2">
             <div className="flex justify-between text-xs opacity-60">
               <span>Subtotal</span>
-              <span>₹{financials.subtotal.toLocaleString()}</span>
+              <span>₹{financials.subtotal.toLocaleString('en-IN')}</span>
             </div>
             <div className="flex justify-between text-xs opacity-60">
               <span>GST</span>
-              <span>₹{financials.tax.toLocaleString()}</span>
+              <span>₹{financials.tax.toLocaleString('en-IN')}</span>
             </div>
             <div className="flex justify-between font-bold border-t pt-2">
               <span>Total</span>
-              <span>₹{financials.total.toLocaleString()}</span>
+              <span>₹{financials.total.toLocaleString('en-IN')}</span>
             </div>
             <div className="flex justify-between text-xs text-slate-400">
               <span>Paid</span>
-              <span>- ₹{financials.paid.toLocaleString()}</span>
+              <span>- ₹{financials.paid.toLocaleString('en-IN')}</span>
             </div>
             <div className="flex justify-between font-bold text-lg border-t pt-2 border-slate-900">
               <span>Balance</span>
-              <span>₹{financials.balance.toLocaleString()}</span>
+              <span>₹{financials.balance.toLocaleString('en-IN')}</span>
             </div>
           </div>
         </div>

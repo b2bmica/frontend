@@ -240,7 +240,7 @@ export function RoomInventory() {
                 </div>
                 
                 <div className="flex items-baseline gap-1 mb-2">
-                  <span className="text-2xl font-black text-foreground">₹{room.price.toLocaleString()}</span>
+                  <span className="text-2xl font-black text-foreground">₹{room.price.toLocaleString('en-IN')}</span>
                   <span className="text-[10px] font-bold text-muted-foreground uppercase opacity-40">/ NT</span>
                 </div>
 

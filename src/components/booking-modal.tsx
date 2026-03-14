@@ -68,10 +68,11 @@ interface BookingModalProps {
   selectedRoomId?: string;
   selectedDate?: string;
   initialBooking?: Booking;
+  isEditingGroup?: boolean;
 }
 
-export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, initialBooking }: BookingModalProps) {
-  const { rooms, bookings, createBooking, updateBooking, createGuest, searchGuests } = useBookings();
+export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, initialBooking, isEditingGroup }: BookingModalProps) {
+  const { rooms, bookings, createBooking, updateBooking, cancelBooking, createGuest, searchGuests, updateGroupMetadata } = useBookings();
   const { hotel } = useAuth();
 
   // Step management
@@ -120,6 +121,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const [paymentMethod, setPaymentMethod] = useState('');
   const [roomPrice, setRoomPrice] = useState(0);
   const [adults, setAdults] = useState(2);
+  const [children, setChildren] = useState(0);
 
   // Group booking state
   const [groupName, setGroupName] = useState('');
@@ -127,7 +129,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
   const [groupRoomPrefs, setGroupRoomPrefs] = useState<Record<string, number>>({});
   const [additionalGuests, setAdditionalGuests] = useState<Array<{ name: string; phone: string }>>([]);
-  const [roomAssignments, setRoomAssignments] = useState<Record<string, { guestName: string; plan: string; price: number }>>({});
+  const [roomAssignments, setRoomAssignments] = useState<Record<string, { guestName: string; plan: string; price: number; adults: number; children: number }>>({});
   const [isSingleFolio, setIsSingleFolio] = useState(true);
   const [planMixed, setPlanMixed] = useState(false);
 
@@ -136,7 +138,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
     if (!isOpen) return;
     if (initialBooking) {
       const rm = typeof initialBooking.roomId === 'object' ? initialBooking.roomId : rooms.find(r => r._id === initialBooking.roomId);
-      const effectiveType = (initialBooking.reservationType || initialBooking.bookingType || 'booking') as 'booking' | 'enquiry' | 'block' | 'group';
+      const effectiveType = (isEditingGroup ? 'group' : (initialBooking.reservationType || initialBooking.bookingType || 'booking')) as 'booking' | 'enquiry' | 'block' | 'group';
       setReservationType(effectiveType);
       setCheckinDate(format(parseISO(initialBooking.checkin), 'yyyy-MM-dd'));
       setCheckinTime(initialBooking.checkinTime || defaultCheckinTime);
@@ -148,6 +150,30 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       setPlanType(initialBooking.planType || 'EP');
       setplanCustomText(initialBooking.planCustomText || '');
       setAdults(initialBooking.adults || 2);
+      setChildren(initialBooking.children || 0);
+      
+      if (isEditingGroup && initialBooking.groupId) {
+        setGroupName(initialBooking.groupName || '');
+         const groupBookings = bookings.filter(b => b.groupId === initialBooking.groupId && b.status !== 'cancelled' && b.status !== 'expired');
+         setNumRooms(groupBookings.length || 1);
+        const rIds = groupBookings.map(b => typeof b.roomId === 'object' ? b.roomId._id : b.roomId).filter(Boolean) as string[];
+        setSelectedRooms(rIds);
+        
+        const assignments: Record<string, { guestName: string; plan: string; price: number; adults: number; children: number }> = {};
+        groupBookings.forEach(b => {
+          const rid = typeof b.roomId === 'object' ? b.roomId._id : b.roomId;
+          const gName = typeof b.guestId === 'object' ? b.guestId.name : (bookings.find(bx => bx._id === b._id)?.guestId as any)?.name || 'Lead';
+          assignments[rid] = {
+            guestName: gName,
+            plan: b.planType || 'EP',
+            price: b.roomPrice || 0,
+            adults: b.adults || adults,
+            children: b.children || children
+          };
+        });
+        setRoomAssignments(assignments);
+        setStep('groupConfig');
+      }
       
       // Intelligent Guest Resolution: if ID is a string, try to find data in other bookings
       if (typeof initialBooking.guestId === 'object') {
@@ -160,10 +186,17 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       }
 
       setBookingSource(initialBooking.bookingSource || 'direct');
-      setSpecialRequests(initialBooking.specialRequests || '');
+      let cleanedRequests = initialBooking.specialRequests || '';
+      cleanedRequests = cleanedRequests.replace(/GROUP:[^.]*\.\s*/g, '');
+      cleanedRequests = cleanedRequests.replace(/Room Guest:[^.]*\.\s*/g, '');
+      setSpecialRequests(cleanedRequests.trim());
       setAdvancePayment(initialBooking.advancePayment || 0);
       setBlockReason(initialBooking.blockReason || '');
-      setStep('dates');
+      if (!(isEditingGroup && initialBooking.groupId)) {
+        setStep('dates');
+      } else {
+        setStep('dates'); // Allow editing dates for groups too
+      }
     } else {
       setStep('type');
       setReservationType('booking');
@@ -180,6 +213,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       setPlanType('EP');
       setplanCustomText('');
       setAdults(2);
+      setChildren(0);
       setSelectedGuest(null);
       setGuestQuery('');
       setGuestResults([]);
@@ -227,6 +261,9 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         const bId = typeof b._id === 'object' ? String((b._id as any)) : String(b._id);
         const initId = initialBooking ? (typeof initialBooking._id === 'object' ? String((initialBooking._id as any)) : String(initialBooking._id)) : null;
         if (initId && bId === initId) return false;
+        
+        // If editing group, skip all bookings in that group
+        if (isEditingGroup && initialBooking?.groupId && b.groupId === initialBooking.groupId) return false;
         
         const bRoomId = typeof b.roomId === 'object' ? String((b.roomId as any)._id) : String(b.roomId);
         if (bRoomId !== String(room._id)) return false;
@@ -290,16 +327,20 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
   const goNext = (nextStep: StepType) => { 
     if (nextStep === 'roomAssignment' && reservationType === 'group') {
-      const init: Record<string, { guestName: string; plan: string; price: number }> = { ...roomAssignments };
-      const guestNames = [selectedGuest?.name || 'Lead', ...additionalGuests.map(ag => ag.name).filter(Boolean)];
+      const init: Record<string, { guestName: string; plan: string; price: number; adults: number; children: number }> = { ...roomAssignments };
+      const leadName = selectedGuest?.name || 'Lead';
+      const allNames = [leadName, ...additionalGuests.map(ag => ag.name).filter(Boolean)];
       
       selectedRooms.forEach((rid, i) => {
         if (!init[rid]) {
           const r = rooms.find(rm => rm._id === rid);
+          // Default first room to lead, others to TBA or subsequent names
           init[rid] = { 
-            guestName: guestNames[i] || 'TBA', 
+            guestName: allNames[i] || leadName, 
             plan: planType, 
-            price: r?.price || 0 
+            price: r?.price || 0,
+            adults: adults,
+            children: children
           };
         }
       });
@@ -347,7 +388,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       const guest = await createGuest(payload);
       setSelectedGuest(guest); 
       setShowNewGuest(false); 
-      goNext('payment');
+      goNext(reservationType === 'group' ? 'roomAssignment' : 'payment');
     } catch (err: unknown) { 
       const errorMessage = err instanceof Error ? err.message : 'An error occurred';
       setError(errorMessage); 
@@ -371,8 +412,16 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           ? addHours(new Date(), effectiveExpiry).toISOString()
           : undefined;
 
-      if (reservationType === 'group') {
-        const conflictRooms = selectedRooms.filter(rid => !isRoomAvailable(rid));
+      if (reservationType === 'group' || isEditingGroup) {
+        const conflictRooms = selectedRooms.filter(rid => {
+          // If editing, exclude the rooms already assigned to this group
+          if (isEditingGroup && initialBooking?.groupId) {
+             const groupRoomIds = bookings.filter(b => b.groupId === initialBooking.groupId).map(b => typeof b.roomId === 'object' ? b.roomId._id : b.roomId);
+             if (groupRoomIds.includes(rid)) return false;
+          }
+          return !isRoomAvailable(rid);
+        });
+
         if (conflictRooms.length > 0) {
           const conflictNames = conflictRooms.map(id => rooms.find(r => r._id === id)?.roomNumber).join(', ');
           setError(`Conflicts detected. The following rooms are no longer available: ${conflictNames}. Please reselect.`);
@@ -380,40 +429,69 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           return;
         }
 
-        const groupId = `GRP-${Date.now()}`;
-        for (const rid of selectedRooms) {
+        const groupId = isEditingGroup ? initialBooking?.groupId : `GRP-${Date.now()}`;
+        
+        // If editing group, handle removal of rooms
+        if (isEditingGroup && initialBooking?.groupId) {
+           const existingGroupBookings = bookings.filter(b => b.groupId === initialBooking.groupId && b.status !== 'cancelled' && b.status !== 'expired');
+           const toRemove = existingGroupBookings.filter(b => !selectedRooms.includes(typeof b.roomId === 'object' ? b.roomId._id : b.roomId));
+           
+           if (toRemove.length > 0) {
+             await Promise.all(toRemove.map(b => cancelBooking(b._id)));
+           }
+
+           // Update group metadata if a record exists (optional)
+           try {
+              await updateGroupMetadata(initialBooking.groupId, {
+                groupName,
+                totalRooms: selectedRooms.length
+              });
+           } catch (metaErr) {
+              console.warn('Group metadata update skipped (likely ad-hoc group):', metaErr);
+           }
+        }
+
+        const roomOps = selectedRooms.map(async (rid) => {
           const assignment = roomAssignments[rid];
           const rmLocal = rooms.find(r => r._id === rid);
-          if (!selectedGuest?._id) {
-            setError('Guest is required for group booking');
-            setIsSubmitting(false);
-            return;
-          }
+          if (!selectedGuest?._id) return;
 
-          const payload = {
-            roomId: rid,
+          const partialPayload = {
             checkin: checkinDate,
             checkout: checkoutDate,
             checkinTime,
             checkoutTime,
-            adults: 2,
-            children: 0,
             roomPrice: assignment?.price || rmLocal?.price || 0,
-            baseOccupancy: rmLocal?.baseOccupancy || 2,
-            extraPersonPrice: rmLocal?.extraPersonPrice || 0,
-            advancePayment: isSingleFolio ? (advancePayment / selectedRooms.length) : (advancePayment / selectedRooms.length),
-            paymentMethod: (advancePayment > 0) ? paymentMethod : undefined,
-            bookingSource,
-            specialRequests: `GROUP: ${groupName}. Room Guest: ${assignment?.guestName || 'TBA'}. ${specialRequests}`,
-            reservationType: 'booking' as const,
+            specialRequests: specialRequests,
             planType: (assignment?.plan || planType) as 'EP' | 'CP' | 'MAP' | 'AP' | 'custom',
-            isGroup: true,
-            groupId,
             groupName,
             guestId: selectedGuest._id,
+            adults: assignment?.adults || adults,
+            children: assignment?.children || children,
+            baseOccupancy: rmLocal?.baseOccupancy || 2,
+            extraPersonPrice: rmLocal?.extraPersonPrice || 0,
+            isGroup: true,
+            groupId: groupId!,
+            reservationType: 'group' as const,
+            status: 'reserved' as const,
           };
-          await createBooking(payload);
-        }
+
+          const existing = isEditingGroup ? bookings.find(b => b.groupId === groupId && (typeof b.roomId === 'object' ? b.roomId._id : b.roomId) === rid) : null;
+          
+          if (existing) {
+            return updateBooking(existing._id, partialPayload);
+          } else {
+            return createBooking({
+              ...partialPayload,
+              roomId: rid,
+              advancePayment: (advancePayment / selectedRooms.length),
+              paymentMethod: (advancePayment > 0) ? paymentMethod : undefined,
+              bookingSource,
+            });
+          }
+        });
+
+        await Promise.all(roomOps);
       } else {
         if (!selectedGuest?._id && reservationType !== 'block') {
           setError('Guest is required');
@@ -517,10 +595,37 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           <Label className="text-xs font-black uppercase tracking-widest opacity-60">Group Name *</Label>
           <Input className="h-11 rounded-xl" placeholder="e.g. Singh Wedding Party" value={groupName} onChange={e => setGroupName(e.target.value)} />
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-black uppercase tracking-widest opacity-60">Adults / Room</Label>
+            <Select value={adults.toString()} onValueChange={v => setAdults(Number(v))}>
+              <SelectTrigger className="h-10 rounded-xl font-bold"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[1,2,3,4,5,6,7,8].map(n => <SelectItem key={n} value={n.toString()}>{n}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-black uppercase tracking-widest opacity-60">Children / Room</Label>
+            <Select value={children.toString()} onValueChange={v => setChildren(Number(v))}>
+              <SelectTrigger className="h-10 rounded-xl font-bold"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[0,1,2,3,4].map(n => <SelectItem key={n} value={n.toString()}>{n}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
         <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl">
           <Label className="text-xs font-black uppercase tracking-widest opacity-60">Number of Rooms</Label>
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setNumRooms(Math.max(2, numRooms - 1))}>–</Button>
+            <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" 
+              onClick={() => {
+                const newNum = Math.max(1, numRooms - 1);
+                setNumRooms(newNum);
+                if (selectedRooms.length > newNum) {
+                  setSelectedRooms(selectedRooms.slice(0, newNum));
+                }
+              }}>–</Button>
             <span className="font-black text-lg">{numRooms}</span>
             <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setNumRooms(Math.min(50, numRooms + 1))}>+</Button>
           </div>
@@ -542,19 +647,32 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           <Button variant="outline" size="sm" className="w-full h-8 text-[10px] font-black uppercase tracking-widest mt-2 border-dashed"
             onClick={() => {
               const newSelection: string[] = [];
+              let remainingToSelect = numRooms;
+
+              // 1. First follow distribution preferences
               Object.entries(groupRoomPrefs).forEach(([type, count]) => {
+                if (count <= 0) return;
                 const candidates = availableRooms.filter(r => r.roomType === type).map(r => r._id);
-                newSelection.push(...candidates.slice(0, count));
+                const toTake = Math.min(count, candidates.length, remainingToSelect);
+                newSelection.push(...candidates.slice(0, toTake));
+                remainingToSelect -= toTake;
               });
-              if (newSelection.length < numRooms) {
-                const remaining = availableRooms.filter(r => !newSelection.includes(r._id)).map(r => r._id);
-                newSelection.push(...remaining.slice(0, numRooms - newSelection.length));
+
+              // 2. If still need rooms, fill from available pool
+              if (remainingToSelect > 0) {
+                const availablePool = availableRooms
+                  .filter(r => !newSelection.includes(r._id))
+                  .map(r => r._id);
+                newSelection.push(...availablePool.slice(0, remainingToSelect));
               }
+
               setSelectedRooms(newSelection);
             }}>Auto-select Rooms</Button>
         </div>
         <div className="space-y-2">
-          <Label className="text-xs font-black uppercase tracking-widest opacity-60">Select Rooms ({selectedRooms.length}/{numRooms})</Label>
+          <Label className="text-xs font-black uppercase tracking-widest opacity-60">
+            {isEditingGroup ? 'Manage Group Rooms' : 'Select Rooms'} ({selectedRooms.length}/{numRooms})
+          </Label>
           <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto p-1">
             {rooms.map(room => {
               const avail = isRoomAvailable(room._id);
@@ -583,7 +701,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
             </Select>
           )}
         </div>
-        <Button className="w-full h-11 rounded-xl font-black" disabled={!groupName || selectedRooms.length < 2} onClick={() => goNext('guest')}>Continue <ChevronRight className="ml-1 h-4 w-4" /></Button>
+        <Button className="w-full h-11 rounded-xl font-black" disabled={!groupName || selectedRooms.length < 1} onClick={() => goNext('guest')}>Continue <ChevronRight className="ml-1 h-4 w-4" /></Button>
       </div>
     );
   };
@@ -773,12 +891,12 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                   <SelectItem key={p.key} value={p.key}>
                     <div className="flex items-center justify-between min-w-[280px] w-full">
                       <div className="flex flex-col py-0.5">
-                        <span className="font-black text-xs uppercase">{p.key} • {p.label}</span>
+                        <span className="font-black text-xs uppercase">{p.key} — {p.label}</span>
                         <span className="text-[10px] text-slate-400 font-medium leading-none mt-1">{p.description || p.desc}</span>
                       </div>
                       {rate > 0 && (
                         <div className="ml-4 flex flex-col items-end shrink-0">
-                          <span className="text-[10px] font-black text-primary">₹{rate}</span>
+                          <span className="text-[10px] font-black text-primary">₹{rate.toLocaleString('en-IN')}</span>
                           <span className="text-[8px] opacity-40 uppercase tracking-tighter">per pax</span>
                         </div>
                       )}
@@ -796,7 +914,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
             <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Estimated Total</span>
             <div className="flex items-baseline gap-1">
                <span className="text-[10px] font-bold text-slate-400">₹</span>
-               <span className="text-2xl font-black text-primary tracking-tighter">{totalAmount.toLocaleString()}</span>
+               <span className="text-2xl font-black text-primary tracking-tighter">{totalAmount.toLocaleString('en-IN')}</span>
             </div>
           </div>
           
@@ -804,25 +922,25 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           
           <div className="grid grid-cols-1 gap-2">
             <div className="flex justify-between items-center px-1">
-              <span className="text-[10px] font-bold text-slate-500">Base Fare ({Math.max(nights, isDayUse ? 1 : 0)}N × ₹{roomPrice})</span>
-              <span className="text-[11px] font-black text-slate-800">₹{baseSubtotal.toLocaleString()}</span>
+              <span className="text-[10px] font-bold text-slate-500">Base Fare ({Math.max(nights, isDayUse ? 1 : 0)}N × ₹{roomPrice.toLocaleString('en-IN')})</span>
+              <span className="text-[11px] font-black text-slate-800">₹{baseSubtotal.toLocaleString('en-IN')}</span>
             </div>
             {extraAdults > 0 && (
               <div className="flex justify-between items-center px-1">
                 <span className="text-[10px] font-bold text-emerald-600">Extra Person ({extraAdults} × ₹{extraPersonPrice})</span>
-                <span className="text-[11px] font-black text-emerald-700">+ ₹{extraCharge.toLocaleString()}</span>
+                <span className="text-[11px] font-black text-emerald-700">+ ₹{extraCharge.toLocaleString('en-IN')}</span>
               </div>
             )}
             {mealCharge > 0 && (
               <div className="flex justify-between items-center px-1">
                 <span className="text-[10px] font-bold text-blue-600">Plan: {planType}</span>
-                <span className="text-[11px] font-black text-blue-700">+ ₹{mealCharge.toLocaleString()}</span>
+                <span className="text-[11px] font-black text-blue-700">+ ₹{mealCharge.toLocaleString('en-IN')}</span>
               </div>
             )}
             {taxConfig?.enabled && (
               <div className="flex justify-between items-center px-1">
                 <span className="text-[10px] font-bold text-orange-600">GST ({ (taxConfig.cgst||0)+(taxConfig.sgst||0) }%)</span>
-                <span className="text-[11px] font-black text-orange-700">+ ₹{taxAmount.toLocaleString()}</span>
+                <span className="text-[11px] font-black text-orange-700">+ ₹{taxAmount.toLocaleString('en-IN')}</span>
               </div>
             )}
           </div>
@@ -980,23 +1098,80 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
     const allGroupGuestNames = [selectedGuest?.name || 'Lead', ...additionalGuests.map(ag => ag.name).filter(Boolean)];
     return (
       <div className="space-y-4">
-        <div className="border rounded-xl overflow-hidden text-xs">
+        <div className="border rounded-xl overflow-x-auto text-xs bg-white shadow-sm">
           <table className="w-full">
-            <thead className="bg-slate-50 border-b"><tr><th className="p-2 text-left">Room</th><th className="p-2 text-left">Guest</th><th className="p-2 text-right">Price</th></tr></thead>
-            <tbody>
+            <thead className="bg-slate-50 border-b">
+              <tr>
+                <th className="p-2.5 text-left font-black tracking-widest uppercase text-[9px] opacity-60">Room</th>
+                <th className="p-2.5 text-left font-black tracking-widest uppercase text-[9px] opacity-60">Guest Name</th>
+                <th className="p-2.5 text-left font-black tracking-widest uppercase text-[9px] opacity-60">Occ. (A/C)</th>
+                <th className="p-2.5 text-left font-black tracking-widest uppercase text-[9px] opacity-60">Meal Plan</th>
+                <th className="p-2.5 text-right font-black tracking-widest uppercase text-[9px] opacity-60">Price/Night</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
               {selectedRooms.map(rid => {
                 const r = rooms.find(rmLocal => rmLocal._id === rid);
-                const a = roomAssignments[rid] || { guestName: 'TBA', plan: planType, price: r?.price || 0 };
+                const a = roomAssignments[rid] || { guestName: allGroupGuestNames[0] || 'TBA', plan: planType, price: r?.price || 0, adults: adults, children: children };
                 return (
-                  <tr key={rid} className="border-b">
-                    <td className="p-2 font-black">#{r?.roomNumber}</td>
-                    <td className="p-2">
+                  <tr key={rid} className="hover:bg-slate-50 transition-colors">
+                    <td className="p-2.5 font-black whitespace-nowrap">
+                       <div className="flex flex-col">
+                         <span>#{r?.roomNumber}</span>
+                         <span className="text-[8px] opacity-50 font-bold">{r?.roomType}</span>
+                       </div>
+                    </td>
+                    <td className="p-2.5">
                        <Select value={a.guestName} onValueChange={v => setRoomAssignments({...roomAssignments, [rid]: {...a, guestName: v}})}>
-                        <SelectTrigger className="h-8 text-[10px]"><SelectValue /></SelectTrigger>
-                        <SelectContent>{['TBA', ...allGroupGuestNames].map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}</SelectContent>
+                        <SelectTrigger className="h-8 text-[10px] w-full min-w-[90px] rounded-lg border-slate-200"><SelectValue /></SelectTrigger>
+                        <SelectContent className="rounded-xl border-none shadow-2xl">
+                          {allGroupGuestNames.map(n => <SelectItem key={n} value={n} className="text-xs">{n}</SelectItem>)}
+                        </SelectContent>
                        </Select>
                     </td>
-                    <td className="p-2 text-right">₹{a.price}</td>
+                    <td className="p-2.5">
+                       <div className="flex items-center gap-1">
+                         <Input 
+                           type="number" 
+                           min={1} 
+                           className="h-8 w-11 text-[10px] text-center font-black border-slate-200 rounded-lg px-1 py-0" 
+                           value={a.adults} 
+                           onChange={e => setRoomAssignments({...roomAssignments, [rid]: {...a, adults: parseInt(e.target.value) || 1}})}
+                         />
+                         <span className="text-slate-400 font-bold text-[10px]">/</span>
+                         <Input 
+                           type="number" 
+                           min={0}
+                           className="h-8 w-11 text-[10px] text-center font-black border-slate-200 rounded-lg px-1 py-0" 
+                           value={a.children} 
+                           onChange={e => setRoomAssignments({...roomAssignments, [rid]: {...a, children: parseInt(e.target.value) || 0}})}
+                         />
+                       </div>
+                    </td>
+                    <td className="p-2.5">
+                       <Select value={a.plan} onValueChange={v => setRoomAssignments({...roomAssignments, [rid]: {...a, plan: v}})}>
+                        <SelectTrigger className="h-8 text-[10px] w-full min-w-[70px] rounded-lg border-slate-200"><SelectValue /></SelectTrigger>
+                        <SelectContent className="rounded-xl border-none shadow-2xl">
+                          {(hotel?.settings?.stayPlans || PLAN_TYPES).map((p: any) => {
+                            const key = typeof p === 'string' ? p : p.key;
+                            const label = typeof p === 'string' ? p : p.label;
+                            return (
+                              <SelectItem key={key} value={key} className="text-xs">
+                                {key}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                       </Select>
+                    </td>
+                    <td className="p-2.5 text-right font-black">
+                       <Input 
+                         type="number" 
+                         className="h-8 w-16 text-[10px] text-right font-black border-slate-200 rounded-lg p-1.5" 
+                         value={a.price} 
+                         onChange={e => setRoomAssignments({...roomAssignments, [rid]: {...a, price: parseFloat(e.target.value) || 0}})}
+                       />
+                    </td>
                   </tr>
                 );
               })}
@@ -1023,15 +1198,25 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       });
     }
     const groupTaxAmount = isGroup && taxConfig?.enabled ? (groupSubtotal * ((taxConfig.cgst || 0) + (taxConfig.sgst || 0)) / 100) : 0;
-    const finalTotal = isGroup ? (groupSubtotal + groupTaxAmount) : totalAmount;
+    const displaySubtotal = isGroup ? groupSubtotal : subtotal;
+    const displayTax = isGroup ? groupTaxAmount : taxAmount;
+    const finalTotal = isGroup ? (groupSubtotal + (taxConfig?.enabled ? (groupSubtotal * ((taxConfig.cgst || 0) + (taxConfig.sgst || 0)) / 100) : 0)) : totalAmount;
     
     return (
       <div className="space-y-4">
         <div className="p-4 bg-slate-50 rounded-2xl border space-y-2">
-          <div className="flex justify-between font-bold text-sm"><span>Total Amount</span><span className="text-primary font-black">₹{finalTotal.toLocaleString()}</span></div>
-          <div className="flex justify-between text-xs text-slate-500"><span>Advance Paid</span><span>₹{advancePayment.toLocaleString()}</span></div>
+          <div className="flex justify-between font-bold text-sm"><span>Subtotal (Rooms + Plans)</span><span className="text-slate-600">₹{displaySubtotal.toLocaleString('en-IN')}</span></div>
+          {(taxConfig?.enabled && displayTax > 0) && (
+            <div className="flex justify-between text-xs text-slate-500 italic">
+              <span>GST ({((taxConfig.cgst || 0) + (taxConfig.sgst || 0))}%)</span>
+              <span>₹{displayTax.toLocaleString('en-IN')}</span>
+            </div>
+          )}
+          <Separator className="bg-slate-200/50" />
+          <div className="flex justify-between font-black text-sm"><span>Total Amount</span><span className="text-primary font-black">₹{finalTotal.toLocaleString('en-IN')}</span></div>
+          <div className="flex justify-between text-xs text-slate-500"><span>Advance Paid</span><span>₹{advancePayment.toLocaleString('en-IN')}</span></div>
           <Separator />
-          <div className="flex justify-between font-black text-lg"><span>Balance Due</span><span className="text-primary">₹{(finalTotal - advancePayment).toLocaleString()}</span></div>
+          <div className="flex justify-between font-black text-lg"><span>Balance Due</span><span className="text-primary">₹{(finalTotal - advancePayment).toLocaleString('en-IN')}</span></div>
         </div>
         <div className="space-y-2">
           <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Collect Advance</Label>
@@ -1063,6 +1248,22 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
     
     return (
       <div className="space-y-5">
+        {isEditingGroup && (
+          <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg">
+                <Users className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Bulk Editing Group</p>
+                <h3 className="text-sm font-black text-slate-800 leading-tight">{groupName || 'Unnamed Group'}</h3>
+              </div>
+            </div>
+            <Badge variant="outline" className="bg-white border-indigo-200 text-indigo-600 font-black">
+              {selectedRooms.length} Rooms
+            </Badge>
+          </div>
+        )}
 
         {/* Dates Row */}
         <div>
@@ -1196,9 +1397,19 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               <Select value={planType} onValueChange={setPlanType}>
                 <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(hotel?.settings?.stayPlans || PLAN_TYPES).map((p: any) => (
-                    <SelectItem key={p.key} value={p.key}>{p.key}</SelectItem>
-                  ))}
+                  {(hotel?.settings?.stayPlans || PLAN_TYPES).map((p: any) => {
+                    const key = typeof p === 'string' ? p : p.key;
+                    const label = typeof p === 'string' ? p : p.label;
+                    const desc = typeof p === 'string' ? '' : p.desc;
+                    return (
+                      <SelectItem key={key} value={key} className="py-2.5">
+                        <div className="flex flex-col">
+                           <span className="font-black text-xs uppercase tracking-tight">{key} {label !== key ? `— ${label}` : ''}</span>
+                           {desc && <span className="text-[10px] opacity-50 font-medium">{desc}</span>}
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -1206,7 +1417,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-1.5 block">Rate / Night</Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">₹</span>
-                <Input type="number" className="h-11 rounded-xl pl-7 font-bold bg-slate-50 border-slate-200 cursor-not-allowed opacity-80" value={roomPrice} readOnly />
+                <Input type="number" className="h-11 rounded-xl pl-7 font-bold bg-slate-50 border-slate-200 cursor-not-allowed opacity-80" value={isEditingGroup ? '---' : roomPrice} readOnly />
               </div>
             </div>
           </div>
@@ -1217,13 +1428,13 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4 flex items-center justify-between">
             <div>
               <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Estimated Total</p>
-              <p className="text-xl font-black text-primary">₹{totalAmount.toLocaleString()}</p>
+              <p className="text-xl font-black text-primary">₹{totalAmount.toLocaleString('en-IN')}</p>
             </div>
             <div className="text-right text-[10px] text-slate-500 space-y-0.5">
-              <p>Base: ₹{baseSubtotal.toLocaleString()}</p>
-              {extraAdults > 0 && <p>+Extra: ₹{extraCharge.toLocaleString()}</p>}
-              {mealCharge > 0 && <p>+Plan: ₹{mealCharge.toLocaleString()}</p>}
-              {taxConfig?.enabled && <p>+GST: ₹{taxAmount.toLocaleString()}</p>}
+              <p>Base: ₹{baseSubtotal.toLocaleString('en-IN')}</p>
+              {extraAdults > 0 && <p>+Extra: ₹{extraCharge.toLocaleString('en-IN')}</p>}
+              {mealCharge > 0 && <p>+Plan: ₹{mealCharge.toLocaleString('en-IN')}</p>}
+              {taxConfig?.enabled && <p>+GST: ₹{taxAmount.toLocaleString('en-IN')}</p>}
             </div>
           </div>
         )}
@@ -1270,15 +1481,15 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       <DialogContent className="sm:max-w-[500px] w-full max-w-none h-auto sm:max-h-[96dvh] p-0 overflow-hidden border-none sm:rounded-[32px] rounded-none flex flex-col shadow-2xl bg-white focus:outline-none">
         <div className="bg-slate-50 border-b flex items-center justify-between p-4 sm:p-6 shrink-0 relative z-10">
           <div className="flex items-center gap-3 w-full">
-            {/* Back button — only show in wizard mode (new bookings) */}
-            {!initialBooking && step !== 'type' && (
+            {/* Back button — show in wizard mode (new bookings OR group edits) */}
+            {((!initialBooking && step !== 'type') || (initialBooking && isEditingGroup && step !== 'dates')) && (
               <Button variant="ghost" size="icon" onClick={goBack} className="h-10 w-10 sm:h-8 sm:w-8 rounded-full bg-white shadow-sm border border-slate-200 shrink-0 hover:bg-slate-100 hover:scale-105 transition-all">
                 <ArrowLeft className="h-5 w-5 sm:h-4 sm:w-4" />
               </Button>
             )}
             <div className="flex-1 min-w-0">
                 <DialogTitle className="text-lg sm:text-xl font-black tracking-tighter truncate">
-                  {initialBooking ? 'Edit' : 'New'} {reservationType === 'block' ? 'Room Block' : reservationType === 'enquiry' ? 'Enquiry Hold' : 'Room Booking'}
+                  {isEditingGroup ? 'Edit Group Booking' : (initialBooking ? 'Edit Booking' : (reservationType === 'group' ? 'Add Group Booking' : `New ${reservationType === 'block' ? 'Room Block' : reservationType === 'enquiry' ? 'Enquiry Hold' : 'Room Booking'}`))}
                 </DialogTitle>
                {!initialBooking && (
                  <p className="text-[10px] font-black tracking-widest text-primary/60 uppercase">
@@ -1287,11 +1498,13 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                )}
                {initialBooking && (
                  <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
-                   {typeof initialBooking.roomId === 'object' 
-                     ? `Room ${(initialBooking.roomId as any).roomNumber}` 
-                     : rooms.find(r => r._id === initialBooking.roomId)?.roomNumber 
-                       ? `Room ${rooms.find(r => r._id === initialBooking.roomId)!.roomNumber}` 
-                       : ''}
+                   {isEditingGroup 
+                     ? `Bulk Editing ${selectedRooms.length} Rooms`
+                     : (typeof initialBooking.roomId === 'object' 
+                       ? `Room ${(initialBooking.roomId as any).roomNumber}` 
+                       : rooms.find(r => r._id === initialBooking.roomId)?.roomNumber 
+                         ? `Room ${rooms.find(r => r._id === initialBooking.roomId)!.roomNumber}` 
+                         : '')}
                  </p>
                )}
             </div>
@@ -1317,8 +1530,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
             </div>
           )}
 
-          {/* Edit mode: single-page form */}
-          {initialBooking ? renderEditForm() : (
+          {/* Edit mode: single-page form for individual bookings, Wizard for new or group bulk edits */}
+          {(initialBooking && !isEditingGroup) ? renderEditForm() : (
             <AnimatePresence mode="wait">
               <motion.div 
                  key={step} 

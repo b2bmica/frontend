@@ -86,7 +86,7 @@ export function PerformanceReport() {
           { label: 'Total Sales', value: `₹${(reportData.revenue / 1000).toFixed(1)}K`, sub: 'Life-time', icon: IndianRupee, color: 'text-emerald-500', bg: 'bg-emerald-50' },
           { label: 'Today Arrivals', value: reportData.arrivals.toString(), sub: 'New Check-ins', icon: CalendarDays, color: 'text-blue-500', bg: 'bg-blue-50' },
           { label: 'In-House Now', value: reportData.inHouse.toString(), sub: `${reportData.occupancy}% Occupancy`, icon: Bed, color: 'text-purple-500', bg: 'bg-purple-50' },
-          { label: 'Pending Dues', value: `₹${reportData.pending.toLocaleString()}`, sub: 'From active guests', icon: Wallet, color: 'text-orange-500', bg: 'bg-orange-50' },
+          { label: 'Pending Dues', value: `₹${reportData.pending.toLocaleString('en-IN')}`, sub: 'From active guests', icon: Wallet, color: 'text-orange-500', bg: 'bg-orange-50' },
         ].map((stat, i) => (
           <motion.div key={stat.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
             <Card className="border-none shadow-md bg-white overflow-hidden rounded-[32px] group hover:shadow-xl transition-all">
@@ -156,7 +156,7 @@ export function PerformanceReport() {
                               </Badge>
                            </TableCell>
                            <TableCell className="text-right px-8 font-black text-slate-900 italic">
-                              ₹{((tx.roomPrice || (typeof tx.roomId === 'object' ? tx.roomId?.price : 0) || 0) * Math.max(1, differenceInDays(new Date(tx.checkout), new Date(tx.checkin)))).toLocaleString()}
+                              ₹{((tx.roomPrice || (typeof tx.roomId === 'object' ? tx.roomId?.price : 0) || 0) * Math.max(1, differenceInDays(new Date(tx.checkout), new Date(tx.checkin)))).toLocaleString('en-IN')}
                            </TableCell>
                         </TableRow>
                       );

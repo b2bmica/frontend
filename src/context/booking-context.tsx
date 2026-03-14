@@ -83,6 +83,7 @@ interface BookingContextType {
   deleteRoom: (id: string) => Promise<void>;
   createGuest: (data: Omit<Guest, '_id'>) => Promise<Guest>;
   searchGuests: (query: string) => Promise<Guest[]>;
+  updateGroupMetadata: (groupId: string, data: any) => Promise<void>;
 }
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
@@ -200,6 +201,11 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return await api.searchGuests(query) as Guest[];
   }, []);
 
+  const updateGroupMetadata = useCallback(async (groupId: string, data: any) => {
+    await api.updateGroupMetadata(groupId, data);
+    await refreshBookings();
+  }, [refreshBookings]);
+
   return (
     <BookingContext.Provider value={{
       bookings, rooms, guests, loading, error,
@@ -214,6 +220,7 @@ export const BookingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       deleteRoom: deleteRoomFn,
       createGuest: createGuestFn,
       searchGuests: searchGuestsFn,
+      updateGroupMetadata,
     }}>
       {children}
     </BookingContext.Provider>
