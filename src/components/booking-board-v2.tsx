@@ -561,6 +561,7 @@ export function BookingBoard() {
        cardEl.style.transform = 'scale(1.02) translateY(-4px)';
        cardEl.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.4)';
        cardEl.style.outline = '2px solid white';
+       cardEl.style.touchAction = 'none'; // Prevent browser scroll taking over
     };
 
     longPressTimer = setTimeout(activateDrag, LONG_MS);
@@ -678,6 +679,7 @@ export function BookingBoard() {
       cardEl.style.transition = '';
       cardEl.style.boxShadow = '';
       cardEl.style.outline = '';
+      cardEl.style.touchAction = '';
       
       setTimeout(() => { isDraggingRef.current = false; }, 50);
     };
@@ -695,7 +697,15 @@ export function BookingBoard() {
     const handleEl = e.currentTarget as HTMLDivElement;
     const cardEl   = handleEl.closest('[data-booking-card]') as HTMLDivElement;
     if (!cardEl) return;
-    try { handleEl.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    
+    // For touch devices, ensure capture works reliably
+    if (e.pointerType === 'touch') {
+      setTimeout(() => {
+        try { handleEl.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      }, 0);
+    } else {
+      try { handleEl.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    }
 
     const startX        = e.clientX;
     const originalWidth = cardEl.offsetWidth;
@@ -709,6 +719,7 @@ export function BookingBoard() {
         setResizingId(booking._id);
         cardEl.style.transition = 'none';
         cardEl.style.zIndex = '50';
+        cardEl.style.touchAction = 'none'; // Prevent browser intercept
       }
       if (moved) {
         const snapped = Math.round(dx / COLUMN_WIDTH) * COLUMN_WIDTH;
@@ -759,6 +770,7 @@ export function BookingBoard() {
         cardEl.style.width = `${originalWidth}px`;
         cardEl.style.zIndex     = '';
         cardEl.style.transition = '';
+        cardEl.style.touchAction = '';
       }
       setResizingId(null);
       setTimeout(() => { isResizingRef.current = false; }, 100);
@@ -1231,7 +1243,13 @@ export function BookingBoard() {
                                          hoveredGroupId === booking.groupId && booking.groupId && "ring-2 ring-white ring-offset-2 ring-offset-primary shadow-xl scale-[1.02]",
                                          isResizing && "ring-2 ring-primary ring-offset-2 z-50 opacity-100 scale-[1.02] shadow-2xl"
                                        )}
-                                       onPointerDown={(e) => handleCardDragStart(e, booking)}
+                                       onPointerDown={(e) => {
+                                         // On touch devices, prevent default to stop scroll takeover if it's a drag interaction
+                                         if (e.pointerType === 'touch') {
+                                           (e.target as HTMLElement).style.touchAction = 'none';
+                                         }
+                                         handleCardDragStart(e, booking);
+                                       }}
                                        onMouseEnter={() => {
                                          setHoveredBookingId(booking._id);
                                          if (booking.groupId) setHoveredGroupId(booking.groupId);
@@ -1338,7 +1356,12 @@ export function BookingBoard() {
                                          </div>
                                        </div>
                                        {isEditable && (
-                                         <div data-resize-handle onPointerDown={(e) => handleResizeDragStart(e, booking, room)} className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize flex items-center justify-center group-hover/card:opacity-100 opacity-0 transition-opacity">
+                                         <div data-resize-handle onPointerDown={(e) => {
+                                           if (e.pointerType === 'touch') {
+                                             (e.target as HTMLElement).style.touchAction = 'none';
+                                           }
+                                           handleResizeDragStart(e, booking, room);
+                                         }} className="absolute right-0 top-0 bottom-0 w-4 cursor-ew-resize flex items-center justify-center group-hover/card:opacity-100 opacity-80 md:opacity-0 transition-opacity">
                                            <div className="h-5 w-1 rounded-full bg-white/40" />
                                          </div>
                                        )}
