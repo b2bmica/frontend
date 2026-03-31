@@ -1588,11 +1588,7 @@ export function BookingBoard() {
                                                 {formatCountdown(booking.enquiryExpiresAt)}
                                               </div>
                                            )}
-                                           {isMobile && !isBlock && !isEnquiry && (
-                                             <span className="text-[7px] font-black opacity-80 uppercase tracking-tighter leading-none mt-0.5">
-                                               {booking.status.replace('-', ' ')}
-                                             </span>
-                                           )}
+
                                            </div>
 
                                            <div className="flex items-center gap-1 shrink-0 pointer-events-auto">
