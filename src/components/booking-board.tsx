@@ -1181,13 +1181,13 @@ export function BookingBoard() {
                                });
 
                                // Time-aware grouping: same-day checkout(11:00)/checkin(14:00) is NOT an overlap
-                               const toCardDT = (dateStr, timeStr, defaultTime = '14:00') => {
+                               const toCardDT = (dateStr: string, timeStr?: string, defaultTime = '14:00') => {
                                  const [h, m] = (timeStr || defaultTime).split(':').map(Number);
                                  const d = parseISO(dateStr);
                                  d.setHours(h, m, 0, 0);
                                  return d;
                                };
-                               const visibleCards = [];
+                               const visibleCards: { primary: Booking; others: Booking[] }[] = [];
                                sorted.forEach(b => {
                                  const bS = toCardDT(b.checkin, b.checkinTime, '14:00');
                                  const bE = toCardDT(b.checkout, b.checkoutTime, '11:00');
@@ -1329,7 +1329,7 @@ export function BookingBoard() {
                                                   <PopoverContent className="w-64 p-2 rounded-xl shadow-xl border z-40">
                                                     <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 p-2 border-b">Others {others.length}</p>
                                                     <div className="space-y-1 mt-1">
-                                                      {others.map(o => (
+                                                      {others.map((o: Booking) => (
                                                         <button key={o._id} className="w-full p-2.5 hover:bg-slate-50 rounded-xl text-left flex items-center justify-between group/o" onClick={() => setSelectedBooking(o)}>
                                                           <span className="text-[10px] font-black text-slate-900">{getGuest(o)?.name || 'Guest'}</span>
                                                           <div className={cn("w-2 h-2 rounded-full", getStatusColor(o.status, o.bookingType, o.reservationType))} />

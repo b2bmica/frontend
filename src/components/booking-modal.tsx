@@ -935,7 +935,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
                     const clashStatus = clash?.status;
                     const isOccupied = !avail && clashStatus === 'checked-in';
-                    const isReserved = !avail && (clashStatus === 'reserved' || clashStatus === 'enquiry');
+                    const isReserved = !avail && (clashStatus === 'reserved' || clash?.bookingType === 'enquiry' || clash?.reservationType === 'enquiry');
 
                     return (
                       <SelectItem 
@@ -1593,7 +1593,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
                     const clashStatus = clash?.status;
                     const isOccupied = !avail && clashStatus === 'checked-in';
-                    const isReserved = !avail && (clashStatus === 'reserved' || clashStatus === 'enquiry');
+                    const isReserved = !avail && (clashStatus === 'reserved' || clash?.bookingType === 'enquiry' || clash?.reservationType === 'enquiry');
 
                     return (
                       <SelectItem 
