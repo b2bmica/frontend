@@ -1173,7 +1173,6 @@ export function BookingBoard() {
                   {[
                     { dot: 'bg-emerald-500', label: 'Clean' },
                     { dot: 'bg-amber-400', label: 'Dirty' },
-                    { dot: 'bg-red-500', label: 'Repair' },
                   ].map(({ dot, label }) => (
                     <span key={label} className="flex items-center gap-1.5">
                       <span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />

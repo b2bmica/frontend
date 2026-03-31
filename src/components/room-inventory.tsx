@@ -179,7 +179,6 @@ export function RoomInventory() {
           { key: 'clean', label: 'Clean', value: stats.clean, color: 'text-emerald-600' },
           { key: 'dirty', label: 'Dirty', value: stats.dirty, color: 'text-orange-600' },
           { key: 'occupied', label: 'Occupied', value: stats.occupied, color: 'text-blue-600' },
-          { key: 'repair', label: 'Repair', value: stats.maintenance, color: 'text-red-600' },
         ].map(s => (
           <button 
             key={s.label} 
@@ -235,7 +234,7 @@ export function RoomInventory() {
                     statusColors[room.status] || 'bg-slate-100', 
                     'text-white shadow-sm shadow-black/10'
                   )}>
-                    {(room.status === 'maintenance' || room.status === 'under-maintenance') ? 'Repair' : room.status}
+                    {room.status}
                   </Badge>
                 </div>
                 
