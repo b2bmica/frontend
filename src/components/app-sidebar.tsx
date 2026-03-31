@@ -21,29 +21,28 @@ const sections = [
     items: [
       { title: "Calendar View", id: "board", icon: Calendar },
       { title: "Booking List", id: "bookings", icon: BookOpen },
-      { title: "Guest History", id: "guests", icon: Users },
+      { title: "Guest Records", id: "guests", icon: Users },
     ]
   },
   {
-    title: "Property",
+    title: "Operations",
     items: [
       { title: "Housekeeping", id: "housekeeping", icon: Home },
-      { title: "Repair Control", id: "maintenance", icon: Wrench },
-      { title: "Room List", id: "rooms", icon: Bed },
+      { title: "Maintenance", id: "maintenance", icon: Wrench },
+      { title: "Room Assets", id: "rooms", icon: Bed },
     ]
   },
   {
-    title: "Insights",
+    title: "Management",
     items: [
-      { title: "Performance & Dues", id: "reports", icon: BarChart3 },
-      { title: "Stats Overview", id: "overview", icon: LayoutDashboard },
-      { title: "Payments & Folio", id: "folio", icon: Wallet },
+      { title: "Analytics", id: "analytics", icon: BarChart3 },
+      { title: "Finances", id: "finance", icon: Wallet },
     ]
   },
   {
-    title: "Settings",
+    title: "Controls",
     items: [
-      { title: "Hotel Setup", id: "settings", icon: Settings },
+      { title: "Settings", id: "settings", icon: Settings },
     ]
   }
 ]

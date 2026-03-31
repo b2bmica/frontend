@@ -964,65 +964,91 @@ export function BookingBoard() {
                       </Button>
                     )}
 
-                    {/* Out-of-view search results indicator */}
-                    {search && (() => {
+                    {/* Consolidated Out-of-view indicator: fires for specific status filters or search */}
+                    {(statusFilter !== 'all' || search) && (() => {
                       const periodEnd = addDays(weekStart, DAYS);
-                      const outOfView = globalMatches.filter(b => {
+                      let outOfView = globalMatches.filter(b => {
                         const ci = startOfDay(new Date(b.checkin));
                         const co = startOfDay(new Date(b.checkout));
                         return !(ci < periodEnd && co > weekStart);
                       });
+                      if (statusFilter !== 'all') {
+                        outOfView = outOfView.filter(b => {
+                          const type = b.reservationType || b.bookingType || 'booking';
+                          if (statusFilter === 'enquiry') return type === 'enquiry' && (!b.enquiryExpiresAt || new Date(b.enquiryExpiresAt) >= new Date());
+                          if (statusFilter === 'expired-hold') return type === 'enquiry' && b.enquiryExpiresAt && new Date(b.enquiryExpiresAt) < new Date();
+                          if (statusFilter === 'block') return type === 'block';
+                          if (statusFilter === 'cancelled') return b.status === 'cancelled';
+                          return (type === 'booking' || type === 'group') && b.status === statusFilter;
+                        });
+                      }
                       if (!outOfView.length) return null;
+                      const filterLabel = statusFilter !== 'all'
+                        ? STATUS_FILTERS.find(f => f.key === statusFilter)?.label || statusFilter
+                        : search ? 'Search' : null;
+                      
                       return (
                         <Popover>
                           <PopoverTrigger asChild>
-                            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-black uppercase tracking-widest hover:bg-amber-100 transition-all shrink-0 animate-in fade-in slide-in-from-right-2 shadow-sm">
-                              <CalendarDays className="h-3 w-3" />
-                              <span>{outOfView.length} more</span>
+                            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-black uppercase tracking-widest hover:bg-amber-100 transition-all shrink-0 animate-in fade-in slide-in-from-right-2 shadow-sm whitespace-nowrap">
+                              <CalendarDays className="h-3 w-3 shrink-0" />
+                              <span>{outOfView.length} {isMobile ? '' : 'outside view'}</span>
                             </button>
                           </PopoverTrigger>
-                          <PopoverContent align="end" className="w-80 p-0 rounded-2xl shadow-2xl border-none overflow-hidden">
-                            <div className="bg-amber-50 border-b border-amber-100 px-4 py-3">
-                              <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Results Outside Current View</p>
-                              <p className="text-xs text-amber-600 font-medium mt-0.5">{outOfView.length} booking{outOfView.length !== 1 ? 's' : ''} found — click to navigate</p>
+                          <PopoverContent align="end" sideOffset={8} className="w-[340px] p-0 rounded-2xl shadow-2xl border-none overflow-hidden">
+                            <div className="bg-gradient-to-br from-amber-50 to-orange-50 border-b border-amber-100 px-4 py-3.5">
+                              <div className="flex items-center gap-2">
+                                <CalendarDays className="h-4 w-4 text-amber-600" />
+                                <div>
+                                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Outside Current View{filterLabel ? ` — ${filterLabel}` : ''}</p>
+                                  <p className="text-xs text-amber-600/80 font-medium mt-0.5">{outOfView.length} booking{outOfView.length !== 1 ? 's' : ''} matched · click any to jump there</p>
+                                </div>
+                              </div>
                             </div>
-                            <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+                            <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 bg-white">
                               {outOfView.map(b => {
                                 const guest = getGuest(b);
                                 const room = rooms.find(r => r._id === getBookingRoomId(b));
                                 const statusColorMap: Record<string, string> = {
-                                  'checked-in': 'bg-blue-100 text-blue-700',
-                                  'reserved': 'bg-emerald-100 text-emerald-700',
-                                  'checked-out': 'bg-orange-100 text-orange-700',
-                                  'enquiry': 'bg-amber-100 text-amber-700',
-                                  'block': 'bg-slate-100 text-slate-600',
-                                  'cancelled': 'bg-red-100 text-red-500',
+                                  'checked-in':  'bg-blue-100 text-blue-700 border border-blue-200',
+                                  'reserved':    'bg-emerald-100 text-emerald-700 border border-emerald-200',
+                                  'checked-out': 'bg-orange-100 text-orange-700 border border-orange-200',
+                                  'enquiry':     'bg-amber-100 text-amber-700 border border-amber-200',
+                                  'block':       'bg-slate-100 text-slate-600 border border-slate-200',
+                                  'cancelled':   'bg-red-50 text-red-500 border border-red-100',
                                 };
                                 const statusKey = b.status || b.reservationType || b.bookingType || 'booking';
+                                const nights = Math.max(1, Math.round((new Date(b.checkout).getTime() - new Date(b.checkin).getTime()) / 86400000));
                                 return (
                                   <button
                                     key={b._id}
-                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-left transition-colors group"
+                                    className="w-full flex items-start gap-3 px-4 py-3.5 hover:bg-slate-50 text-left transition-colors group"
                                     onClick={() => {
                                       setNavDirection(startOfDay(new Date(b.checkin)) > weekStart ? 1 : -1);
                                       setWeekStart(startOfDay(new Date(b.checkin)));
                                       setTimeout(() => setSelectedBooking(b), 150);
                                     }}
                                   >
-                                    <div className="h-9 w-9 rounded-xl bg-slate-100 flex items-center justify-center font-black text-xs text-slate-700 shrink-0 group-hover:bg-primary group-hover:text-white transition-all">
+                                    <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-sm text-slate-700 shrink-0 group-hover:bg-primary group-hover:text-white transition-all">
                                       {room?.roomNumber || '?'}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <p className="text-xs font-black text-slate-800 truncate">{guest?.name || (b.bookingType === 'block' ? 'Room Block' : 'Unknown')}</p>
-                                      <p className="text-[10px] font-bold text-slate-400">
-                                        {format(new Date(b.checkin), 'MMM d')} → {format(new Date(b.checkout), 'MMM d, yyyy')}
+                                      <p className="text-xs font-black text-slate-800 truncate">
+                                        {guest?.name || (b.bookingType === 'block' ? 'Room Block' : 'Unknown Guest')}
                                       </p>
+                                      <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                                        {format(new Date(b.checkin), 'MMM d')} → {format(new Date(b.checkout), 'MMM d, yyyy')}
+                                        <span className="ml-1 opacity-60">· {nights}N</span>
+                                      </p>
+                                      {room && (
+                                        <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mt-0.5">{room.roomType}</p>
+                                      )}
                                     </div>
-                                    <div className="flex flex-col items-end gap-1 shrink-0">
-                                      <span className={cn('text-[9px] font-black uppercase px-2 py-0.5 rounded-full', statusColorMap[statusKey] || 'bg-slate-100 text-slate-500')}>
+                                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                      <span className={cn('text-[9px] font-black uppercase px-2 py-0.5 rounded-full', statusColorMap[statusKey] || 'bg-slate-100 text-slate-500 border border-slate-200')}>
                                         {b.status || statusKey}
                                       </span>
-                                      <ArrowRight className="h-3 w-3 text-slate-300 group-hover:text-primary transition-colors" />
+                                      <ArrowRight className="h-3.5 w-3.5 text-slate-200 group-hover:text-primary transition-colors" />
                                     </div>
                                   </button>
                                 );
@@ -1065,106 +1091,6 @@ export function BookingBoard() {
                   );
                 })}
 
-                {/* Out-of-view pill: fires for specific status filters or search, NOT for "All" without search */}
-                {(statusFilter !== 'all' || search) && (() => {
-                  const periodEnd = addDays(weekStart, DAYS);
-                  // From globalMatches, pick only those outside the current view window
-                  let outOfView = globalMatches.filter(b => {
-                    const ci = startOfDay(new Date(b.checkin));
-                    const co = startOfDay(new Date(b.checkout));
-                    return !(ci < periodEnd && co > weekStart);
-                  });
-                  // globalMatches always includes cancelled/expired for grid alerts —
-                  // strip those out when a specific status filter is active so counts are accurate
-                  if (statusFilter !== 'all') {
-                    outOfView = outOfView.filter(b => {
-                      const type = b.reservationType || b.bookingType || 'booking';
-                      if (statusFilter === 'enquiry') return type === 'enquiry' && (!b.enquiryExpiresAt || new Date(b.enquiryExpiresAt) >= new Date());
-                      if (statusFilter === 'expired-hold') return type === 'enquiry' && b.enquiryExpiresAt && new Date(b.enquiryExpiresAt) < new Date();
-                      if (statusFilter === 'block') return type === 'block';
-                      if (statusFilter === 'cancelled') return b.status === 'cancelled';
-                      return (type === 'booking' || type === 'group') && b.status === statusFilter;
-                    });
-                  }
-                  if (!outOfView.length) return null;
-                  const filterLabel = statusFilter !== 'all'
-                    ? STATUS_FILTERS.find(f => f.key === statusFilter)?.label || statusFilter
-                    : search ? 'Search' : null;
-                  return (
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-black uppercase tracking-widest hover:bg-amber-100 transition-all shrink-0 animate-in fade-in slide-in-from-right-2 shadow-sm whitespace-nowrap">
-                          <CalendarDays className="h-3 w-3 shrink-0" />
-                          <span>{outOfView.length} outside view</span>
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent align="end" sideOffset={8} className="w-[340px] p-0 rounded-2xl shadow-2xl border-none overflow-hidden">
-                        <div className="bg-gradient-to-br from-amber-50 to-orange-50 border-b border-amber-100 px-4 py-3.5">
-                          <div className="flex items-center gap-2">
-                            <CalendarDays className="h-4 w-4 text-amber-600" />
-                            <div>
-                              <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Outside Current View{filterLabel ? ` — ${filterLabel}` : ''}</p>
-                              <p className="text-xs text-amber-600/80 font-medium mt-0.5">{outOfView.length} booking{outOfView.length !== 1 ? 's' : ''} matched · click any to jump there</p>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 bg-white">
-                          {outOfView.map(b => {
-                            const guest = getGuest(b);
-                            const room = rooms.find(r => r._id === getBookingRoomId(b));
-                            const statusColorMap: Record<string, string> = {
-                              'checked-in':  'bg-blue-100 text-blue-700 border border-blue-200',
-                              'reserved':    'bg-emerald-100 text-emerald-700 border border-emerald-200',
-                              'checked-out': 'bg-orange-100 text-orange-700 border border-orange-200',
-                              'enquiry':     'bg-amber-100 text-amber-700 border border-amber-200',
-                              'block':       'bg-slate-100 text-slate-600 border border-slate-200',
-                              'cancelled':   'bg-red-50 text-red-500 border border-red-100',
-                            };
-                            const statusKey = b.status || b.reservationType || b.bookingType || 'booking';
-                            const nights = Math.max(1, Math.round((new Date(b.checkout).getTime() - new Date(b.checkin).getTime()) / 86400000));
-                            return (
-                              <button
-                                key={b._id}
-                                className="w-full flex items-start gap-3 px-4 py-3.5 hover:bg-slate-50 text-left transition-colors group"
-                                onClick={() => {
-                                  setNavDirection(startOfDay(new Date(b.checkin)) > weekStart ? 1 : -1);
-                                  setWeekStart(startOfDay(new Date(b.checkin)));
-                                  setTimeout(() => setSelectedBooking(b), 150);
-                                }}
-                              >
-                                {/* Room avatar */}
-                                <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-sm text-slate-700 shrink-0 group-hover:bg-primary group-hover:text-white transition-all">
-                                  {room?.roomNumber || '?'}
-                                </div>
-                                {/* Info */}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-black text-slate-800 truncate">
-                                    {guest?.name || (b.bookingType === 'block' ? 'Room Block' : 'Unknown Guest')}
-                                  </p>
-                                  <p className="text-[10px] font-bold text-slate-400 mt-0.5">
-                                    {format(new Date(b.checkin), 'MMM d')} → {format(new Date(b.checkout), 'MMM d, yyyy')}
-                                    <span className="ml-1 opacity-60">· {nights}N</span>
-                                  </p>
-                                  {room && (
-                                    <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mt-0.5">{room.roomType}</p>
-                                  )}
-                                </div>
-                                {/* Status + arrow */}
-                                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                                  <span className={cn('text-[9px] font-black uppercase px-2 py-0.5 rounded-full', statusColorMap[statusKey] || 'bg-slate-100 text-slate-500 border border-slate-200')}>
-                                    {b.status || statusKey}
-                                  </span>
-                                  <ArrowRight className="h-3.5 w-3.5 text-slate-200 group-hover:text-primary transition-colors" />
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  );
-                })()}
-
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-slate-100/50">
@@ -1180,12 +1106,7 @@ export function BookingBoard() {
                     </span>
                   ))}
                 </div>
-                {isMobile && (
-                   <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-                      <span className="text-[9px] font-bold text-slate-400 uppercase">Alerts Active</span>
-                   </div>
-                )}
+                {/* Alerts info removed from mobile per request */}
               </div>
             </>
           )}

@@ -92,7 +92,11 @@ export function BookingDetailSheet({ booking, onClose, onOpenGuest }: BookingDet
     setShowGroupActionConfirm(null);
     setError(null);
   }, [booking?._id]);
-  const currentBooking = activeBookingId ? bookings.find(b => b._id === activeBookingId) : booking;
+  const currentBooking = useMemo(() => {
+    const targetId = activeBookingId || booking?._id;
+    if (!targetId) return booking;
+    return bookings.find(b => b._id === targetId) || booking;
+  }, [activeBookingId, booking, bookings]);
   const isGroupBooking = !!currentBooking?.groupId;
   const [now, setNow] = useState(Date.now());
 
