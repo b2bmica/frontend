@@ -15,6 +15,22 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useIsMobile } from "@/hooks/use-mobile"
+import {
+  Bed, Calendar, Wrench, Home,
+  BookOpen, BarChart3, Wallet, Users, TrendingUp,
+} from "lucide-react"
+
+const navItems = [
+  { title: "Calendar", id: "board", icon: Calendar },
+  { title: "Bookings", id: "bookings", icon: BookOpen },
+  { title: "Guests", id: "guests", icon: Users },
+  { title: "Housekeeping", id: "housekeeping", icon: Home },
+  { title: "Maintenance", id: "maintenance", icon: Wrench },
+  { title: "Rooms", id: "rooms", icon: Bed },
+  { title: "Bills", id: "finance", icon: Wallet },
+  { title: "Analytics", id: "analytics", icon: TrendingUp },
+]
 
 export default function DashboardLayout({
   children,
@@ -27,6 +43,7 @@ export default function DashboardLayout({
 }) {
   const { user, hotel, logout } = useAuth()
   const location = useLocation()
+  const isMobile = useIsMobile()
   
   const [isLandscapeMobile, setIsLandscapeMobile] = React.useState(false)
 
@@ -52,7 +69,8 @@ export default function DashboardLayout({
     <SidebarProvider>
       <div className="flex w-full bg-background overflow-hidden h-screen">
         
-        <AppSidebar />
+        {/* Sidebar only for mobile */}
+        {isMobile && <AppSidebar />}
 
         <div className="flex-1 flex flex-col min-w-0">
           {/* ── Top Navigation Bar ── */}
@@ -60,8 +78,8 @@ export default function DashboardLayout({
             <header className="sticky top-0 z-50 border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 shadow-sm flex-shrink-0">
               <div className="flex items-center h-14 px-3 md:px-5 gap-3">
 
-              {/* Sidebar Trigger for Mobile/Collapsed */}
-              <SidebarTrigger className="hover:bg-slate-100 h-9 w-9 rounded-lg transition-colors border shadow-sm" />
+              {/* Sidebar Trigger only for mobile */}
+              <SidebarTrigger className="md:hidden hover:bg-slate-100 h-9 w-9 rounded-lg transition-colors border shadow-sm" />
 
               {/* Brand */}
               <Link to="/dashboard/board" className="flex items-center gap-2.5 shrink-0 mr-2 ml-1">
@@ -73,8 +91,33 @@ export default function DashboardLayout({
                 </span>
               </Link>
 
-              {/* Spacer on mobile, header desktop nav was removed as it's now in the sidebar */}
-              <div className="flex-1" />
+              {/* Divider (Desktop Only) */}
+              <div className="h-5 w-px bg-slate-200 hidden md:block shrink-0" />
+
+              {/* Desktop Navigation (Horizontal) */}
+              <nav className="hidden md:flex items-center gap-0.5 overflow-x-auto no-scrollbar flex-1 py-1">
+                {navItems.map((item) => {
+                  const isActive = currentTab === item.id
+                  return (
+                    <Link
+                      key={item.id}
+                      to={`/dashboard/${item.id}`}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all duration-150 shrink-0",
+                        isActive
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                      )}
+                    >
+                      <item.icon className="h-3.5 w-3.5 shrink-0" />
+                      <span>{item.title}</span>
+                    </Link>
+                  )
+                })}
+              </nav>
+
+              {/* Spacer on mobile to keep actions on right */}
+              <div className="flex-1 md:hidden" />
 
               {/* Right Actions */}
               <div className="flex items-center gap-1.5 shrink-0">

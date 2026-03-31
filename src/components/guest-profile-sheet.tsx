@@ -87,10 +87,7 @@ export function GuestProfileSheet({ guestId, onClose, onBookingClick }: GuestPro
                 <Badge variant="secondary" className="text-[9px] font-black uppercase tracking-[0.15em] px-2 h-5 bg-indigo-50 text-indigo-700 border-indigo-100/50">
                   {guest?.nationality || 'IND'}
                 </Badge>
-                <div className="flex items-center gap-1.5 px-2 h-5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100/50">
-                   <div className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse" />
-                   <span className="text-[9px] font-black uppercase tracking-widest">UID Verified</span>
-                </div>
+                {/* UID Verified tag removed per request */}
               </div>
             </div>
           </div>
