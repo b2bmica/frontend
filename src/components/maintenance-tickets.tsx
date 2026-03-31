@@ -210,7 +210,7 @@ export function MaintenanceTickets() {
                                 {ticket.status.replace('-', ' ')}
                             </Badge>
                             <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1 ml-1 uppercase tracking-tighter">
-                                <Clock className="h-3 w-3" /> {format(new Date(ticket.createdAt), 'MMM dd · HH:mm')}
+                                <Clock className="h-3 w-3" /> {format(new Date(ticket.createdAt), 'MMM dd · hh:mm a')}
                             </span>
                         </div>
                         <h4 className="font-bold text-sm md:text-base text-slate-900 leading-snug break-words">

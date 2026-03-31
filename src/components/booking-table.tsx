@@ -11,7 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { BookingDetailSheet } from './booking-detail-sheet';
 import { BookingModal } from './booking-modal';
 import { GuestProfileSheet } from './guest-profile-sheet';
-import { cn } from '../lib/utils';
+import { cn, isExpiredBooking } from '../lib/utils';
 
 export function BookingTable() {
   const { bookings, rooms, checkIn, checkOut, cancelBooking, loading } = useBookings();
@@ -360,7 +360,7 @@ export function BookingTable() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm font-medium">{booking.createdAt ? format(new Date(booking.createdAt), 'dd MMM yy HH:mm') : '—'}</div>
+                        <div className="text-sm font-medium">{booking.createdAt ? format(new Date(booking.createdAt), 'dd MMM yy hh:mm a') : '—'}</div>
                       </TableCell>
                       <TableCell>
                         <div className="font-medium">{room?.roomNumber || '[Deleted]'}</div>
@@ -388,7 +388,7 @@ export function BookingTable() {
                                 <Eye className="h-4 w-4 mr-2" /> View Details
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              {(booking.status === 'reserved' || booking.status === 'checked-in') && (
+                              {(booking.status === 'reserved' || booking.status === 'checked-in') && !isExpiredBooking(booking) && (
                                 <DropdownMenuItem onClick={() => setEditingBooking(booking)}>
                                   <Pencil className="h-4 w-4 mr-2" /> Edit Reservation
                                 </DropdownMenuItem>
@@ -404,7 +404,7 @@ export function BookingTable() {
                                   <LogOut className="h-4 w-4 mr-2" /> Check Out
                                 </DropdownMenuItem>
                               )}
-                              {(booking.status === 'reserved' || booking.status === 'checked-in') && (
+                              {(booking.status === 'reserved' || booking.status === 'checked-in') && !isExpiredBooking(booking) && (
                                 <DropdownMenuItem className="text-destructive" onClick={() => handleAction(booking._id, cancelBooking)}>
                                   <XCircle className="h-4 w-4 mr-2" /> Cancel Booking
                                 </DropdownMenuItem>
@@ -542,7 +542,7 @@ export function BookingTable() {
                   </div>
                   {sortField === 'createdAt' && booking.createdAt && (
                      <div className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">
-                        Created: {format(new Date(booking.createdAt), 'dd MMM, HH:mm')}
+                        Created: {format(new Date(booking.createdAt), 'dd MMM, hh:mm a')}
                      </div>
                   )}
                 </div>

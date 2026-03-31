@@ -4,9 +4,9 @@ import {
   differenceInDays, startOfDay, parseISO, addHours
 } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Loader2, Search, ChevronLeft, ChevronRight, ChevronDown, Bed, X, ShieldCheck, ArrowRight, Lock, Globe, User, Info, Users } from 'lucide-react';
+import { Plus, Loader2, Search, ChevronLeft, ChevronRight, ChevronDown, Bed, X, ShieldCheck, ArrowRight, Lock, Globe, User, Info, Users, CalendarDays } from 'lucide-react';
 import { useBookings, type Booking, type Room } from '../context/booking-context';
-import { cn } from '../lib/utils';
+import { cn, isExpiredBooking } from '../lib/utils';
 import { Button } from './ui/button';
 import { BookingModal } from '@/components/booking-modal';
 import { BookingDetailSheet } from '@/components/booking-detail-sheet';
@@ -226,8 +226,9 @@ export function BookingBoard() {
         } else if (statusFilter === 'block') {
           if (type !== 'block') return false;
         } else {
-          // Standard status filters
-          if (type !== 'booking' || b.status !== statusFilter) return false;
+          // Standard status filters (reserved, checked-in, checked-out, etc.)
+          // Include both regular bookings AND group bookings
+          if ((type !== 'booking' && type !== 'group') || b.status !== statusFilter) return false;
         }
       }
 
@@ -267,8 +268,8 @@ export function BookingBoard() {
       const bRoomId = typeof b.roomId === 'object' ? b.roomId._id : b.roomId;
       if (bRoomId !== roomId) return false;
       
-      const checkin = parseISO(toISO(format(parseISO(b.checkin), 'yyyy-MM-dd'), b.checkinTime || '00:00'));
-      const checkout = parseISO(toISO(format(parseISO(b.checkout), 'yyyy-MM-dd'), b.checkoutTime || '23:59'));
+      const checkin = parseISO(toISO(format(parseISO(b.checkin), 'yyyy-MM-dd'), b.checkinTime || '14:00'));
+      const checkout = parseISO(toISO(format(parseISO(b.checkout), 'yyyy-MM-dd'), b.checkoutTime || '11:00'));
       return now >= checkin && now <= checkout;
     });
   }, [bookings]);
@@ -398,9 +399,16 @@ export function BookingBoard() {
         if (isExpEnquiry) return false;
 
         if (getBookingRoomId(b) !== targetRoom._id) return false;
-        const bStart = startOfDay(parseISO(b.checkin));
-        const bEnd = startOfDay(parseISO(b.checkout));
-        return newCheckinDate < bEnd && newCheckoutDate > bStart;
+        // Time-aware: same-day checkout then checkin is NOT a clash
+        const toDateTime = (dateStr: string, timeStr?: string, dt = '14:00') => {
+          const [h, m] = (timeStr || dt).split(':').map(Number);
+          const d = parseISO(dateStr); d.setHours(h, m, 0, 0); return d;
+        };
+        const bStart = toDateTime(b.checkin, b.checkinTime, '14:00');
+        const bEnd = toDateTime(b.checkout, b.checkoutTime, '11:00');
+        const newCI = toDateTime(newCheckin, booking.checkinTime, '14:00');
+        const newCO2 = toDateTime(newCheckout, booking.checkoutTime, '11:00');
+        return newCI < bEnd && newCO2 > bStart;
       });
 
       if (isClashing) return;
@@ -465,7 +473,7 @@ export function BookingBoard() {
 
   const handleCardDragStart = (e: React.PointerEvent<HTMLDivElement>, booking: Booking) => {
     const isEnquiry = (booking.reservationType || booking.bookingType) === 'enquiry';
-    const isEditable = (booking.status !== 'checked-out' && booking.status !== 'cancelled') || isEnquiry;
+    const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled' && !isExpiredBooking(booking);
     if (!isEditable) return;
     if (isResizingRef.current || isDraggingRef.current) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -645,7 +653,7 @@ export function BookingBoard() {
   // ── Pointer-based resize ───────────────────────────────────────
   const handleResizeDragStart = (e: React.PointerEvent<HTMLDivElement>, booking: Booking, room: Room) => {
     e.stopPropagation();
-    const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled';
+    const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled' && !isExpiredBooking(booking);
     if (!isEditable) return;
     const handleEl = e.currentTarget as HTMLDivElement;
     const cardEl   = handleEl.closest('[data-booking-card]') as HTMLDivElement;
@@ -687,19 +695,36 @@ export function BookingBoard() {
         const origIn = startOfDay(parseISO(booking.checkin));
         const newCO = format(addDays(origIn, differenceInDays(parseISO(booking.checkout), origIn) + daysDelta), 'yyyy-MM-dd');
         if (newCO > booking.checkin) {
-          setPendingUpdate({
-            booking,
-            updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCO },
-            type: 'resize',
-            details: {
-              oldRoom: room.roomNumber, newRoom: room.roomNumber,
-              oldCheckin: booking.checkin, newCheckin: booking.checkin,
-              oldCheckout: booking.checkout, newCheckout: newCO,
-              changeText: daysDelta > 0 ? "Extend" : "Shorten",
-              nightsDelta: daysDelta,
-              oldPrice: booking.roomPrice || 0, newPrice: booking.roomPrice || 0
-            }
+          const toResizeDT = (dateStr: string, timeStr?: string, dt = '14:00') => {
+            const [h, m] = (timeStr || dt).split(':').map(Number);
+            const d = parseISO(dateStr); d.setHours(h, m, 0, 0); return d;
+          };
+          const resizeCI = toResizeDT(booking.checkin, booking.checkinTime, '14:00');
+          const resizeCO = toResizeDT(newCO, booking.checkoutTime, '11:00');
+          const roomId = getBookingRoomId(booking);
+          const resizeClash = bookings.some(b => {
+            if (String(b._id) === String(booking._id) || b.status === 'cancelled' || b.status === 'checked-out') return false;
+            const isExp = (b.reservationType || b.bookingType) === 'enquiry' && b.enquiryExpiresAt && new Date(b.enquiryExpiresAt) < new Date();
+            if (isExp || getBookingRoomId(b) !== roomId) return false;
+            const bStart = toResizeDT(b.checkin, b.checkinTime, '14:00');
+            const bEnd = toResizeDT(b.checkout, b.checkoutTime, '11:00');
+            return resizeCI < bEnd && resizeCO > bStart;
           });
+          if (!resizeClash) {
+            setPendingUpdate({
+              booking,
+              updates: { roomId, checkin: booking.checkin, checkout: newCO },
+              type: 'resize',
+              details: {
+                oldRoom: room.roomNumber, newRoom: room.roomNumber,
+                oldCheckin: booking.checkin, newCheckin: booking.checkin,
+                oldCheckout: booking.checkout, newCheckout: newCO,
+                changeText: daysDelta > 0 ? "Extend" : "Shorten",
+                nightsDelta: daysDelta,
+                oldPrice: booking.roomPrice || 0, newPrice: booking.roomPrice || 0
+              }
+            });
+          }
         }
       }
       cleanup();
@@ -839,6 +864,7 @@ export function BookingBoard() {
                     {isMobile ? 'Today' : 'Go to Today'}
                   </Button>
                 )}
+
              </div>
           </div>
 
@@ -870,6 +896,100 @@ export function BookingBoard() {
                 </button>
               );
             })}
+
+                {/* Out-of-view pill: fires for specific status filters or search, NOT for "All" without search */}
+                {(statusFilter !== 'all' || search) && (() => {
+                  const periodEnd = addDays(weekStart, DAYS);
+                  let outOfView = globalMatches.filter(b => {
+                    const ci = startOfDay(new Date(b.checkin));
+                    const co = startOfDay(new Date(b.checkout));
+                    return !(ci < periodEnd && co > weekStart);
+                  });
+                  // Strip always-included cancelled/expired when a specific status is active
+                  if (statusFilter !== 'all') {
+                    outOfView = outOfView.filter(b => {
+                      const type = b.reservationType || b.bookingType || 'booking';
+                      if (statusFilter === 'enquiry') return type === 'enquiry' && (!b.enquiryExpiresAt || new Date(b.enquiryExpiresAt) >= new Date());
+                      if (statusFilter === 'expired-hold') return type === 'enquiry' && b.enquiryExpiresAt && new Date(b.enquiryExpiresAt) < new Date();
+                      if (statusFilter === 'block') return type === 'block';
+                      if (statusFilter === 'cancelled') return b.status === 'cancelled';
+                      return (type === 'booking' || type === 'group') && b.status === statusFilter;
+                    });
+                  }
+                  if (!outOfView.length) return null;
+                  const filterLabel = statusFilter !== 'all'
+                    ? STATUS_FILTERS.find(f => f.key === statusFilter)?.label || statusFilter
+                    : search ? 'Search' : null;
+                  return (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-black uppercase tracking-widest hover:bg-amber-100 transition-all shrink-0 shadow-sm whitespace-nowrap">
+                          <CalendarDays className="h-3 w-3 shrink-0" />
+                          <span>{outOfView.length} outside view</span>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" sideOffset={8} className="w-[340px] p-0 rounded-2xl shadow-2xl border-none overflow-hidden">
+                        <div className="bg-gradient-to-br from-amber-50 to-orange-50 border-b border-amber-100 px-4 py-3.5">
+                          <div className="flex items-center gap-2">
+                            <CalendarDays className="h-4 w-4 text-amber-600" />
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Outside Current View{filterLabel ? ` — ${filterLabel}` : ''}</p>
+                              <p className="text-xs text-amber-600/80 font-medium mt-0.5">{outOfView.length} booking{outOfView.length !== 1 ? 's' : ''} matched · click any to jump there</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 bg-white">
+                          {outOfView.map(b => {
+                            const guest = getGuest(b);
+                            const room = rooms.find(r => r._id === getBookingRoomId(b));
+                            const statusColorMap: Record<string, string> = {
+                              'checked-in':  'bg-blue-100 text-blue-700 border border-blue-200',
+                              'reserved':    'bg-emerald-100 text-emerald-700 border border-emerald-200',
+                              'checked-out': 'bg-orange-100 text-orange-700 border border-orange-200',
+                              'enquiry':     'bg-amber-100 text-amber-700 border border-amber-200',
+                              'block':       'bg-slate-100 text-slate-600 border border-slate-200',
+                              'cancelled':   'bg-red-50 text-red-500 border border-red-100',
+                            };
+                            const statusKey = b.status || b.reservationType || b.bookingType || 'booking';
+                            const nights = Math.max(1, Math.round((new Date(b.checkout).getTime() - new Date(b.checkin).getTime()) / 86400000));
+                            return (
+                              <button
+                                key={b._id}
+                                className="w-full flex items-start gap-3 px-4 py-3.5 hover:bg-slate-50 text-left transition-colors group"
+                                onClick={() => {
+                                  setWeekStart(startOfDay(new Date(b.checkin)));
+                                  setTimeout(() => setSelectedBooking(b), 150);
+                                }}
+                              >
+                                <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-sm text-slate-700 shrink-0 group-hover:bg-primary group-hover:text-white transition-all">
+                                  {room?.roomNumber || '?'}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-black text-slate-800 truncate">
+                                    {guest?.name || (b.bookingType === 'block' ? 'Room Block' : 'Unknown Guest')}
+                                  </p>
+                                  <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                                    {format(new Date(b.checkin), 'MMM d')} → {format(new Date(b.checkout), 'MMM d, yyyy')}
+                                    <span className="ml-1 opacity-60">· {nights}N</span>
+                                  </p>
+                                  {room && (
+                                    <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mt-0.5">{room.roomType}</p>
+                                  )}
+                                </div>
+                                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                  <span className={cn('text-[9px] font-black uppercase px-2 py-0.5 rounded-full', statusColorMap[statusKey] || 'bg-slate-100 text-slate-500 border border-slate-200')}>
+                                    {b.status || statusKey}
+                                  </span>
+                                  <ArrowRight className="h-3.5 w-3.5 text-slate-200 group-hover:text-primary transition-colors" />
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  );
+                })()}
           </div>
 
           <div className="flex items-center gap-3 pt-2 border-t border-slate-100/50">
@@ -1060,11 +1180,22 @@ export function BookingBoard() {
                                  return parseISO(a.checkin).getTime() - parseISO(b.checkin).getTime();
                                });
 
-                               const visibleCards: { primary: Booking, others: Booking[] }[] = [];
+                               // Time-aware grouping: same-day checkout(11:00)/checkin(14:00) is NOT an overlap
+                               const toCardDT = (dateStr, timeStr, defaultTime = '14:00') => {
+                                 const [h, m] = (timeStr || defaultTime).split(':').map(Number);
+                                 const d = parseISO(dateStr);
+                                 d.setHours(h, m, 0, 0);
+                                 return d;
+                               };
+                               const visibleCards = [];
                                sorted.forEach(b => {
-                                 const bS = parseISO(b.checkin);
-                                 const bE = parseISO(b.checkout);
-                                 const group = visibleCards.find(g => [g.primary, ...g.others].some(m => bS < parseISO(m.checkout) && bE > parseISO(m.checkin)));
+                                 const bS = toCardDT(b.checkin, b.checkinTime, '14:00');
+                                 const bE = toCardDT(b.checkout, b.checkoutTime, '11:00');
+                                 const group = visibleCards.find(g => [g.primary, ...g.others].some(m => {
+                                   const mS = toCardDT(m.checkin, m.checkinTime, '14:00');
+                                   const mE = toCardDT(m.checkout, m.checkoutTime, '11:00');
+                                   return bS < mE && bE > mS;
+                                 }));
                                  if (group) group.others.push(b); else visibleCards.push({ primary: b, others: [] });
                                });
 
@@ -1102,19 +1233,24 @@ export function BookingBoard() {
                                     const bCI = startOfDay(parseISO(booking.checkin));
                                     const bCO = startOfDay(parseISO(booking.checkout));
                                     const wS  = startOfDay(weekStart);
-                                    const pE  = addDays(wS, DAYS);
                                     
-                                    if (bCO <= wS || bCI >= pE) return null;
+                                    const getFraction = (time?: string) => {
+                                      if (!time) return 0.5; // Default middle if time is missing
+                                      const [h, m] = time.split(':').map(Number);
+                                      return (h + m/60) / 24;
+                                    };
 
-                                    const visibleCI = bCI < wS ? wS : bCI;
-                                    const visibleCO = bCO > pE ? pE : bCO;
-                                    
-                                    const startOffset = differenceInDays(visibleCI, wS);
-                                    const visibleDuration = Math.max(0, differenceInDays(visibleCO, visibleCI));
-                                    
-                                    return { 
-                                       left: startOffset * COLUMN_WIDTH + (visibleCI > bCI ? 0 : 1), 
-                                       width: Math.max(COLUMN_WIDTH - 2, (visibleDuration * COLUMN_WIDTH) - (visibleCI > bCI ? 0 : 1) - (visibleCO < bCO ? 0 : 1))
+                                    const startPos = differenceInDays(bCI, wS) + getFraction(booking.checkinTime || '14:00');
+                                    const endPos = differenceInDays(bCO, wS) + getFraction(booking.checkoutTime || '11:00');
+
+                                    if (endPos <= 0 || startPos >= DAYS) return null;
+
+                                    const visStart = Math.max(0, startPos);
+                                    const visEnd = Math.min(DAYS, endPos);
+
+                                    return {
+                                      left: visStart * COLUMN_WIDTH,
+                                      width: Math.max(COLUMN_WIDTH * 0.1, (visEnd - visStart) * COLUMN_WIDTH)
                                     };
                                   }
                                 };

@@ -28,6 +28,7 @@ const MaintenanceTickets = lazy(() => import('./components/maintenance-tickets')
 const DirectBookingEngine = lazy(() => import('./components/direct-booking').then(module => ({ default: module.DirectBookingEngine })))
 const HotelSettings = lazy(() => import('./components/hotel-settings').then(module => ({ default: module.HotelSettings })))
 const AnalyticsDashboard = lazy(() => import('./components/analytics-dashboard').then(module => ({ default: module.AnalyticsDashboard })))
+const FinanceDashboard = lazy(() => import('./components/finance-dashboard').then(module => ({ default: module.FinanceDashboard })))
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
   board: { title: 'Calendar View', subtitle: 'Visual timeline of all room reservations.' },
@@ -37,6 +38,7 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
   housekeeping: { title: 'Housekeeping', subtitle: 'Coordinate cleaning tasks and room status.' },
   maintenance: { title: 'Maintenance', subtitle: 'Manage repair tickets and facility upkeep.' },
   analytics: { title: 'Analytics', subtitle: 'Advanced performance insights and financial reports.' },
+  finance: { title: 'Cash & Bills', subtitle: 'Track all payments, safety deposits, and unpaid bills.' },
   settings: { title: 'Hotel Settings', subtitle: 'Configure hotel information and Indian tax settings.' },
 }
 
@@ -93,7 +95,7 @@ function DashboardContent() {
         }
       }}>
         <div className={cn("flex flex-col", activeTab === 'board' ? "h-full p-0" : "gap-4 md:gap-6 pt-4 md:pt-6 pb-20")}>
-          {activeTab !== 'board' && activeTab !== 'maintenance' && activeTab !== 'housekeeping' && (
+          {activeTab !== 'board' && activeTab !== 'maintenance' && activeTab !== 'housekeeping' && activeTab !== 'analytics' && activeTab !== 'finance' && (
             <div className="mb-2 px-4 md:px-6">
               <h2 className="text-2xl font-black tracking-tight text-slate-900">{currentPage.title}</h2>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{currentPage.subtitle}</p>
@@ -125,6 +127,7 @@ function DashboardContent() {
                       <Route path="maintenance" element={<MaintenanceTickets />} />
                       <Route path="housekeeping" element={<HousekeepingBoard />} />
                       <Route path="analytics" element={<AnalyticsDashboard />} />
+                      <Route path="finance" element={<FinanceDashboard />} />
                       <Route path="settings" element={<HotelSettings />} />
                       <Route path="*" element={<Navigate to="/dashboard/board" replace />} />
                   </Routes>

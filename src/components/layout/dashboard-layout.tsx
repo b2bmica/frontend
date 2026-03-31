@@ -25,6 +25,7 @@ const navItems = [
   { title: "Housekeeping", id: "housekeeping", icon: Home },
   { title: "Maintenance", id: "maintenance", icon: Wrench },
   { title: "Rooms", id: "rooms", icon: Bed },
+  { title: "Bills", id: "finance", icon: Wallet },
   { title: "Analytics", id: "analytics", icon: TrendingUp },
 ]
 

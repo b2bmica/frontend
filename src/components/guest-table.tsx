@@ -6,13 +6,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from './ui/dialog';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { useBookings } from '../context/booking-context';
+import { useBookings, type Booking } from '../context/booking-context';
 import { GuestProfileSheet } from './guest-profile-sheet';
+import { BookingDetailSheet } from './booking-detail-sheet';
 
 export function GuestTable() {
   const { guests, createGuest, loading } = useBookings();
   const [search, setSearch] = useState('');
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -246,7 +248,26 @@ export function GuestTable() {
       </Dialog>
 
       {/* Guest Profile Sheet */}
-      <GuestProfileSheet guestId={selectedGuestId} onClose={() => setSelectedGuestId(null)} />
+      <GuestProfileSheet 
+        guestId={selectedGuestId} 
+        onClose={() => setSelectedGuestId(null)} 
+        onBookingClick={(b) => {
+          setSelectedBooking(b);
+          setSelectedGuestId(null);
+        }}
+      />
+
+      {/* Booking Detail Sheet */}
+      {selectedBooking && (
+        <BookingDetailSheet 
+          booking={selectedBooking} 
+          onClose={() => setSelectedBooking(null)}
+          onOpenGuest={(id) => {
+            setSelectedBooking(null);
+            setSelectedGuestId(id);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -452,6 +452,8 @@ export function HotelSettings() {
             </CardContent>
           </Card>
 
+
+
           <Card className="border-none shadow-md">
             <CardHeader>
               <div className="flex items-center gap-2">

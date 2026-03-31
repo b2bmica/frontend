@@ -4,10 +4,10 @@ import {
   differenceInDays, startOfDay, parseISO, addHours
 } from 'date-fns';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Loader2, Search, ChevronLeft, ChevronRight, ChevronDown, Bed, X, ShieldCheck, ArrowRight, Lock, Globe, User, Info, Users, Timer, Clock } from 'lucide-react';
+import { Plus, Loader2, Search, ChevronLeft, ChevronRight, ChevronDown, Bed, X, ShieldCheck, ArrowRight, Lock, Globe, User, Info, Users, Timer, Clock, CalendarDays } from 'lucide-react';
 import { useBookings, type Booking, type Room } from '../context/booking-context';
 import { useAuth } from '../context/auth-context';
-import { cn } from '../lib/utils';
+import { cn, isExpiredBooking } from '../lib/utils';
 import { Button } from './ui/button';
 import { BookingModal } from '@/components/booking-modal';
 import { BookingDetailSheet } from '@/components/booking-detail-sheet';
@@ -88,6 +88,7 @@ export function BookingBoard() {
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
   const [viewMode] = useState<'today' | 'week' | 'month'>('week');
   const [resizingId, setResizingId] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const [navDirection, setNavDirection] = useState<number>(0); // -1 for prev, 1 for next
   const [isUpdating, setIsUpdating] = useState(false);
   const [useNewPrice, setUseNewPrice] = useState(true);
@@ -172,6 +173,7 @@ export function BookingBoard() {
   const [, setTick] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => {
+      if (isResizingRef.current || isDraggingRef.current) return;
       setTick(t => t + 1);
       // We don't necessarily need to call refreshBookings() every second unless
       // the backend actually changes the status. But for UI countdowns, a re-render is enough.
@@ -243,8 +245,9 @@ export function BookingBoard() {
         } else if (statusFilter === 'block') {
           if (type !== 'block') return false;
         } else {
-          // Standard status filters
-          if (type !== 'booking' || b.status !== statusFilter) return false;
+          // Standard status filters (reserved, checked-in, checked-out, etc.)
+          // Include both regular bookings AND group bookings
+          if ((type !== 'booking' && type !== 'group') || b.status !== statusFilter) return false;
         }
       }
 
@@ -284,8 +287,8 @@ export function BookingBoard() {
       const bRoomId = typeof b.roomId === 'object' ? b.roomId._id : b.roomId;
       if (bRoomId !== roomId) return false;
       
-      const checkin = parseISO(toISO(format(parseISO(b.checkin), 'yyyy-MM-dd'), b.checkinTime || '00:00'));
-      const checkout = parseISO(toISO(format(parseISO(b.checkout), 'yyyy-MM-dd'), b.checkoutTime || '23:59'));
+      const checkin = parseISO(toISO(format(parseISO(b.checkin), 'yyyy-MM-dd'), b.checkinTime || '14:00'));
+      const checkout = parseISO(toISO(format(parseISO(b.checkout), 'yyyy-MM-dd'), b.checkoutTime || '11:00'));
       return now >= checkin && now <= checkout;
     });
   }, [bookings]);
@@ -335,8 +338,7 @@ export function BookingBoard() {
     const bookingAtCell = bookings.find(b => {
       if (b.status === 'cancelled' || b.status === 'checked-out') return false;
       // Expired enquiries are removed from the card layer — cell click should open new booking
-      const isExpiredEnquiry = (b.reservationType || b.bookingType) === 'enquiry'
-        && !!b.enquiryExpiresAt && new Date(b.enquiryExpiresAt) < new Date();
+      const isExpiredEnquiry = isExpiredBooking(b);
       if (isExpiredEnquiry) return false;
       if (getBookingRoomId(b) !== roomId) return false;
       const start = startOfDay(parseISO(b.checkin));
@@ -418,9 +420,16 @@ export function BookingBoard() {
         if (isExpEnquiry) return false;
 
         if (getBookingRoomId(b) !== targetRoom._id) return false;
-        const bStart = startOfDay(parseISO(b.checkin));
-        const bEnd = startOfDay(parseISO(b.checkout));
-        return newCheckinDate < bEnd && newCheckoutDate > bStart;
+        // Time-aware: same-day checkout(11:00) then checkin(14:00) is NOT a clash
+        const toDateTime = (dateStr: string, timeStr?: string, dt = '14:00') => {
+          const [h, m] = (timeStr || dt).split(':').map(Number);
+          const d = parseISO(dateStr); d.setHours(h, m, 0, 0); return d;
+        };
+        const bStart = toDateTime(b.checkin, b.checkinTime, '14:00');
+        const bEnd = toDateTime(b.checkout, b.checkoutTime, '11:00');
+        const newCI = toDateTime(newCheckin, booking.checkinTime, '14:00');
+        const newCO2 = toDateTime(newCheckout, booking.checkoutTime, '11:00');
+        return newCI < bEnd && newCO2 > bStart;
       });
 
       if (isClashing) return;
@@ -429,7 +438,7 @@ export function BookingBoard() {
       const oldRoom = rooms.find(r => r._id === getBookingRoomId(booking));
       const dayDiff = Math.round(differenceInDays(newCheckinDate, startOfDay(parseISO(booking.checkin))));
       const nightText = dayDiff === 0 ? "" : (dayDiff > 0 ? ` +${dayDiff} night${dayDiff > 1 ? 's' : ''}` : ` -${Math.abs(dayDiff)} night${Math.abs(dayDiff) > 1 ? 's' : ''}`);
-      const changeText = targetRoom._id !== getBookingRoomId(booking) ? `Push to Rm ${targetRoom.roomNumber}${nightText}` : (nightText ? `Shift ${nightText.trim()}` : "Save changes");
+      const changeText = targetRoom._id !== getBookingRoomId(booking) ? `Push to ${targetRoom.roomNumber}${nightText}` : (nightText ? `Shift ${nightText.trim()}` : "Save changes");
 
       /* Auto-snap disabled per user request to keep view on the same page */
       /*
@@ -552,6 +561,7 @@ export function BookingBoard() {
        if (cancelled) return;
        longPressReady = true;
        isDraggingRef.current = true;
+       setDraggingId(booking._id);
        try { cardEl.setPointerCapture(e.pointerId); } catch { /* ignore */ }
        try { (navigator as any).vibrate?.([10, 30, 10]); } catch { /* ignore */ }
        
@@ -654,13 +664,13 @@ export function BookingBoard() {
 
     const onUp = (ue: PointerEvent) => {
        const dist = Math.hypot(ue.clientX - startX, ue.clientY - startY);
-       cleanup();
        
        if (dragging && dist > 10) {
          handleDragEnd(ue, { point: { x: ue.clientX, y: ue.clientY } }, booking);
        } else if (!cancelled) {
          setSelectedBooking(booking);
        }
+       cleanup();
     };
 
     const cleanup = () => {
@@ -673,6 +683,7 @@ export function BookingBoard() {
       window.removeEventListener('pointercancel', cleanup);
       
       setDragTarget(null);
+      setDraggingId(null);
       cardEl.style.transform = '';
       cardEl.style.opacity = '';
       cardEl.style.zIndex = '';
@@ -743,19 +754,36 @@ export function BookingBoard() {
         const origIn = startOfDay(parseISO(booking.checkin));
         const newCO = format(addDays(origIn, differenceInDays(startOfDay(parseISO(booking.checkout)), startOfDay(origIn)) + daysDelta), 'yyyy-MM-dd');
         if (newCO > booking.checkin) {
-          setPendingUpdate({
-            booking,
-            updates: { roomId: getBookingRoomId(booking), checkin: booking.checkin, checkout: newCO },
-            type: 'resize',
-            details: {
-              oldRoom: room.roomNumber, newRoom: room.roomNumber,
-              oldCheckin: booking.checkin, newCheckin: booking.checkin,
-              oldCheckout: booking.checkout, newCheckout: newCO,
-              changeText: daysDelta > 0 ? "Extend" : "Shorten",
-              nightsDelta: daysDelta,
-              oldPrice: booking.roomPrice || 0, newPrice: booking.roomPrice || 0
-            }
+          const toResizeDT = (dateStr: string, timeStr?: string, dt = '14:00') => {
+            const [h, m] = (timeStr || dt).split(':').map(Number);
+            const d = parseISO(dateStr); d.setHours(h, m, 0, 0); return d;
+          };
+          const resizeCI = toResizeDT(booking.checkin, booking.checkinTime, '14:00');
+          const resizeCO = toResizeDT(newCO, booking.checkoutTime, '11:00');
+          const rRoomId = getBookingRoomId(booking);
+          const resizeClash = bookings.some(b => {
+            if (String(b._id) === String(booking._id) || b.status === 'cancelled' || b.status === 'checked-out') return false;
+            const isExp = (b.reservationType || b.bookingType) === 'enquiry' && b.enquiryExpiresAt && new Date(b.enquiryExpiresAt) < new Date();
+            if (isExp || getBookingRoomId(b) !== rRoomId) return false;
+            const bStart2 = toResizeDT(b.checkin, b.checkinTime, '14:00');
+            const bEnd2 = toResizeDT(b.checkout, b.checkoutTime, '11:00');
+            return resizeCI < bEnd2 && resizeCO > bStart2;
           });
+          if (!resizeClash) {
+            setPendingUpdate({
+              booking,
+              updates: { roomId: rRoomId, checkin: booking.checkin, checkout: newCO },
+              type: 'resize',
+              details: {
+                oldRoom: room.roomNumber, newRoom: room.roomNumber,
+                oldCheckin: booking.checkin, newCheckin: booking.checkin,
+                oldCheckout: booking.checkout, newCheckout: newCO,
+                changeText: daysDelta > 0 ? "Extend" : "Shorten",
+                nightsDelta: daysDelta,
+                oldPrice: booking.roomPrice || 0, newPrice: booking.roomPrice || 0
+              }
+            });
+          }
         }
       }
       cleanup();
@@ -785,9 +813,10 @@ export function BookingBoard() {
   return (
     <>
       <div 
-        className="flex flex-col bg-background h-full w-full max-w-full"
-        style={{ minHeight: isMobile ? 300 : 480 }}
+        className="flex flex-col bg-slate-50/40 p-1.5 md:p-4 lg:p-6 h-full w-full max-w-full overflow-hidden"
+        style={{ minHeight: isMobile ? 400 : 500 }}
       >
+        <div className="flex flex-col flex-1 bg-white border border-slate-200/60 shadow-2xl shadow-slate-200/40 rounded-[24px] md:rounded-[32px] overflow-hidden relative">
 
 
         {/* ── Header ── */}
@@ -805,21 +834,21 @@ export function BookingBoard() {
 
 
             {/* Navigation (Centered) */}
-            <div className="flex items-center justify-center gap-2">
-              <Button variant="outline" size="sm" className={cn("h-9 px-3 rounded-xl border-slate-200 bg-white shadow-sm font-bold text-xs", isLandscape && "h-8 px-2")}
-                onClick={() => {
-                  setNavDirection(-1);
-                  setWeekStart(addDays(weekStart, -7));
-                }}>
-                <ChevronLeft className="h-4 w-4 mr-1" /> {(isMobile || isLandscape) ? '' : 'Prev'}
-              </Button>
-              
-              <div className="flex flex-col items-center">
+            {isMobile && !isLandscape ? (
+              <div className="flex items-center justify-between border border-slate-200 rounded-[28px] p-1.5 bg-white shadow-sm mt-1 mb-2 mx-1">
+                <Button variant="ghost" size="icon" className="h-10 w-10 p-0 rounded-full border border-slate-200 shadow-sm shrink-0 bg-white"
+                  onClick={() => {
+                    setNavDirection(-1);
+                    setWeekStart(addDays(weekStart, -7));
+                  }}>
+                  <ChevronLeft className="h-5 w-5 text-slate-700" />
+                </Button>
+                
                 <Popover>
                   <PopoverTrigger asChild>
-                    <button className={cn("flex flex-col items-center hover:bg-slate-100/50 p-1 px-4 rounded-xl transition-colors min-w-[140px] group", isLandscape && "min-w-[100px] px-2")}>
-                      {!isLandscape && <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-primary transition-colors">Viewing Period</span>}
-                      <span className={cn("text-xs font-black uppercase tracking-tight text-slate-900 flex items-center gap-1 group-hover:scale-105 transition-transform", isLandscape && "text-[10px]")}>
+                    <button className="flex flex-col items-center justify-center flex-1 px-2 group">
+                      <span className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-400 group-hover:text-primary transition-colors mb-0.5">Viewing Period</span>
+                      <span className="text-xs font-black uppercase tracking-tight text-slate-800 flex items-center gap-1">
                         {periodLabel} <ChevronDown className="h-3 w-3 opacity-40 ml-0.5" />
                       </span>
                     </button>
@@ -829,7 +858,7 @@ export function BookingBoard() {
                       <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 text-slate-400">Jump to Date</Label>
                       <Input 
                         type="date" 
-                        className="h-10 rounded-xl font-bold border-slate-200" 
+                        className="h-10 rounded-[20px] font-bold border-slate-200" 
                         value={format(weekStart, 'yyyy-MM-dd')}
                         onChange={(e) => {
                           if (e.target.value) {
@@ -842,16 +871,64 @@ export function BookingBoard() {
                     </div>
                   </PopoverContent>
                 </Popover>
-              </div>
 
-              <Button variant="outline" size="sm" className={cn("h-9 px-3 rounded-xl border-slate-200 bg-white shadow-sm font-bold text-xs", isLandscape && "h-8 px-2")}
-                onClick={() => {
-                  setNavDirection(1);
-                  setWeekStart(addDays(weekStart, 7));
-                }}>
-                {(isMobile || isLandscape) ? '' : 'Next'} <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
+                <Button variant="ghost" size="icon" className="h-10 w-10 p-0 rounded-full border border-slate-200 shadow-sm shrink-0 bg-white"
+                  onClick={() => {
+                    setNavDirection(1);
+                    setWeekStart(addDays(weekStart, 7));
+                  }}>
+                  <ChevronRight className="h-5 w-5 text-slate-700" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-2">
+                <Button variant="outline" size="sm" className={cn("h-9 px-3 rounded-xl border-slate-200 bg-white shadow-sm font-bold text-xs", isLandscape && "h-8 px-2")}
+                  onClick={() => {
+                    setNavDirection(-1);
+                    setWeekStart(addDays(weekStart, -7));
+                  }}>
+                  <ChevronLeft className="h-4 w-4 mr-1" /> {(isMobile || isLandscape) ? '' : 'Prev'}
+                </Button>
+                
+                <div className="flex flex-col items-center">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button className={cn("flex flex-col items-center hover:bg-slate-100/50 p-1 px-4 rounded-xl transition-colors min-w-[140px] group", isLandscape && "min-w-[100px] px-2")}>
+                        {!isLandscape && <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-primary transition-colors">Viewing Period</span>}
+                        <span className={cn("text-xs font-black uppercase tracking-tight text-slate-900 flex items-center gap-1 group-hover:scale-105 transition-transform", isLandscape && "text-[10px]")}>
+                          {periodLabel} <ChevronDown className="h-3 w-3 opacity-40 ml-0.5" />
+                        </span>
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-4 rounded-2xl shadow-2xl border-none">
+                      <div className="space-y-3">
+                        <Label className="text-[10px] font-black uppercase tracking-widest opacity-60 text-slate-400">Jump to Date</Label>
+                        <Input 
+                          type="date" 
+                          className="h-10 rounded-xl font-bold border-slate-200" 
+                          value={format(weekStart, 'yyyy-MM-dd')}
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              const newDate = startOfDay(new Date(e.target.value));
+                              setNavDirection(newDate > weekStart ? 1 : -1);
+                              setWeekStart(newDate);
+                            }
+                          }}
+                        />
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <Button variant="outline" size="sm" className={cn("h-9 px-3 rounded-xl border-slate-200 bg-white shadow-sm font-bold text-xs", isLandscape && "h-8 px-2")}
+                  onClick={() => {
+                    setNavDirection(1);
+                    setWeekStart(addDays(weekStart, 7));
+                  }}>
+                  {(isMobile || isLandscape) ? '' : 'Next'} <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            )}
 
             {/* View Toggle Pill (Removed per user request) */}
             {/* Status Legend Tags in Top Right */}
@@ -865,7 +942,7 @@ export function BookingBoard() {
                     <div className="relative flex-1 group">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 group-focus-within:text-primary transition-colors" />
                       <Input 
-                        className="h-11 pl-10 pr-10 rounded-xl border-slate-200 bg-white shadow-sm focus:ring-4 focus:ring-primary/5 text-sm font-bold placeholder:font-medium transition-all"
+                        className={cn("pl-10 pr-10 border-slate-200 bg-white shadow-sm focus:ring-4 focus:ring-primary/5 text-sm font-bold placeholder:font-medium transition-all", isMobile ? "h-12 rounded-[24px]" : "h-11 rounded-xl")}
                         placeholder="Search name, room or booking ID..."
                         value={search}
                         onChange={e => setSearch(e.target.value)}
@@ -887,10 +964,79 @@ export function BookingBoard() {
                       </Button>
                     )}
 
+                    {/* Out-of-view search results indicator */}
+                    {search && (() => {
+                      const periodEnd = addDays(weekStart, DAYS);
+                      const outOfView = globalMatches.filter(b => {
+                        const ci = startOfDay(new Date(b.checkin));
+                        const co = startOfDay(new Date(b.checkout));
+                        return !(ci < periodEnd && co > weekStart);
+                      });
+                      if (!outOfView.length) return null;
+                      return (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-black uppercase tracking-widest hover:bg-amber-100 transition-all shrink-0 animate-in fade-in slide-in-from-right-2 shadow-sm">
+                              <CalendarDays className="h-3 w-3" />
+                              <span>{outOfView.length} more</span>
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent align="end" className="w-80 p-0 rounded-2xl shadow-2xl border-none overflow-hidden">
+                            <div className="bg-amber-50 border-b border-amber-100 px-4 py-3">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Results Outside Current View</p>
+                              <p className="text-xs text-amber-600 font-medium mt-0.5">{outOfView.length} booking{outOfView.length !== 1 ? 's' : ''} found — click to navigate</p>
+                            </div>
+                            <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
+                              {outOfView.map(b => {
+                                const guest = getGuest(b);
+                                const room = rooms.find(r => r._id === getBookingRoomId(b));
+                                const statusColorMap: Record<string, string> = {
+                                  'checked-in': 'bg-blue-100 text-blue-700',
+                                  'reserved': 'bg-emerald-100 text-emerald-700',
+                                  'checked-out': 'bg-orange-100 text-orange-700',
+                                  'enquiry': 'bg-amber-100 text-amber-700',
+                                  'block': 'bg-slate-100 text-slate-600',
+                                  'cancelled': 'bg-red-100 text-red-500',
+                                };
+                                const statusKey = b.status || b.reservationType || b.bookingType || 'booking';
+                                return (
+                                  <button
+                                    key={b._id}
+                                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-left transition-colors group"
+                                    onClick={() => {
+                                      setNavDirection(startOfDay(new Date(b.checkin)) > weekStart ? 1 : -1);
+                                      setWeekStart(startOfDay(new Date(b.checkin)));
+                                      setTimeout(() => setSelectedBooking(b), 150);
+                                    }}
+                                  >
+                                    <div className="h-9 w-9 rounded-xl bg-slate-100 flex items-center justify-center font-black text-xs text-slate-700 shrink-0 group-hover:bg-primary group-hover:text-white transition-all">
+                                      {room?.roomNumber || '?'}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs font-black text-slate-800 truncate">{guest?.name || (b.bookingType === 'block' ? 'Room Block' : 'Unknown')}</p>
+                                      <p className="text-[10px] font-bold text-slate-400">
+                                        {format(new Date(b.checkin), 'MMM d')} → {format(new Date(b.checkout), 'MMM d, yyyy')}
+                                      </p>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-1 shrink-0">
+                                      <span className={cn('text-[9px] font-black uppercase px-2 py-0.5 rounded-full', statusColorMap[statusKey] || 'bg-slate-100 text-slate-500')}>
+                                        {b.status || statusKey}
+                                      </span>
+                                      <ArrowRight className="h-3 w-3 text-slate-300 group-hover:text-primary transition-colors" />
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      );
+                    })()}
+
                  </div>
               </div>
 
-              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1 pb-2 -mx-4 px-4 scroll-smooth">
+              <div className="flex items-center gap-2 py-1 pb-2 overflow-x-auto no-scrollbar -mx-4 px-4 scroll-smooth">
                 {STATUS_FILTERS.map((f) => {
                   const key = f.key;
                   const color = 'color' in f ? f.color : undefined;
@@ -906,7 +1052,7 @@ export function BookingBoard() {
                         "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold capitalize tracking-wide border transition-all active:scale-95 whitespace-nowrap shrink-0",
                         statusFilter === key
                           ? "bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-900/10"
-                          : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
+                          : "bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
                       )}
                     >
                       {color && <span className={cn("w-2 h-2 rounded-full flex-shrink-0", color)} />}
@@ -918,14 +1064,116 @@ export function BookingBoard() {
                     </button>
                   );
                 })}
+
+                {/* Out-of-view pill: fires for specific status filters or search, NOT for "All" without search */}
+                {(statusFilter !== 'all' || search) && (() => {
+                  const periodEnd = addDays(weekStart, DAYS);
+                  // From globalMatches, pick only those outside the current view window
+                  let outOfView = globalMatches.filter(b => {
+                    const ci = startOfDay(new Date(b.checkin));
+                    const co = startOfDay(new Date(b.checkout));
+                    return !(ci < periodEnd && co > weekStart);
+                  });
+                  // globalMatches always includes cancelled/expired for grid alerts —
+                  // strip those out when a specific status filter is active so counts are accurate
+                  if (statusFilter !== 'all') {
+                    outOfView = outOfView.filter(b => {
+                      const type = b.reservationType || b.bookingType || 'booking';
+                      if (statusFilter === 'enquiry') return type === 'enquiry' && (!b.enquiryExpiresAt || new Date(b.enquiryExpiresAt) >= new Date());
+                      if (statusFilter === 'expired-hold') return type === 'enquiry' && b.enquiryExpiresAt && new Date(b.enquiryExpiresAt) < new Date();
+                      if (statusFilter === 'block') return type === 'block';
+                      if (statusFilter === 'cancelled') return b.status === 'cancelled';
+                      return (type === 'booking' || type === 'group') && b.status === statusFilter;
+                    });
+                  }
+                  if (!outOfView.length) return null;
+                  const filterLabel = statusFilter !== 'all'
+                    ? STATUS_FILTERS.find(f => f.key === statusFilter)?.label || statusFilter
+                    : search ? 'Search' : null;
+                  return (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[10px] font-black uppercase tracking-widest hover:bg-amber-100 transition-all shrink-0 animate-in fade-in slide-in-from-right-2 shadow-sm whitespace-nowrap">
+                          <CalendarDays className="h-3 w-3 shrink-0" />
+                          <span>{outOfView.length} outside view</span>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" sideOffset={8} className="w-[340px] p-0 rounded-2xl shadow-2xl border-none overflow-hidden">
+                        <div className="bg-gradient-to-br from-amber-50 to-orange-50 border-b border-amber-100 px-4 py-3.5">
+                          <div className="flex items-center gap-2">
+                            <CalendarDays className="h-4 w-4 text-amber-600" />
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-widest text-amber-700">Outside Current View{filterLabel ? ` — ${filterLabel}` : ''}</p>
+                              <p className="text-xs text-amber-600/80 font-medium mt-0.5">{outOfView.length} booking{outOfView.length !== 1 ? 's' : ''} matched · click any to jump there</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 bg-white">
+                          {outOfView.map(b => {
+                            const guest = getGuest(b);
+                            const room = rooms.find(r => r._id === getBookingRoomId(b));
+                            const statusColorMap: Record<string, string> = {
+                              'checked-in':  'bg-blue-100 text-blue-700 border border-blue-200',
+                              'reserved':    'bg-emerald-100 text-emerald-700 border border-emerald-200',
+                              'checked-out': 'bg-orange-100 text-orange-700 border border-orange-200',
+                              'enquiry':     'bg-amber-100 text-amber-700 border border-amber-200',
+                              'block':       'bg-slate-100 text-slate-600 border border-slate-200',
+                              'cancelled':   'bg-red-50 text-red-500 border border-red-100',
+                            };
+                            const statusKey = b.status || b.reservationType || b.bookingType || 'booking';
+                            const nights = Math.max(1, Math.round((new Date(b.checkout).getTime() - new Date(b.checkin).getTime()) / 86400000));
+                            return (
+                              <button
+                                key={b._id}
+                                className="w-full flex items-start gap-3 px-4 py-3.5 hover:bg-slate-50 text-left transition-colors group"
+                                onClick={() => {
+                                  setNavDirection(startOfDay(new Date(b.checkin)) > weekStart ? 1 : -1);
+                                  setWeekStart(startOfDay(new Date(b.checkin)));
+                                  setTimeout(() => setSelectedBooking(b), 150);
+                                }}
+                              >
+                                {/* Room avatar */}
+                                <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-sm text-slate-700 shrink-0 group-hover:bg-primary group-hover:text-white transition-all">
+                                  {room?.roomNumber || '?'}
+                                </div>
+                                {/* Info */}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-black text-slate-800 truncate">
+                                    {guest?.name || (b.bookingType === 'block' ? 'Room Block' : 'Unknown Guest')}
+                                  </p>
+                                  <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                                    {format(new Date(b.checkin), 'MMM d')} → {format(new Date(b.checkout), 'MMM d, yyyy')}
+                                    <span className="ml-1 opacity-60">· {nights}N</span>
+                                  </p>
+                                  {room && (
+                                    <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mt-0.5">{room.roomType}</p>
+                                  )}
+                                </div>
+                                {/* Status + arrow */}
+                                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                  <span className={cn('text-[9px] font-black uppercase px-2 py-0.5 rounded-full', statusColorMap[statusKey] || 'bg-slate-100 text-slate-500 border border-slate-200')}>
+                                    {b.status || statusKey}
+                                  </span>
+                                  <ArrowRight className="h-3.5 w-3.5 text-slate-200 group-hover:text-primary transition-colors" />
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  );
+                })()}
+
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-slate-100/50">
                 <div className="flex items-center gap-3">
-                  <span className="text-[9px] font-bold tracking-[0.15em] text-slate-400 uppercase">Room Cleanliness:</span>
+                  <span className="text-[9px] font-bold tracking-[0.15em] text-slate-400 uppercase">{isMobile ? 'Room:' : 'Room Cleanliness:'}</span>
                   {[
                     { dot: 'bg-emerald-500', label: 'Clean' },
                     { dot: 'bg-amber-400', label: 'Dirty' },
+                    { dot: 'bg-red-500', label: 'Repair' },
                   ].map(({ dot, label }) => (
                     <span key={label} className="flex items-center gap-1.5">
                       <span className={cn("w-2 h-2 rounded-full flex-shrink-0", dot)} />
@@ -1029,30 +1277,46 @@ export function BookingBoard() {
                     <div 
                       key={`sidebar-${room._id}`}
                       className={cn(
-                        "border-r border-b flex flex-col justify-center px-1.5 md:px-3.5 transition-all hover:bg-slate-50",
-                        isMobile && "px-1"
+                        "border-r border-b flex flex-col transition-all hover:bg-slate-50",
+                        isMobile ? "p-2 items-start justify-center gap-0.5" : "justify-center px-1.5 md:px-3.5"
                       )} 
                       style={{ width: ROOM_COL, height: ROW_HEIGHT }}
                     >
-                      <div className="flex flex-col md:flex-row md:items-center justify-between mb-0.5 gap-0.5 md:gap-1.5">
-                        <div className="flex items-center gap-1 md:gap-1.5">
-                          <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", room.status === 'clean' ? 'bg-emerald-500' : 'bg-amber-400')} />
-                          <div className="text-[10px] md:text-[12px] font-black tracking-tight text-slate-800 leading-none">
-                            RM {room.roomNumber}
+                      {isMobile ? (
+                        <>
+                          <div className="flex items-center gap-1.5 w-full">
+                            <span className="text-[12px] font-black text-slate-800 tracking-tight leading-none">{room.roomNumber}</span>
+                            <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", room.status === 'clean' ? 'bg-emerald-500' : (room.status === 'maintenance' || room.status === 'under-maintenance') ? 'bg-red-500' : 'bg-amber-400')} />
+                            {getRoomOccupancy(room._id) && (
+                              <Clock className="h-2.5 w-2.5 text-blue-500 animate-pulse shrink-0 ml-auto" />
+                            )}
                           </div>
-                        </div>
-                        {getRoomOccupancy(room._id) && (
-                          <Clock className="h-2.5 w-2.5 md:h-3 md:w-3 text-blue-500 animate-pulse shrink-0" />
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between mt-1 pt-1 border-t border-slate-50/50">
-                        <div className="text-[7px] md:text-[9px] font-bold text-slate-400 truncate tracking-tight opacity-70 uppercase">
-                          {room.roomType}
-                        </div>
-                        <div className="text-[9px] md:text-[10px] font-black text-primary/60 tracking-tighter">
-                          ₹{room.price?.toLocaleString('en-IN') || '0'}
-                        </div>
-                      </div>
+                          <div className="text-[10px] font-bold text-slate-400 capitalize opacity-90 leading-tight mt-0.5">{room.roomType}</div>
+                          <div className="text-[10px] font-bold text-slate-500 flex-1 flex items-end">₹{room.price?.toLocaleString('en-IN') || '0'}</div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex flex-col md:flex-row md:items-center justify-between mb-0.5 gap-0.5 md:gap-1.5">
+                            <div className="flex items-center gap-1 md:gap-1.5">
+                              <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", room.status === 'clean' ? 'bg-emerald-500' : (room.status === 'maintenance' || room.status === 'under-maintenance') ? 'bg-red-500' : 'bg-amber-400')} />
+                              <div className="text-[10px] md:text-[12px] font-black tracking-tight text-slate-800 leading-none">
+                                {room.roomNumber}
+                              </div>
+                            </div>
+                            {getRoomOccupancy(room._id) && (
+                              <Clock className="h-2.5 w-2.5 md:h-3 md:w-3 text-blue-500 animate-pulse shrink-0" />
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between mt-1 pt-1 border-t border-slate-50/50">
+                            <div className="text-[7px] md:text-[9px] font-bold text-slate-400 truncate tracking-tight opacity-70 uppercase">
+                              {room.roomType}
+                            </div>
+                            <div className="text-[9px] md:text-[10px] font-black text-primary/60 tracking-tighter">
+                              ₹{room.price?.toLocaleString('en-IN') || '0'}
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1069,7 +1333,12 @@ export function BookingBoard() {
                       style={{ width: timeline.length * COLUMN_WIDTH }}
                     >
                     {activeRooms.map((room) => {
-                      const roomBookings = filteredBookings.filter(b => getBookingRoomId(b) === room._id);
+                      const roomBookings = filteredBookings.map(b => {
+                        if (pendingUpdate && pendingUpdate.booking._id === b._id) {
+                          return { ...b, ...pendingUpdate.updates };
+                        }
+                        return b;
+                      }).filter(b => getBookingRoomId(b) === room._id);
                       return (
                         <div 
                           key={room._id}
@@ -1131,11 +1400,15 @@ export function BookingBoard() {
 
                              {/* Booking cards overlay for this room */}
                              {(() => {
-                                 const isExpiredEnquiry = (b: Booking) =>
-                                   (b.reservationType || b.bookingType) === 'enquiry' &&
-                                   !!b.enquiryExpiresAt && new Date(b.enquiryExpiresAt) < new Date();
+                                 const isExpiredEnquiry = (b: Booking) => isExpiredBooking(b);
 
-                                 const roomBookingsAll = filteredBookings.filter(b => getBookingRoomId(b) === room._id);
+                                                                   const patchedBookings = filteredBookings.map(b => {
+                                    if (pendingUpdate && pendingUpdate.booking._id === b._id) {
+                                      return { ...b, ...pendingUpdate.updates };
+                                    }
+                                    return b;
+                                  });
+                                  const roomBookingsAll = patchedBookings.filter(b => getBookingRoomId(b) === room._id);
                                  
                                  const statusPriority: Record<string, number> = { 'checked-in': 5, 'confirmed': 4, 'reserved': 3, 'checked-out': 2 };
 
@@ -1160,7 +1433,7 @@ export function BookingBoard() {
 
                                  const visibleCards: { primary: Booking, others: Booking[] }[] = [];
                                  sorted.forEach(b => {
-                                   const isExp = isExpiredEnquiry(b);
+                                   const isExp = isExpiredBooking(b);
                                    if (b.status === 'cancelled') {
                                      const key = startOfDay(parseISO(b.checkin)).toISOString();
                                      if (!cancelledByDay[key]) cancelledByDay[key] = [];
@@ -1207,27 +1480,37 @@ export function BookingBoard() {
                                        const bCI = startOfDay(parseISO(booking.checkin));
                                        const bCO = startOfDay(parseISO(booking.checkout));
                                        const wS  = startOfDay(weekStart);
-                                       const pE  = addDays(wS, DAYS);
-                                       if (bCO <= wS || bCI >= pE) return null;
-                                       const visibleCI = bCI < wS ? wS : bCI;
-                                       const visibleCO = bCO > pE ? pE : bCO;
-                                       const startOffset = differenceInDays(visibleCI, wS);
-                                       const visibleDuration = Math.max(0, differenceInDays(visibleCO, visibleCI));
-                                       return { 
-                                          left: startOffset * COLUMN_WIDTH + (visibleCI > bCI ? 0 : 1), 
-                                          width: Math.max(COLUMN_WIDTH - 2, (visibleDuration * COLUMN_WIDTH) - (visibleCI > bCI ? 0 : 1) - (visibleCO < bCO ? 0 : 1))
+                                       
+                                       const getFraction = (time?: string) => {
+                                         if (!time) return 0.5;
+                                         const [h, m] = time.split(':').map(Number);
+                                         return (h + m/60) / 24;
+                                       };
+
+                                       const startPos = differenceInDays(bCI, wS) + getFraction(booking.checkinTime || '14:00');
+                                       const endPos = differenceInDays(bCO, wS) + getFraction(booking.checkoutTime || '11:00');
+
+                                       if (endPos <= 0 || startPos >= DAYS) return null;
+
+                                       const visStart = Math.max(0, startPos);
+                                       const visEnd = Math.min(DAYS, endPos);
+
+                                       return {
+                                         left: visStart * COLUMN_WIDTH,
+                                         width: Math.max(COLUMN_WIDTH * 0.1, (visEnd - visStart) * COLUMN_WIDTH)
                                        };
                                      }
                                    };
 
                                    const layout = calculateLayoutValue();
                                    if (!layout) return null;
-                                   const isResizing = resizingId === booking._id;
-                                   const isExpired = isExpiredEnquiry(booking);
+                                                                       const isResizing = resizingId === booking._id;
+                                    const isPendingMove = !!(pendingUpdate && pendingUpdate.booking._id === booking._id);
+                                   const isExpired = isExpiredBooking(booking);
                                    const isEnquiry = (booking.reservationType || booking.bookingType) === 'enquiry';
                                    const isBlock = booking.bookingType === 'block' || booking.reservationType === 'block';
                                    const isSolid = ['checked-in', 'confirmed', 'reserved', 'checked-out'].includes(booking.status);
-                                   const isEditable = (booking.status !== 'checked-out' && booking.status !== 'cancelled') || isEnquiry || isBlock;
+                                   const isEditable = booking.status !== 'checked-out' && booking.status !== 'cancelled' && !isExpired;
                                    const isToday = isSameDay(parseISO(booking.checkin), new Date());
 
                                    return (
@@ -1235,7 +1518,10 @@ export function BookingBoard() {
                                        key={booking._id}
                                        data-booking-card
                                        initial={false}
-                                       animate={isResizing ? {} : { left: layout.left, width: layout.width }}
+                                                                               animate={{ 
+                                          left: layout.left, 
+                                          ...((isResizing || draggingId === booking._id) ? {} : { width: layout.width }) 
+                                        }}
                                        className={cn(
                                          "absolute top-2 bottom-2 rounded-xl text-white select-none group/card cursor-pointer active:scale-[0.99] transition-all",
                                          getStatusColor(booking.status, booking.bookingType, booking.reservationType, isExpired),
@@ -1268,7 +1554,7 @@ export function BookingBoard() {
                                          )}
 
                                          <div className="flex justify-between items-start gap-1">
-                                           <div className="flex flex-col min-w-0">
+                                           <div className={cn("flex flex-col min-w-0", isMobile && "gap-0.5")}>
                                             {isBlock ? (
                                               <button
                                                 className="flex items-center gap-1 cursor-pointer pointer-events-auto active:scale-95 transition-transform"
@@ -1301,6 +1587,11 @@ export function BookingBoard() {
                                                 <Timer className="h-2 w-2" />
                                                 {formatCountdown(booking.enquiryExpiresAt)}
                                               </div>
+                                           )}
+                                           {isMobile && !isBlock && !isEnquiry && (
+                                             <span className="text-[7px] font-black opacity-80 uppercase tracking-tighter leading-none mt-0.5">
+                                               {booking.status.replace('-', ' ')}
+                                             </span>
                                            )}
                                            </div>
 
@@ -1444,9 +1735,9 @@ export function BookingBoard() {
             </div>
           </div>
             {/* Bottom spacer */}
-            <div className="h-8 w-full pointer-events-none" />
           </div>
         </div>
+      </div>
       </div>
 
       <BookingModal isOpen={isModalOpen || !!editingBooking} onClose={() => { setIsModalOpen(false); setEditingBooking(null); }}
@@ -1481,8 +1772,8 @@ export function BookingBoard() {
               <div className="space-y-2 text-center min-w-0">
                  <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest truncate">Original</p>
                  <div className="p-3 md:p-4 rounded-2xl bg-slate-50 border border-slate-100 shadow-inner group/card transition-all opacity-60 flex flex-col justify-center min-h-[72px]">
-                    <p className="font-black text-slate-900 text-xs md:text-sm mb-1 leading-none truncate w-full" title={pendingUpdate ? `Rm ${pendingUpdate.details.oldRoom}` : 'Room'}>
-                      {pendingUpdate ? `Rm ${pendingUpdate.details.oldRoom}` : 'Room'}
+                    <p className="font-black text-slate-900 text-xs md:text-sm mb-1 leading-none truncate w-full" title={pendingUpdate ? pendingUpdate.details.oldRoom : 'Room'}>
+                      {pendingUpdate ? pendingUpdate.details.oldRoom : 'Room'}
                     </p>
                     <p className="text-[9px] md:text-[10px] font-bold text-slate-400 whitespace-nowrap overflow-hidden text-ellipsis">
                       {pendingUpdate && format(parseISO(pendingUpdate.details.oldCheckin), 'MMM dd')} - {pendingUpdate && format(parseISO(pendingUpdate.details.oldCheckout), 'MMM dd')}
@@ -1498,8 +1789,8 @@ export function BookingBoard() {
               <div className="space-y-2 text-center min-w-0">
                  <p className="text-[9px] font-black uppercase text-primary/60 tracking-widest truncate">Proposed</p>
                  <div className="p-3 md:p-4 rounded-2xl bg-primary/5 border border-primary/20 shadow-lg shadow-primary/5 ring-1 ring-primary/5 scale-105 flex flex-col justify-center min-h-[72px]">
-                    <p className="font-black text-primary text-xs md:text-sm mb-1 leading-none truncate w-full" title={pendingUpdate ? `Rm ${pendingUpdate.details.newRoom}` : 'Room'}>
-                      {pendingUpdate ? `Rm ${pendingUpdate.details.newRoom}` : 'Room'}
+                    <p className="font-black text-primary text-xs md:text-sm mb-1 leading-none truncate w-full" title={pendingUpdate ? pendingUpdate.details.newRoom : 'Room'}>
+                      {pendingUpdate ? pendingUpdate.details.newRoom : 'Room'}
                     </p>
                     <p className="text-[9px] md:text-[10px] font-black text-primary whitespace-nowrap overflow-hidden text-ellipsis">
                       {pendingUpdate && format(parseISO(pendingUpdate.details.newCheckin), 'MMM dd')} - {pendingUpdate && format(parseISO(pendingUpdate.details.newCheckout), 'MMM dd')}

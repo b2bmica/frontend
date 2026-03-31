@@ -46,6 +46,8 @@ export interface Booking {
   isGroup?: boolean;
   groupId?: string;
   groupName?: string;
+  mealRate?: number;
+  mealChargeTotal?: number;
   createdAt?: string;
   updatedAt?: string;
   createdBy?: { name: string; email: string };
