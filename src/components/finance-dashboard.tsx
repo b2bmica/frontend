@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useBookings } from '../context/booking-context';
 import { differenceInDays, format, startOfToday, startOfDay } from 'date-fns';
-import { 
+import {
   CreditCard,
   AlertCircle,
   TrendingUp,
@@ -48,7 +48,7 @@ export function FinanceDashboard() {
   const fetchFinanceSummary = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/analytics/finance`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/analytics/finance`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) throw new Error('Fetch failed');
@@ -66,7 +66,7 @@ export function FinanceDashboard() {
   }, [token]);
 
   // Frontend filtering logic
-  const activeBookings = bookings.filter(b => 
+  const activeBookings = bookings.filter(b =>
     !['cancelled', 'expired'].includes(b.status) &&
     b.reservationType !== 'block'
   );
@@ -76,7 +76,7 @@ export function FinanceDashboard() {
       const room = typeof b.roomId === 'object' ? b.roomId : rooms.find(r => r._id === b.roomId);
       const guest = typeof b.guestId === 'object' ? b.guestId : guests.find(g => g._id === b.guestId);
       const totalPaid = b.paymentLogs?.reduce((sum, log) => sum + log.amount, 0) || b.advancePayment || 0;
-      
+
       const p = calculateBookingPrice({
         roomPrice: b.roomPrice || (room as any)?.price || 0,
         checkin: b.checkin,
@@ -109,16 +109,16 @@ export function FinanceDashboard() {
   const filteredData = billingData.billList.filter(b => {
     const nameStr = b.guest?.name || '';
     const roomStr = b.room?.roomNumber || '';
-    const matchesSearch = 
+    const matchesSearch =
       nameStr.toLowerCase().includes(searchTerm.toLowerCase()) ||
       roomStr.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     if (!matchesSearch) return false;
 
     if (statusFilter === 'dues') return b.unpaidBalance > 0;
     if (statusFilter === 'paid') return b.unpaidBalance === 0;
     if (statusFilter === 'in-house') return b.status === 'checked-in';
-    
+
     return true;
   });
 
@@ -129,9 +129,9 @@ export function FinanceDashboard() {
   const handleUpdateOpeningCash = async () => {
     try {
       setIsActioning(true);
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/analytics/opening-cash`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/analytics/opening-cash`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
@@ -151,9 +151,9 @@ export function FinanceDashboard() {
     if (!window.confirm('Are you sure you want to finalize the financial records for today? This will lock the cash closing balance.')) return;
     try {
       setIsActioning(true);
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/analytics/finalize-finance`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/analytics/finalize-finance`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
@@ -176,7 +176,7 @@ export function FinanceDashboard() {
 
   return (
     <div className="space-y-6 pb-20 w-full max-w-7xl mx-auto px-4 md:px-8 mt-6">
-      
+
       {/* Header & Quick Actions */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -191,19 +191,19 @@ export function FinanceDashboard() {
             <Wallet className="h-4 w-4 mr-2" /> Set Opening Cash
           </Button>
           <Button variant="ghost" className="h-11 w-11 p-0 rounded-2xl hover:bg-slate-100" onClick={fetchFinanceSummary}>
-             <RefreshCcw className={cn("h-5 w-5 text-slate-400", (loading || isActioning) && "animate-spin")} />
+            <RefreshCcw className={cn("h-5 w-5 text-slate-400", (loading || isActioning) && "animate-spin")} />
           </Button>
         </div>
       </div>
 
       {/* Row 1: KPI Cards */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
         <StatCard title="Outstanding Amount" value={`₹${stats.outstandingAmount.toLocaleString('en-IN')}`} icon={AlertCircle} color="rose" />
-        <StatCard 
-          title="Today's Collection" 
-          value={`₹${stats.todayCollection.total.toLocaleString('en-IN')}`} 
-          icon={TrendingUp} 
-          color="emerald" 
+        <StatCard
+          title="Today's Collection"
+          value={`₹${stats.todayCollection.total.toLocaleString('en-IN')}`}
+          icon={TrendingUp}
+          color="emerald"
           subValue={`Cash: ₹${stats.todayCollection.cash} • UPI: ₹${stats.todayCollection.upi} • Card: ₹${stats.todayCollection.card}`}
         />
         <StatCard title="Advance Collected" value={`₹${stats.advanceCollected.toLocaleString('en-IN')}`} icon={CreditCard} color="blue" />
@@ -212,209 +212,209 @@ export function FinanceDashboard() {
       {/* Row 2: Operational Stats & Cash Closing */}
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
         <div className="lg:col-span-2 grid gap-4 grid-cols-1 sm:grid-cols-2">
-           <AlertMetric title="Unpaid Checkouts Today" count={row2.unpaidCheckoutsToday.count} amount={row2.unpaidCheckoutsToday.amount} color="rose" />
-           <AlertMetric title="Overdue Bills" count={row2.overdueBills.count} amount={row2.overdueBills.amount} color="rose" />
-           <AlertMetric title="Partial Paid Guests" count={row2.partialPaidGuests.count} amount={row2.partialPaidGuests.amount} color="amber" />
+          <AlertMetric title="Unpaid Checkouts Today" count={row2.unpaidCheckoutsToday.count} amount={row2.unpaidCheckoutsToday.amount} color="rose" />
+          <AlertMetric title="Overdue Bills" count={row2.overdueBills.count} amount={row2.overdueBills.amount} color="rose" />
+          <AlertMetric title="Partial Paid Guests" count={row2.partialPaidGuests.count} amount={row2.partialPaidGuests.amount} color="amber" className="sm:col-span-2" />
         </div>
 
         <Card className="rounded-[32px] border-none shadow-xl bg-slate-900 text-white overflow-hidden relative group h-full">
-           <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 via-slate-900 to-emerald-500/10 opacity-80 pointer-events-none" />
-           <CardHeader className="p-6 pb-2 relative z-10 border-none">
-             <div className="flex justify-between items-center">
-               <CardTitle className="text-lg font-black tracking-tight text-white flex items-center gap-2">
-                 <Wallet className="h-5 w-5 text-emerald-400" />
-                 Cash Closing
-               </CardTitle>
-               <Badge className={cn(
-                 "border-none text-[9px] uppercase font-black px-2.5 h-6 backdrop-blur-md",
-                 isFinalized ? "bg-emerald-500/20 text-emerald-400" : "bg-white/10 text-amber-400"
-               )}>
-                 {isFinalized ? 'Finalized' : 'Live'}
-               </Badge>
-             </div>
-           </CardHeader>
-           <CardContent className="p-6 relative z-10 space-y-5">
-              <div className="grid grid-cols-2 gap-y-6">
-                 <div className="space-y-1">
-                    <p className="text-[10px] font-black uppercase text-white/40 tracking-widest leading-none">Opening</p>
-                    <p className="text-xl font-bold">₹{cashClosing.openingCash.toLocaleString('en-IN')}</p>
-                 </div>
-                 <div className="space-y-1">
-                    <p className="text-[10px] font-black uppercase text-emerald-400 tracking-widest leading-none">Collected</p>
-                    <p className="text-xl font-bold text-emerald-400">+ ₹{cashClosing.collectedToday.toLocaleString('en-IN')}</p>
-                 </div>
-                 <div className="space-y-1 border-t border-white/5 pt-3">
-                    <p className="text-[10px] font-black uppercase text-rose-400 tracking-widest leading-none">Refunds</p>
-                    <p className="text-xl font-bold text-rose-400">- ₹{cashClosing.refunds.toLocaleString('en-IN')}</p>
-                 </div>
-                 <div className="space-y-1 border-t border-white/5 pt-3">
-                    <p className="text-[10px] font-black uppercase text-white/40 tracking-widest leading-none">Closing</p>
-                    <p className="text-xl font-bold text-white">₹{cashClosing.closingCash.toLocaleString('en-IN')}</p>
-                 </div>
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 via-slate-900 to-emerald-500/10 opacity-80 pointer-events-none" />
+          <CardHeader className="p-6 pb-2 relative z-10 border-none">
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-lg font-black tracking-tight text-white flex items-center gap-2">
+                <Wallet className="h-5 w-5 text-emerald-400" />
+                Cash Closing
+              </CardTitle>
+              <Badge className={cn(
+                "border-none text-[9px] uppercase font-black px-2.5 h-6 backdrop-blur-md",
+                isFinalized ? "bg-emerald-500/20 text-emerald-400" : "bg-white/10 text-amber-400"
+              )}>
+                {isFinalized ? 'Finalized' : 'Live'}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6 relative z-10 space-y-5">
+            <div className="grid grid-cols-2 gap-y-6">
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase text-white/40 tracking-widest leading-none">Opening</p>
+                <p className="text-xl font-bold">₹{cashClosing.openingCash.toLocaleString('en-IN')}</p>
               </div>
-              <Button 
-                className={cn(
-                  "w-full h-11 rounded-2xl font-bold text-[11px] uppercase tracking-widest transition-all",
-                  isFinalized ? "bg-emerald-500/10 text-emerald-500 cursor-default" : "bg-white text-slate-900 hover:bg-emerald-50 hover:text-emerald-700"
-                )}
-                disabled={isFinalized || isActioning}
-                onClick={handleFinalizeFinance}
-              >
-                {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : isFinalized ? 'Finalized for Day' : 'Finalise Cash for Day'}
-              </Button>
-           </CardContent>
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase text-emerald-400 tracking-widest leading-none">Collected</p>
+                <p className="text-xl font-bold text-emerald-400">+ ₹{cashClosing.collectedToday.toLocaleString('en-IN')}</p>
+              </div>
+              <div className="space-y-1 border-t border-white/5 pt-3">
+                <p className="text-[10px] font-black uppercase text-rose-400 tracking-widest leading-none">Refunds</p>
+                <p className="text-xl font-bold text-rose-400">- ₹{cashClosing.refunds.toLocaleString('en-IN')}</p>
+              </div>
+              <div className="space-y-1 border-t border-white/5 pt-3">
+                <p className="text-[10px] font-black uppercase text-white/40 tracking-widest leading-none">Closing</p>
+                <p className="text-xl font-bold text-white">₹{cashClosing.closingCash.toLocaleString('en-IN')}</p>
+              </div>
+            </div>
+            <Button
+              className={cn(
+                "w-full h-11 rounded-2xl font-bold text-[11px] uppercase tracking-widest transition-all",
+                isFinalized ? "bg-emerald-500/10 text-emerald-500 cursor-default" : "bg-white text-slate-900 hover:bg-emerald-50 hover:text-emerald-700"
+              )}
+              disabled={isFinalized || isActioning}
+              onClick={handleFinalizeFinance}
+            >
+              {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : isFinalized ? 'Finalized for Day' : 'Finalise Cash for Day'}
+            </Button>
+          </CardContent>
         </Card>
       </div>
 
       {/* Main Table: Guest Bills */}
       <Card className="rounded-[32px] border border-slate-200/60 shadow-sm bg-white overflow-hidden">
         <CardHeader className="p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-4 border-b border-slate-100 bg-slate-50/50">
-           <div>
-             <CardTitle className="text-2xl font-black tracking-tighter text-slate-900">Guest Bills Ledger</CardTitle>
-           </div>
-           
-           <div className="flex items-center gap-3 w-full md:w-auto">
-             <div className="relative flex-1 md:w-80">
-               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-               <Input 
-                 className="pl-10 h-11 rounded-2xl border-slate-200 bg-white shadow-sm focus:ring-4 focus:ring-indigo-100 font-bold transition-all"
-                 placeholder="Search guest or room..."
-                 value={searchTerm}
-                 onChange={(e) => setSearchTerm(e.target.value)}
-               />
-             </div>
-             <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[140px] h-11 rounded-2xl font-bold bg-white shadow-sm border-slate-200">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent className="rounded-2xl border-slate-200 shadow-xl font-bold">
-                  <SelectItem value="all">All Bills</SelectItem>
-                  <SelectItem value="dues">Dues Only</SelectItem>
-                  <SelectItem value="paid">Fully Paid</SelectItem>
-                  <SelectItem value="in-house">In-House</SelectItem>
-                </SelectContent>
-             </Select>
-           </div>
-        </CardHeader>
-        
-        <CardContent className="p-0 overflow-x-auto scrollbar-hide">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead>
-                <tr className="bg-slate-100/30 border-b border-slate-100">
-                  <th className="px-8 py-4 font-black uppercase text-[10px] tracking-[0.2em] text-slate-500">Guest Name</th>
-                  <th className="px-8 py-4 font-black uppercase text-[10px] tracking-[0.2em] text-slate-500">Room</th>
-                  <th className="px-8 py-4 font-black uppercase text-[10px] tracking-[0.2em] text-slate-500">Total Bill</th>
-                  <th className="px-8 py-4 font-black uppercase text-[10px] tracking-[0.2em] text-slate-500">Paid</th>
-                  <th className="px-8 py-4 font-black uppercase text-[10px] tracking-[0.2em] text-slate-500">Balance</th>
-                  <th className="px-8 py-4 font-black uppercase text-[10px] tracking-[0.2em] text-slate-500 text-center">Status</th>
-                  <th className="px-8 py-4 font-black uppercase text-[10px] tracking-[0.2em] text-slate-500 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {filteredData.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-8 py-16 text-center text-slate-400 font-black text-xs uppercase tracking-[0.3em]">
-                        No records found
-                    </td>
-                  </tr>
-                ) : (
-                  filteredData.map(b => {
-                    const isUnpaidCheckoutToday = b.status === 'checked-in' && startOfDay(new Date(b.checkout)).getTime() === startOfToday().getTime() && b.unpaidBalance > 0;
-                    const isPartial = b.unpaidBalance > 0 && b.totalPaid > 0;
-                    const isPaid = b.unpaidBalance === 0;
+          <div>
+            <CardTitle className="text-2xl font-black tracking-tighter text-slate-900">Guest Bills Ledger</CardTitle>
+          </div>
 
-                    return (
-                      <tr 
-                        key={b._id} 
-                        className={cn(
-                          "transition-all group border-l-[4px] border-l-transparent",
-                          isUnpaidCheckoutToday ? "bg-rose-50/70 hover:bg-rose-100/80 border-l-rose-500" : 
-                          isPartial ? "bg-amber-50/50 hover:bg-amber-100/50 border-l-amber-500" : 
-                          isPaid ? "bg-emerald-50/30 hover:bg-emerald-50/60 border-l-emerald-500" :
-                          "hover:bg-slate-50"
-                        )}
-                      >
-                        <td className="px-8 py-5">
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-2xl bg-white border border-slate-200 text-slate-700 flex items-center justify-center font-black shadow-sm group-hover:scale-105 transition-transform">
-                              {b.guest?.name?.[0] || 'G'}
-                            </div>
-                            <div>
-                              <p className="font-black text-slate-900 text-sm tracking-tight">{b.guest?.name || 'Walk-in Guest'}</p>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Stay from {format(new Date(b.checkin), 'MMM dd')}</p>
-                            </div>
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="relative flex-1 md:w-80">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                className="pl-10 h-11 rounded-2xl border-slate-200 bg-white shadow-sm focus:ring-4 focus:ring-indigo-100 font-bold transition-all"
+                placeholder="Search guest or room..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[140px] h-11 rounded-2xl font-bold bg-white shadow-sm border-slate-200">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent className="rounded-2xl border-slate-200 shadow-xl font-bold">
+                <SelectItem value="all">All Bills</SelectItem>
+                <SelectItem value="dues">Dues Only</SelectItem>
+                <SelectItem value="paid">Fully Paid</SelectItem>
+                <SelectItem value="in-house">In-House</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-0 overflow-x-auto scrollbar-hide">
+          <table className="w-full text-left text-sm whitespace-nowrap">
+            <thead>
+              <tr className="bg-slate-100/30 border-b border-slate-100">
+                <th className="px-8 py-4 font-black uppercase text-[10px] tracking-[0.2em] text-slate-500">Guest Name</th>
+                <th className="px-8 py-4 font-black uppercase text-[10px] tracking-[0.2em] text-slate-500">Room</th>
+                <th className="px-8 py-4 font-black uppercase text-[10px] tracking-[0.2em] text-slate-500 text-right">Total Bill</th>
+                <th className="px-8 py-4 font-black uppercase text-[10px] tracking-[0.2em] text-slate-500 text-right">Paid</th>
+                <th className="px-8 py-4 font-black uppercase text-[10px] tracking-[0.2em] text-slate-500 text-right">Balance</th>
+                <th className="px-8 py-4 font-black uppercase text-[10px] tracking-[0.2em] text-slate-500 text-center">Status</th>
+                <th className="px-8 py-4 font-black uppercase text-[10px] tracking-[0.2em] text-slate-500 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filteredData.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-8 py-16 text-center text-slate-400 font-black text-xs uppercase tracking-[0.3em]">
+                    No records found
+                  </td>
+                </tr>
+              ) : (
+                filteredData.map(b => {
+                  const isUnpaidCheckoutToday = b.status === 'checked-in' && startOfDay(new Date(b.checkout)).getTime() === startOfToday().getTime() && b.unpaidBalance > 0;
+                  const isPartial = b.unpaidBalance > 0 && b.totalPaid > 0;
+                  const isPaid = b.unpaidBalance === 0;
+
+                  return (
+                    <tr
+                      key={b._id}
+                      className={cn(
+                        "transition-all group border-l-[4px] border-l-transparent",
+                        isUnpaidCheckoutToday ? "bg-rose-50/70 hover:bg-rose-100/80 border-l-rose-500" :
+                          isPartial ? "bg-amber-50/50 hover:bg-amber-100/50 border-l-amber-500" :
+                            isPaid ? "bg-emerald-50/30 hover:bg-emerald-50/60 border-l-emerald-500" :
+                              "hover:bg-slate-50"
+                      )}
+                    >
+                      <td className="px-8 py-5">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-2xl bg-white border border-slate-200 text-slate-700 flex items-center justify-center font-black shadow-sm group-hover:scale-105 transition-transform">
+                            {b.guest?.name?.[0] || 'G'}
                           </div>
-                        </td>
-                        <td className="px-8 py-5">
-                           <Badge variant="outline" className="rounded-xl px-2.5 h-7 font-black text-[10px] bg-white border-slate-200 text-slate-600 shadow-sm">
-                              #{b.room?.roomNumber || '?'}
-                           </Badge>
-                        </td>
-                        <td className="px-8 py-5 font-black text-slate-900">
-                           ₹{b.totalAmount.toLocaleString('en-IN')}
-                        </td>
-                        <td className="px-8 py-5">
-                           <p className="font-black text-emerald-600">₹{b.totalPaid.toLocaleString('en-IN')}</p>
-                        </td>
-                        <td className="px-8 py-5">
-                           <p className={cn("font-black text-base tabular-nums", b.unpaidBalance > 0 ? "text-rose-600" : "text-emerald-500")}>
-                             {b.unpaidBalance > 0 ? `₹${b.unpaidBalance.toLocaleString('en-IN')}` : '₹0'}
-                           </p>
-                        </td>
-                        <td className="px-8 py-5 text-center">
-                           <Badge className={cn(
-                             "uppercase font-black text-[9px] tracking-[0.15em] px-3 py-1.5 rounded-xl border-none shadow-sm",
-                             isPaid ? "bg-emerald-500 text-white" : 
-                             isUnpaidCheckoutToday ? "bg-rose-600 text-white animate-pulse" :
-                             isPartial ? "bg-amber-500 text-white" : "bg-slate-200 text-slate-500"
-                           )}>
-                             {isPaid ? 'Paid' : isUnpaidCheckoutToday ? 'Unpaid Checkout' : isPartial ? 'Partial' : 'Pending'}
-                           </Badge>
-                        </td>
-                        <td className="px-8 py-5 text-right">
-                           <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                             <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl hover:bg-white hover:text-emerald-600 shadow-none border-slate-100 border">
-                               <Smartphone className="h-4 w-4" />
-                             </Button>
-                             <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl hover:bg-white hover:text-indigo-600 shadow-none border-slate-100 border">
-                               <Printer className="h-4 w-4" />
-                             </Button>
-                           </div>
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
+                          <div>
+                            <p className="font-black text-slate-900 text-sm tracking-tight">{b.guest?.name || 'Walk-in Guest'}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Stay from {format(new Date(b.checkin), 'MMM dd')}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-8 py-5">
+                        <Badge variant="outline" className="rounded-xl px-2.5 h-7 font-black text-[10px] bg-white border-slate-200 text-slate-600 shadow-sm">
+                          #{b.room?.roomNumber || '?'}
+                        </Badge>
+                      </td>
+                      <td className="px-8 py-5 font-black text-slate-900 text-right">
+                        ₹{b.totalAmount.toLocaleString('en-IN')}
+                      </td>
+                      <td className="px-8 py-5 text-right">
+                        <p className="font-black text-emerald-600">₹{b.totalPaid.toLocaleString('en-IN')}</p>
+                      </td>
+                      <td className="px-8 py-5 text-right">
+                        <p className={cn("font-black text-base tabular-nums", b.unpaidBalance > 0 ? "text-rose-600" : "text-emerald-500")}>
+                          {b.unpaidBalance > 0 ? `₹${b.unpaidBalance.toLocaleString('en-IN')}` : '₹0'}
+                        </p>
+                      </td>
+                      <td className="px-8 py-5 text-center">
+                        <Badge className={cn(
+                          "uppercase font-black text-[9px] tracking-[0.15em] px-3 py-1.5 rounded-xl border-none shadow-sm",
+                          isPaid ? "bg-emerald-500 text-white" :
+                            isUnpaidCheckoutToday ? "bg-rose-600 text-white animate-pulse" :
+                              isPartial ? "bg-amber-500 text-white" : "bg-slate-200 text-slate-500"
+                        )}>
+                          {isPaid ? 'Paid' : isUnpaidCheckoutToday ? 'Unpaid Checkout' : isPartial ? 'Partial' : 'Pending'}
+                        </Badge>
+                      </td>
+                      <td className="px-8 py-5 text-right">
+                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl hover:bg-white hover:text-emerald-600 shadow-none border-slate-100 border">
+                            <Smartphone className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-9 w-9 rounded-xl hover:bg-white hover:text-indigo-600 shadow-none border-slate-100 border">
+                            <Printer className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
         </CardContent>
       </Card>
 
       {/* Opening Cash Dialog */}
       <Dialog open={showOpeningCashDialog} onOpenChange={setShowOpeningCashDialog}>
         <DialogContent className="sm:max-w-[400px] rounded-[32px]">
-           <DialogHeader>
-             <DialogTitle className="text-xl font-black">Set Opening Cash</DialogTitle>
-             <DialogDescription>Enter the starting cash balance for today's shift.</DialogDescription>
-           </DialogHeader>
-           <div className="py-6">
-             <div className="relative">
-                <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                <Input 
-                  type="number" 
-                  className="pl-12 h-14 rounded-2xl border-slate-200 font-bold text-xl" 
-                  placeholder="0.00"
-                  value={tempOpeningCash}
-                  onChange={(e) => setTempOpeningCash(e.target.value)}
-                />
-             </div>
-           </div>
-           <DialogFooter>
-             <Button variant="ghost" onClick={() => setShowOpeningCashDialog(false)} className="rounded-xl font-bold">Cancel</Button>
-             <Button onClick={handleUpdateOpeningCash} className="rounded-xl bg-slate-900 text-white font-bold" disabled={isActioning}>
-               {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Update Balance'}
-             </Button>
-           </DialogFooter>
+          <DialogHeader>
+            <DialogTitle className="text-xl font-black">Set Opening Cash</DialogTitle>
+            <DialogDescription>Enter the starting cash balance for today's shift.</DialogDescription>
+          </DialogHeader>
+          <div className="py-6">
+            <div className="relative">
+              <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+              <Input
+                type="number"
+                className="pl-12 h-14 rounded-2xl border-slate-200 font-bold text-xl"
+                placeholder="0.00"
+                value={tempOpeningCash}
+                onChange={(e) => setTempOpeningCash(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowOpeningCashDialog(false)} className="rounded-xl font-bold">Cancel</Button>
+            <Button onClick={handleUpdateOpeningCash} className="rounded-xl bg-slate-900 text-white font-bold" disabled={isActioning}>
+              {isActioning ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Update Balance'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
@@ -451,7 +451,7 @@ function StatCard({ title, value, icon: Icon, color, subValue }: { title: string
   );
 }
 
-function AlertMetric({ title, count, amount, color }: { title: string, count: number, amount: number, color: 'rose' | 'blue' | 'amber' }) {
+function AlertMetric({ title, count, amount, color, className }: { title: string, count: number, amount: number, color: 'rose' | 'blue' | 'amber', className?: string }) {
   const colorMap: any = {
     rose: "bg-white border-rose-100 text-rose-700 hover:bg-rose-50/50",
     blue: "bg-white border-blue-100 text-blue-700 hover:bg-blue-50/50",
@@ -459,12 +459,12 @@ function AlertMetric({ title, count, amount, color }: { title: string, count: nu
   };
 
   return (
-    <div className={cn("p-6 rounded-[32px] border-2 flex items-center justify-between group cursor-default transition-all duration-300", colorMap[color])}>
+    <div className={cn("p-6 rounded-[32px] border-2 flex items-center justify-between group cursor-default transition-all duration-300", colorMap[color], className)}>
       <div className="space-y-2">
         <p className="text-[11px] font-black uppercase tracking-widest opacity-60 leading-none">{title}</p>
         <div className="flex items-baseline gap-2">
-           <span className="text-3xl font-black leading-none">{count}</span>
-           <span className="text-xs font-bold opacity-60 uppercase tracking-widest">Guests</span>
+          <span className="text-3xl font-black leading-none">{count}</span>
+          <span className="text-xs font-bold opacity-60 uppercase tracking-widest">Guests</span>
         </div>
       </div>
       <div className="text-right flex flex-col items-end">

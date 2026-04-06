@@ -33,11 +33,11 @@ const ENQUIRY_DURATIONS = [
 ];
 
 const PLAN_TYPES = [
-  { key: 'EP',     label: 'Room Only',            desc: 'No meals included',                     icon: Bed },
-  { key: 'CP',     label: 'Continental Plan',      desc: 'Room + Breakfast',                      icon: Coffee },
-  { key: 'MAP',    label: 'Modified American Plan', desc: 'Room + Breakfast + Dinner',             icon: Sun },
-  { key: 'AP',     label: 'American Plan',         desc: 'Room + All Meals (B+L+D)',              icon: Utensils },
-  { key: 'custom', label: 'Custom Inclusions',     desc: 'Specify your own package',              icon: Star },
+  { key: 'EP', label: 'Room Only', desc: 'No meals included', icon: Bed },
+  { key: 'CP', label: 'Continental Plan', desc: 'Room + Breakfast', icon: Coffee },
+  { key: 'MAP', label: 'Modified American Plan', desc: 'Room + Breakfast + Dinner', icon: Sun },
+  { key: 'AP', label: 'American Plan', desc: 'Room + All Meals (B+L+D)', icon: Utensils },
+  { key: 'custom', label: 'Custom Inclusions', desc: 'Specify your own package', icon: Star },
 ];
 
 const PLAN_LABELS = {
@@ -57,7 +57,7 @@ const parseHotelTime = (timeStr: string): string => {
     const [time, period] = timeStr.split(' ');
     const [h, m] = time.split(':').map(Number);
     const hour24 = period?.toUpperCase() === 'PM' && h !== 12 ? h + 12 :
-                   period?.toUpperCase() === 'AM' && h === 12 ? 0 : h;
+      period?.toUpperCase() === 'AM' && h === 12 ? 0 : h;
     return `${hour24.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
   } catch { return '12:00'; }
 };
@@ -101,11 +101,11 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
   // Date/time state
   const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const defaultCheckinTime  = parseHotelTime(hotel?.settings?.checkinTimes?.[0]  || '14:00');
+  const defaultCheckinTime = parseHotelTime(hotel?.settings?.checkinTimes?.[0] || '14:00');
   const defaultCheckoutTime = parseHotelTime(hotel?.settings?.checkoutTimes?.[0] || '11:00');
 
-  const [checkinDate,  setCheckinDate]  = useState('');
-  const [checkinTime,  setCheckinTime]  = useState(defaultCheckinTime);
+  const [checkinDate, setCheckinDate] = useState('');
+  const [checkinTime, setCheckinTime] = useState(defaultCheckinTime);
   const [checkoutDate, setCheckoutDate] = useState('');
   const [checkoutTime, setCheckoutTime] = useState(defaultCheckoutTime);
 
@@ -164,7 +164,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       setplanCustomText(initialBooking.planCustomText || '');
       setAdults(initialBooking.adults || 2);
       setChildren(initialBooking.children || 0);
-      
+
       if (isEditingGroup && initialBooking.groupId) {
         const groupRooms = bookings
           .filter(b => b.groupId === initialBooking.groupId && b.status !== 'cancelled' && b.status !== 'expired')
@@ -172,11 +172,11 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         setSelectedRooms(groupRooms);
         setNumRooms(groupRooms.length);
         setGroupName(initialBooking.groupName || '');
-         const groupBookings = bookings.filter(b => b.groupId === initialBooking.groupId && b.status !== 'cancelled' && b.status !== 'expired');
-         setNumRooms(groupBookings.length || 1);
+        const groupBookings = bookings.filter(b => b.groupId === initialBooking.groupId && b.status !== 'cancelled' && b.status !== 'expired');
+        setNumRooms(groupBookings.length || 1);
         const rIds = groupBookings.map(b => typeof b.roomId === 'object' ? b.roomId._id : b.roomId).filter(Boolean) as string[];
         setSelectedRooms(rIds);
-        
+
         const assignments: Record<string, { guestName: string; plan: string; price: number; adults: number; children: number }> = {};
         groupBookings.forEach(b => {
           const rid = typeof b.roomId === 'object' ? b.roomId._id : b.roomId;
@@ -192,7 +192,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         setRoomAssignments(assignments);
         setStep('groupConfig');
       }
-      
+
       // Intelligent Guest Resolution: if ID is a string, try to find data in other bookings
       if (typeof initialBooking.guestId === 'object') {
         setSelectedGuest(initialBooking.guestId);
@@ -256,7 +256,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // ─── Availability ─────────────────────────────────────────────────────────
-  const checkinISO  = useMemo(() => toISO(checkinDate,  checkinTime), [checkinDate, checkinTime]);
+  const checkinISO = useMemo(() => toISO(checkinDate, checkinTime), [checkinDate, checkinTime]);
   const checkoutISO = useMemo(() => toISO(checkoutDate, checkoutTime), [checkoutDate, checkoutTime]);
 
   const availableRooms = useMemo(() => {
@@ -267,11 +267,11 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       return !bookings.some(b => {
         const bStatus = b.status;
         const bType = b.reservationType || (b as any).bookingType;
-        
+
         const bStatusLower = bStatus?.toLowerCase();
         // Skip explicitly non-blocking statuses
         if (['cancelled', 'checked-out', 'expired', 'no-show', 'no_show'].includes(bStatusLower)) return false;
-        
+
         // Skip expired enquiries or blocks
         const expiry = b.enquiryExpiresAt || b.blockExpiresAt;
         if (expiry && new Date(expiry) < now && (bType === 'enquiry' || bType === 'block')) return false;
@@ -280,17 +280,17 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         const bId = typeof b._id === 'object' ? String((b._id as any)) : String(b._id);
         const initId = initialBooking ? (typeof initialBooking._id === 'object' ? String((initialBooking._id as any)) : String(initialBooking._id)) : null;
         if (initId && bId === initId) return false;
-        
+
         // If editing group, skip all bookings in that group
         if (isEditingGroup && initialBooking?.groupId && b.groupId === initialBooking.groupId) return false;
-        
+
         const bRoomId = typeof b.roomId === 'object' ? String((b.roomId as any)._id) : String(b.roomId);
         if (bRoomId !== String(room._id)) return false;
 
         const checkinDateStr = typeof b.checkin === 'string' ? b.checkin.slice(0, 10) : format(new Date(b.checkin), 'yyyy-MM-dd');
         const checkoutDateStr = typeof b.checkout === 'string' ? b.checkout.slice(0, 10) : format(new Date(b.checkout), 'yyyy-MM-dd');
-        
-        const bCI = toISO(checkinDateStr, b.checkinTime  || '14:00');
+
+        const bCI = toISO(checkinDateStr, b.checkinTime || '14:00');
         const bCO = toISO(checkoutDateStr, b.checkoutTime || '11:00');
         return overlaps(checkinISO, checkoutISO, bCI, bCO);
       });
@@ -306,14 +306,14 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   };
 
   // ─── Financials ───────────────────────────────────────────────────────────
-  const { 
+  const {
     nights,
-    baseSubtotal, 
-    extraAdults, 
-    extraCharge, 
-    mealCharge, 
+    baseSubtotal,
+    extraAdults,
+    extraCharge,
+    mealCharge,
     subtotal,
-    taxAmount, 
+    taxAmount,
     grandTotal: totalAmount,
     taxConfig
   } = useMemo(() => {
@@ -339,8 +339,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
   // ─── Navigation ───────────────────────────────────────────────────────────
   const STEP_ORDER_BOOKING: StepType[] = ['type', 'dates', 'room', 'guest', 'payment'];
-  const STEP_ORDER_BLOCK:   StepType[] = ['type', 'dates', 'room'];
-  const STEP_ORDER_GROUP:   StepType[] = ['type', 'dates', 'groupConfig', 'guest', 'roomAssignment', 'payment'];
+  const STEP_ORDER_BLOCK: StepType[] = ['type', 'dates', 'room'];
+  const STEP_ORDER_GROUP: StepType[] = ['type', 'dates', 'groupConfig', 'guest', 'roomAssignment', 'payment'];
   const STEP_ORDER_ENQUIRY: StepType[] = ['type', 'dates', 'room', 'guest'];
 
   const getActiveSteps = () => {
@@ -354,19 +354,19 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
   const stepOrder = getActiveSteps();
 
-  const goNext = (nextStep: StepType) => { 
+  const goNext = (nextStep: StepType) => {
     if (nextStep === 'roomAssignment' && reservationType === 'group') {
       const init: Record<string, { guestName: string; plan: string; price: number; adults: number; children: number }> = { ...roomAssignments };
       const leadName = selectedGuest?.name || 'Lead';
       const allNames = [leadName, ...additionalGuests.map(ag => ag.name).filter(Boolean)];
-      
+
       selectedRooms.forEach((rid, i) => {
         if (!init[rid]) {
           const r = rooms.find(rm => rm._id === rid);
           // Default first room to lead, others to TBA or subsequent names
-          init[rid] = { 
-            guestName: allNames[i] || leadName, 
-            plan: planType, 
+          init[rid] = {
+            guestName: allNames[i] || leadName,
+            plan: planType,
             price: r?.price || 0,
             adults: adults,
             children: children
@@ -375,8 +375,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       });
       setRoomAssignments(init);
     }
-    setStep(nextStep); 
-    setError(null); 
+    setStep(nextStep);
+    setError(null);
   };
   const goBack = () => {
     const idx = stepOrder.indexOf(step);
@@ -407,20 +407,20 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
     if (!/^\+?[0-9]{10,15}$/.test(newGuest.phone)) { setError('Valid phone number required'); return; }
     setIsSubmitting(true); setError(null);
     try {
-      const payload: Omit<Guest, '_id'> = { 
-        name: newGuest.name, 
-        phone: newGuest.phone, 
-        email: newGuest.email || '', 
+      const payload: Omit<Guest, '_id'> = {
+        name: newGuest.name,
+        phone: newGuest.phone,
+        email: newGuest.email || '',
         nationality: newGuest.nationality,
         idProof: newGuest.idProof.number ? newGuest.idProof : { idType: 'aadhaar', number: 'TBA' }
       };
       const guest = await createGuest(payload);
-      setSelectedGuest(guest); 
-      setShowNewGuest(false); 
+      setSelectedGuest(guest);
+      setShowNewGuest(false);
       goNext(reservationType === 'group' ? 'roomAssignment' : 'payment');
-    } catch (err: unknown) { 
+    } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred';
-      setError(errorMessage); 
+      setError(errorMessage);
     }
     setIsSubmitting(false);
   };
@@ -429,7 +429,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const handleSubmit = async () => {
     // Mode-specific validation
     const isActuallyGroup = reservationType === 'group' && (!initialBooking || isEditingGroup);
-    
+
     if (!isActuallyGroup && reservationType !== 'block' && !selectedRoom) { setError('Please select a room'); return; }
     if (isActuallyGroup && selectedRooms.length === 0) { setError('Please select rooms'); return; }
     if (!nights && !isDayUse) { setError('Invalid dates'); return; }
@@ -438,8 +438,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
     setIsSubmitting(true); setError(null);
     try {
       const effectiveExpiry = expiryHours === 'custom' ? parseFloat(customExpiryHours) : parseFloat(expiryHours);
-      const enquiryExpiresAt = initialBooking?.enquiryExpiresAt 
-        ? initialBooking.enquiryExpiresAt 
+      const enquiryExpiresAt = initialBooking?.enquiryExpiresAt
+        ? initialBooking.enquiryExpiresAt
         : (reservationType === 'enquiry' || reservationType === 'block')
           ? addHours(new Date(), effectiveExpiry).toISOString()
           : undefined;
@@ -448,8 +448,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         const conflictRooms = selectedRooms.filter(rid => {
           // If editing, exclude the rooms already assigned to this group
           if (isEditingGroup && initialBooking?.groupId) {
-             const groupRoomIds = bookings.filter(b => b.groupId === initialBooking.groupId).map(b => typeof b.roomId === 'object' ? b.roomId._id : b.roomId);
-             if (groupRoomIds.includes(rid)) return false;
+            const groupRoomIds = bookings.filter(b => b.groupId === initialBooking.groupId).map(b => typeof b.roomId === 'object' ? b.roomId._id : b.roomId);
+            if (groupRoomIds.includes(rid)) return false;
           }
           return !isRoomAvailable(rid);
         });
@@ -462,25 +462,25 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         }
 
         const groupId = isEditingGroup ? initialBooking?.groupId : `GRP-${Date.now()}`;
-        
+
         // If editing group, handle removal of rooms
         if (isEditingGroup && initialBooking?.groupId) {
-           const existingGroupBookings = bookings.filter(b => b.groupId === initialBooking.groupId && b.status !== 'cancelled' && b.status !== 'expired');
-           const toRemove = existingGroupBookings.filter(b => !selectedRooms.includes(typeof b.roomId === 'object' ? b.roomId._id : b.roomId));
-           
-           if (toRemove.length > 0) {
-             await Promise.all(toRemove.map(b => cancelBooking(b._id)));
-           }
+          const existingGroupBookings = bookings.filter(b => b.groupId === initialBooking.groupId && b.status !== 'cancelled' && b.status !== 'expired');
+          const toRemove = existingGroupBookings.filter(b => !selectedRooms.includes(typeof b.roomId === 'object' ? b.roomId._id : b.roomId));
 
-           // Update group metadata if a record exists (optional)
-           try {
-              await updateGroupMetadata(initialBooking.groupId, {
-                groupName,
-                totalRooms: selectedRooms.length
-              });
-           } catch (metaErr) {
-              console.warn('Group metadata update skipped (likely ad-hoc group):', metaErr);
-           }
+          if (toRemove.length > 0) {
+            await Promise.all(toRemove.map(b => cancelBooking(b._id)));
+          }
+
+          // Update group metadata if a record exists (optional)
+          try {
+            await updateGroupMetadata(initialBooking.groupId, {
+              groupName,
+              totalRooms: selectedRooms.length
+            });
+          } catch (metaErr) {
+            console.warn('Group metadata update skipped (likely ad-hoc group):', metaErr);
+          }
         }
 
         const roomOps = selectedRooms.map(async (rid) => {
@@ -511,7 +511,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           };
 
           const existing = isEditingGroup ? bookings.find(b => b.groupId === groupId && (typeof b.roomId === 'object' ? b.roomId._id : b.roomId) === rid) : null;
-          
+
           if (existing) {
             return updateBooking(existing._id, partialPayload);
           } else {
@@ -566,9 +566,9 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         }
       }
       onClose();
-    } catch (err: unknown) { 
+    } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred';
-      setError(errorMessage); 
+      setError(errorMessage);
     }
     setIsSubmitting(false);
   };
@@ -577,9 +577,9 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const renderTypeStep = () => {
     const types = [
       { key: 'booking', label: 'Booking', desc: 'Confirmed reservation', icon: CalendarCheck, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
-      { key: 'enquiry', label: 'Enquiry',  desc: 'Tentative hold, auto-releases', icon: Clock, color: 'text-amber-600 bg-amber-50 border-amber-200' },
-      { key: 'block',   label: 'Room Block', desc: 'Maintenance / owner use', icon: Lock, color: 'text-slate-600 bg-slate-50 border-slate-200' },
-      { key: 'group',   label: 'Group',    desc: 'Multiple rooms at once', icon: Users, color: 'text-blue-600 bg-blue-50 border-blue-200' },
+      { key: 'enquiry', label: 'Enquiry', desc: 'Tentative hold, auto-releases', icon: Clock, color: 'text-amber-600 bg-amber-50 border-amber-200' },
+      { key: 'block', label: 'Room Block', desc: 'Maintenance / owner use', icon: Lock, color: 'text-slate-600 bg-slate-50 border-slate-200' },
+      { key: 'group', label: 'Group', desc: 'Multiple rooms at once', icon: Users, color: 'text-blue-600 bg-blue-50 border-blue-200' },
     ];
     return (
       <div className="grid grid-cols-2 gap-3 p-2">
@@ -587,24 +587,24 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           const Icon = t.icon;
           const isActive = reservationType === t.key;
           return (
-            <button 
-              key={t.key} 
+            <button
+              key={t.key}
               disabled={!!initialBooking}
-              onClick={() => { 
+              onClick={() => {
                 setReservationType(t.key as 'booking' | 'enquiry' | 'block' | 'group');
                 if (t.key === 'block') {
-                   const bdMinutes = hotel?.settings?.defaultBlockDuration || 1440;
-                   const bd = Math.max(1, bdMinutes / 1440);
-                   if (!isNaN(bd) && checkinDate) {
-                      setCheckoutDate(format(addDays(parseISO(checkinDate), bd), 'yyyy-MM-dd'));
-                   }
+                  const bdMinutes = hotel?.settings?.defaultBlockDuration || 1440;
+                  const bd = Math.max(1, bdMinutes / 1440);
+                  if (!isNaN(bd) && checkinDate) {
+                    setCheckoutDate(format(addDays(parseISO(checkinDate), bd), 'yyyy-MM-dd'));
+                  }
                 }
-                goNext('dates'); 
+                goNext('dates');
               }}
               className={cn(
                 'relative flex flex-col items-center gap-2 p-5 rounded-2xl border-2 transition-all text-center',
-                initialBooking 
-                  ? (isActive ? t.color + ' border-primary ring-2 ring-primary/20 opacity-100 shadow-sm' : 'opacity-40 grayscale pointer-events-none border-slate-100') 
+                initialBooking
+                  ? (isActive ? t.color + ' border-primary ring-2 ring-primary/20 opacity-100 shadow-sm' : 'opacity-40 grayscale pointer-events-none border-slate-100')
                   : (t.color + ' hover:scale-[1.02] hover:shadow-md cursor-pointer active:scale-95')
               )}>
               <Icon className="h-7 w-7" />
@@ -635,7 +635,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl">
           <Label className="text-xs font-black uppercase tracking-widest opacity-60">Number of Rooms</Label>
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" 
+            <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg"
               onClick={() => {
                 const newNum = Math.max(1, numRooms - 1);
                 setNumRooms(newNum);
@@ -644,25 +644,34 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                 }
               }}>–</Button>
             <span className="font-black text-lg">{numRooms}</span>
-            <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" onClick={() => setNumRooms(Math.min(50, numRooms + 1))}>+</Button>
+            <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" disabled={numRooms >= availableRooms.length || numRooms >= 50} onClick={() => setNumRooms(Math.min(availableRooms.length, Math.min(50, numRooms + 1)))}>+</Button>
           </div>
         </div>
         <div className="space-y-3 bg-slate-50/50 p-3 rounded-2xl border border-dashed border-slate-200">
           <div className="flex items-center justify-between">
             <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Distribution Preferences</Label>
-            <span className="text-[9px] font-medium text-slate-400">Total: {Object.values(groupRoomPrefs).reduce((a,b)=>a+b,0)}</span>
+            <span className="text-[9px] font-medium text-slate-400">Total: {Object.values(groupRoomPrefs).reduce((a, b) => a + b, 0)}</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            {roomTypesInHotel.map(type => (
-              <div key={type} className="flex items-center justify-between px-2.5 py-1.5 rounded-xl border bg-white shadow-sm">
-                <span className="text-[10px] font-bold text-slate-600 truncate mr-2">{type}</span>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button className="h-5 w-5 rounded-md hover:bg-slate-100 flex items-center justify-center transition-colors" onClick={() => setGroupRoomPrefs({...groupRoomPrefs, [type]: Math.max(0, (groupRoomPrefs[type] || 0) - 1)})}>–</button>
-                  <span className="text-[10px] font-black w-3 text-center">{groupRoomPrefs[type] || 0}</span>
-                  <button className="h-5 w-5 rounded-md hover:bg-slate-100 flex items-center justify-center transition-colors font-bold" onClick={() => setGroupRoomPrefs({...groupRoomPrefs, [type]: (groupRoomPrefs[type] || 0) + 1})}>+</button>
+            {roomTypesInHotel.map(type => {
+              const typeAvailable = availableRooms.filter(r => r.roomType === type).length;
+              const currentCount = groupRoomPrefs[type] || 0;
+              const totalPrefs = Object.values(groupRoomPrefs).reduce((a, b) => a + b, 0);
+              const canAdd = currentCount < typeAvailable && totalPrefs < numRooms;
+
+              return (
+                <div key={type} className="flex items-center justify-between px-2.5 py-1.5 rounded-xl border bg-white shadow-sm">
+                  <span className="text-[10px] font-bold text-slate-600 truncate mr-2">
+                    {type} <span className="opacity-50 font-medium">({typeAvailable} avail)</span>
+                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button className="h-5 w-5 rounded-md hover:bg-slate-100 flex items-center justify-center transition-colors" onClick={() => setGroupRoomPrefs({ ...groupRoomPrefs, [type]: Math.max(0, currentCount - 1) })}>–</button>
+                    <span className="text-[10px] font-black w-3 text-center">{currentCount}</span>
+                    <button disabled={!canAdd} className="h-5 w-5 rounded-md hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors font-bold" onClick={() => setGroupRoomPrefs({ ...groupRoomPrefs, [type]: currentCount + 1 })}>+</button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <Button variant="outline" size="sm" className="w-full h-8 text-[9px] font-black uppercase tracking-widest mt-1 border-slate-200 bg-white hover:bg-primary hover:text-white hover:border-primary transition-all"
             onClick={() => {
@@ -700,21 +709,21 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               <Button variant="ghost" size="sm" className="h-6 text-[9px] font-black uppercase text-red-500" onClick={() => setSelectedRooms([])}>Clear All</Button>
             )}
           </div>
-          
+
           {/* Category Tabs / Filters */}
           <div className="flex flex-wrap gap-1.5 px-0.5 sm:px-1">
             {roomTypesInHotel.map(type => {
               const count = selectedRooms.filter(rid => rooms.find(r => r._id === rid)?.roomType === type).length;
               const isActive = activeCategoryFilter === type || (!activeCategoryFilter && type === roomTypesInHotel[0]);
-              
+
               return (
-                <button 
+                <button
                   key={type}
                   onClick={() => setActiveCategoryFilter(type)}
                   className={cn(
                     "px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border-2",
-                    isActive 
-                      ? "bg-primary text-white border-primary shadow-sm" 
+                    isActive
+                      ? "bg-primary text-white border-primary shadow-sm"
                       : "bg-white text-slate-400 border-slate-100 hover:border-primary/20"
                   )}
                 >
@@ -731,35 +740,35 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
               const roomsInType = rooms.filter(r => r.roomType === type);
               return (
-                  <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3">
-                    {roomsInType.map(room => {
-                      const avail = isRoomAvailable(room._id);
-                      const idx = selectedRooms.indexOf(room._id);
-                      const sel = idx !== -1;
-                      return (
-                        <button 
-                          key={room._id} 
-                          disabled={!avail} 
-                          onClick={() => sel ? setSelectedRooms(selectedRooms.filter(id => id !== room._id)) : (selectedRooms.length < numRooms && setSelectedRooms([...selectedRooms, room._id]))}
-                          className={cn(
-                            'group/room h-14 rounded-2xl border-2 flex flex-col items-center justify-center relative transition-all duration-200', 
-                            sel 
-                              ? 'border-primary bg-primary text-white font-black shadow-lg shadow-primary/20 z-10' 
-                              : avail 
-                                ? 'border-slate-100 bg-white hover:border-primary/30 hover:bg-slate-50' 
-                                : 'opacity-25 cursor-not-allowed bg-slate-100 border-transparent'
-                          )}
-                        >
-                          <span className={cn("text-xs tabular-nums font-black transition-transform", sel && "scale-110")}>{room.roomNumber}</span>
-                          {sel && (
-                            <div className="absolute -top-2 -right-2 w-5 h-5 bg-white text-primary text-[9px] rounded-full border-2 border-primary flex items-center justify-center font-black shadow-md">
-                              {idx + 1}
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
+                <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3">
+                  {roomsInType.map(room => {
+                    const avail = isRoomAvailable(room._id);
+                    const idx = selectedRooms.indexOf(room._id);
+                    const sel = idx !== -1;
+                    return (
+                      <button
+                        key={room._id}
+                        disabled={!avail}
+                        onClick={() => sel ? setSelectedRooms(selectedRooms.filter(id => id !== room._id)) : (selectedRooms.length < numRooms && setSelectedRooms([...selectedRooms, room._id]))}
+                        className={cn(
+                          'group/room h-14 rounded-2xl border-2 flex flex-col items-center justify-center relative transition-all duration-200',
+                          sel
+                            ? 'border-primary bg-primary text-white font-black shadow-lg shadow-primary/20 z-10'
+                            : avail
+                              ? 'border-slate-100 bg-white hover:border-primary/30 hover:bg-slate-50'
+                              : 'opacity-25 cursor-not-allowed bg-slate-100 border-transparent'
+                        )}
+                      >
+                        <span className={cn("text-xs tabular-nums font-black transition-transform", sel && "scale-110")}>{room.roomNumber}</span>
+                        {sel && (
+                          <div className="absolute -top-2 -right-2 w-5 h-5 bg-white text-primary text-[9px] rounded-full border-2 border-primary flex items-center justify-center font-black shadow-md">
+                            {idx + 1}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               );
             })}
           </div>
@@ -777,8 +786,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                 {(hotel?.settings?.stayPlans || PLAN_TYPES).map((p: any) => (
                   <SelectItem key={p.key} value={p.key}>
                     <div className="flex flex-col py-1">
-                       <span className="font-black text-xs uppercase tracking-tight">{p.label}</span>
-                       <span className="text-[9px] opacity-50 font-medium leading-none">{p.desc}</span>
+                      <span className="font-black text-xs uppercase tracking-tight">{p.label}</span>
+                      <span className="text-[9px] opacity-50 font-medium leading-none">{p.desc}</span>
                     </div>
                   </SelectItem>
                 ))}
@@ -799,10 +808,10 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5 col-span-2 sm:col-span-1">
             <Label className="text-xs font-black uppercase tracking-widest opacity-60">Check-in</Label>
-            <Input type="date" className="h-11 rounded-xl" value={checkinDate} min={!initialBooking ? todayStr : undefined} onChange={e => { 
-                setCheckinDate(e.target.value); 
-                if (e.target.value >= checkoutDate) setCheckoutDate(format(addDays(parseISO(e.target.value), 1), 'yyyy-MM-dd')); 
-                // Let the user keep their selected room; validation is handled downstream.
+            <Input type="date" className="h-11 rounded-xl" value={checkinDate} min={!initialBooking ? todayStr : undefined} onChange={e => {
+              setCheckinDate(e.target.value);
+              if (e.target.value >= checkoutDate) setCheckoutDate(format(addDays(parseISO(e.target.value), 1), 'yyyy-MM-dd'));
+              // Let the user keep their selected room; validation is handled downstream.
             }} />
             <Select value={checkinTime} onValueChange={v => { setCheckinTime(v); }}>
               <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Check-in Time" /></SelectTrigger>
@@ -814,7 +823,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           <div className="space-y-1.5 col-span-2 sm:col-span-1">
             <Label className="text-xs font-black uppercase tracking-widest opacity-60">Check-out</Label>
             <Input type="date" className="h-11 rounded-xl" value={checkoutDate} min={checkinDate} onChange={e => {
-                setCheckoutDate(e.target.value);
+              setCheckoutDate(e.target.value);
             }} />
             <Select value={checkoutTime} onValueChange={v => { setCheckoutTime(v); }}>
               <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue placeholder="Check-out Time" /></SelectTrigger>
@@ -830,17 +839,17 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         {validDates && (
           <div className="flex items-center gap-3 flex-wrap">
             <div className="bg-primary/10 text-primary text-[10px] font-black px-4 py-1.5 rounded-full border border-primary/20 shadow-sm flex items-center gap-2">
-               <Clock className="w-3 h-3" />
-               {isDayUse ? 'DAY USE (No Night)' : `${nights} NIGHT${nights !== 1 ? 'S' : ''}`}
+              <Clock className="w-3 h-3" />
+              {isDayUse ? 'DAY USE (No Night)' : `${nights} NIGHT${nights !== 1 ? 'S' : ''}`}
             </div>
             {/* Only show rooms available count for new bookings, not edits */}
             {!initialBooking && (
               <div className={cn(
-                 'text-[10px] font-black px-4 py-1.5 rounded-full border shadow-sm flex items-center gap-2', 
-                 availableRooms.length > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'
+                'text-[10px] font-black px-4 py-1.5 rounded-full border shadow-sm flex items-center gap-2',
+                availableRooms.length > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'
               )}>
-                 <Bed className="w-3 h-3" />
-                 {availableRooms.length} ROOMS AVAILABLE
+                <Bed className="w-3 h-3" />
+                {availableRooms.length} ROOMS AVAILABLE
               </div>
             )}
           </div>
@@ -870,7 +879,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           </div>
         )}
         <Button className="w-full h-11 rounded-xl font-black" disabled={!validDates} onClick={() => {
-            goNext(reservationType === 'group' ? 'groupConfig' : 'room');
+          goNext(reservationType === 'group' ? 'groupConfig' : 'room');
         }}>Continue <ChevronRight className="ml-1 h-4 w-4" /></Button>
       </div>
     );
@@ -882,8 +891,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label className="text-xs font-black uppercase tracking-widest opacity-60">1. Select Category</Label>
-          <Select 
-            value={selectedRoomType} 
+          <Select
+            value={selectedRoomType}
             onValueChange={val => {
               setSelectedRoomType(val);
               setSelectedRoom(''); // Clear specific room when type changes
@@ -902,8 +911,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
         <div className="space-y-1.5">
           <Label className="text-xs font-black uppercase tracking-widest opacity-60">2. Select Room</Label>
-          <Select 
-            value={selectedRoom || undefined} 
+          <Select
+            value={selectedRoom || undefined}
             disabled={!selectedRoomType}
             onValueChange={val => {
               const rm = rooms.find(r => r._id === val);
@@ -918,60 +927,60 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               <SelectValue placeholder={selectedRoomType ? "Select Number" : "Select type first"} />
             </SelectTrigger>
             <SelectContent>
-                  {rooms.filter(r => r.roomType === selectedRoomType).map(room => {
-                    const avail = isRoomAvailable(room._id);
-                    // Find the booking causing the clash to determine exact status
-                    const clash = !avail ? bookings.find(b => {
-                       if (b.status === 'cancelled' || b.status === 'checked-out' || b.status === 'expired') return false;
-                       const bRoomId = typeof b.roomId === 'object' ? (b.roomId as any)._id : b.roomId;
-                       if (bRoomId !== room._id) return false;
-                       
-                       const checkinDateStr = typeof b.checkin === 'string' ? b.checkin.slice(0, 10) : format(new Date(b.checkin), 'yyyy-MM-dd');
-                       const checkoutDateStr = typeof b.checkout === 'string' ? b.checkout.slice(0, 10) : format(new Date(b.checkout), 'yyyy-MM-dd');
-                       const bCI = toISO(checkinDateStr, b.checkinTime  || '14:00');
-                       const bCO = toISO(checkoutDateStr, b.checkoutTime || '11:00');
-                       return overlaps(checkinISO, checkoutISO, bCI, bCO);
-                    }) : null;
+              {rooms.filter(r => r.roomType === selectedRoomType).map(room => {
+                const avail = isRoomAvailable(room._id);
+                // Find the booking causing the clash to determine exact status
+                const clash = !avail ? bookings.find(b => {
+                  if (b.status === 'cancelled' || b.status === 'checked-out' || b.status === 'expired') return false;
+                  const bRoomId = typeof b.roomId === 'object' ? (b.roomId as any)._id : b.roomId;
+                  if (bRoomId !== room._id) return false;
 
-                    const clashStatus = clash?.status;
-                    const isOccupied = !avail && clashStatus === 'checked-in';
-                    const isReserved = !avail && (clashStatus === 'reserved' || clash?.bookingType === 'enquiry' || clash?.reservationType === 'enquiry');
+                  const checkinDateStr = typeof b.checkin === 'string' ? b.checkin.slice(0, 10) : format(new Date(b.checkin), 'yyyy-MM-dd');
+                  const checkoutDateStr = typeof b.checkout === 'string' ? b.checkout.slice(0, 10) : format(new Date(b.checkout), 'yyyy-MM-dd');
+                  const bCI = toISO(checkinDateStr, b.checkinTime || '14:00');
+                  const bCO = toISO(checkoutDateStr, b.checkoutTime || '11:00');
+                  return overlaps(checkinISO, checkoutISO, bCI, bCO);
+                }) : null;
 
-                    return (
-                      <SelectItem 
-                        key={room._id} 
-                        value={room._id} 
-                        disabled={!avail}
-                        className={cn("font-bold text-sm", !avail && "opacity-40")}
-                      >
-                        <div className="flex items-center justify-between w-full pr-1">
-                           <div className="flex items-center gap-2">
-                              <span className={cn(
-                                 "w-1.5 h-1.5 rounded-full shrink-0",
-                                 isOccupied ? 'bg-red-500' : 
-                                 isReserved ? 'bg-indigo-500' :
-                                 (room.status === 'maintenance' || room.status === 'under-maintenance') ? 'bg-slate-400' : 
-                                 room.status === 'dirty' ? 'bg-amber-400' : 'bg-emerald-500'
-                              )} />
-                              <span className="tabular-nums">Room #{room.roomNumber}</span>
-                           </div>
-                           <span className={cn(
-                              'text-[10px] font-black uppercase px-2.5 py-1 rounded-full ml-6 tracking-wider leading-none transition-colors border', 
-                              isOccupied ? 'bg-red-50 text-red-600 border-red-100' :
-                              isReserved ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
-                              (room.status === 'maintenance' || room.status === 'under-maintenance') ? 'bg-slate-50 text-slate-500 border-slate-200' :
+                const clashStatus = clash?.status;
+                const isOccupied = !avail && clashStatus === 'checked-in';
+                const isReserved = !avail && (clashStatus === 'reserved' || clash?.bookingType === 'enquiry' || clash?.reservationType === 'enquiry');
+
+                return (
+                  <SelectItem
+                    key={room._id}
+                    value={room._id}
+                    disabled={!avail}
+                    className={cn("font-bold text-sm", !avail && "opacity-40")}
+                  >
+                    <div className="flex items-center justify-between w-full pr-1">
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "w-1.5 h-1.5 rounded-full shrink-0",
+                          isOccupied ? 'bg-red-500' :
+                            isReserved ? 'bg-indigo-500' :
+                              (room.status === 'maintenance' || room.status === 'under-maintenance') ? 'bg-slate-400' :
+                                room.status === 'dirty' ? 'bg-amber-400' : 'bg-emerald-500'
+                        )} />
+                        <span className="tabular-nums">Room #{room.roomNumber}</span>
+                      </div>
+                      <span className={cn(
+                        'text-[10px] font-black uppercase px-2.5 py-1 rounded-full ml-6 tracking-wider leading-none transition-colors border',
+                        isOccupied ? 'bg-red-50 text-red-600 border-red-100' :
+                          isReserved ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
+                            (room.status === 'maintenance' || room.status === 'under-maintenance') ? 'bg-slate-50 text-slate-500 border-slate-200' :
                               (room.status === 'dirty' ? 'bg-amber-100 text-amber-700 border-amber-200/50' : 'bg-emerald-100 text-emerald-700 border-emerald-200/50')
-                           )}>
-                              {isOccupied ? 'Occupied' : 
-                               isReserved ? 'Reserved' :
-                               (room.status === 'maintenance' || room.status === 'under-maintenance') ? 'Service' :
-                               (room.status === 'dirty' ? 'Dirty' : 'Clean')}
-                           </span>
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-              </SelectContent>
+                      )}>
+                        {isOccupied ? 'Occupied' :
+                          isReserved ? 'Reserved' :
+                            (room.status === 'maintenance' || room.status === 'under-maintenance') ? 'Service' :
+                              (room.status === 'dirty' ? 'Dirty' : 'Clean')}
+                      </span>
+                    </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
           </Select>
         </div>
       </div>
@@ -998,17 +1007,17 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                 {(hotel?.settings?.stayPlans || PLAN_TYPES).map((p: any) => {
                   const rate = mealRates[p.key] || 0;
                   return (
-                  <SelectItem key={p.key} value={p.key}>
-                    <div className="flex items-center justify-between min-w-[200px] w-full py-0.5">
-                      <span className="font-black text-xs uppercase">{p.label}</span>
-                      {rate > 0 && (
-                        <div className="ml-4 flex flex-col items-end shrink-0">
-                          <span className="text-[10px] font-black text-primary">₹{rate.toLocaleString('en-IN')}</span>
-                          <span className="text-[8px] opacity-40 uppercase tracking-tighter">per pax</span>
-                        </div>
-                      )}
-                    </div>
-                  </SelectItem>
+                    <SelectItem key={p.key} value={p.key}>
+                      <div className="flex items-center justify-between min-w-[200px] w-full py-0.5">
+                        <span className="font-black text-xs uppercase">{p.label}</span>
+                        {rate > 0 && (
+                          <div className="ml-4 flex flex-col items-end shrink-0">
+                            <span className="text-[10px] font-black text-primary">₹{rate.toLocaleString('en-IN')}</span>
+                            <span className="text-[8px] opacity-40 uppercase tracking-tighter">per pax</span>
+                          </div>
+                        )}
+                      </div>
+                    </SelectItem>
                   );
                 })}
               </SelectContent>
@@ -1027,13 +1036,13 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Estimated Total</span>
             <div className="flex items-baseline gap-1">
-               <span className="text-[10px] font-bold text-slate-400">₹</span>
-               <span className="text-2xl font-black text-primary tracking-tighter">{totalAmount.toLocaleString('en-IN')}</span>
+              <span className="text-[10px] font-bold text-slate-400">₹</span>
+              <span className="text-2xl font-black text-primary tracking-tighter">{totalAmount.toLocaleString('en-IN')}</span>
             </div>
           </div>
-          
+
           <Separator className="bg-slate-200" />
-          
+
           <div className="grid grid-cols-1 gap-2">
             <div className="flex justify-between items-center px-1">
               <span className="text-[10px] font-bold text-slate-500">Occupancy</span>
@@ -1052,7 +1061,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
             {mealCharge > 0 && (
               <div className="flex justify-between items-center px-1">
                 <span className="text-[10px] font-bold text-blue-600">
-                  {planType === 'custom' 
+                  {planType === 'custom'
                     ? (planCustomText || 'Custom Plan')
                     : (PLAN_LABELS[planType as keyof typeof PLAN_LABELS] || planType + ' Plan')}
                 </span>
@@ -1061,16 +1070,16 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
             )}
             {taxConfig?.enabled && (
               <div className="flex justify-between items-center px-1">
-                <span className="text-[10px] font-bold text-orange-600">GST ({ (taxConfig.cgst||0)+(taxConfig.sgst||0) }%)</span>
+                <span className="text-[10px] font-bold text-orange-600">GST ({(taxConfig.cgst || 0) + (taxConfig.sgst || 0)}%)</span>
                 <span className="text-[11px] font-black text-orange-700">+ ₹{taxAmount.toLocaleString('en-IN')}</span>
               </div>
             )}
           </div>
         </div>
       )}
-      <Button 
-        className="w-full h-11 rounded-xl font-black" 
-        disabled={!selectedRoom || isSubmitting} 
+      <Button
+        className="w-full h-11 rounded-xl font-black"
+        disabled={!selectedRoom || isSubmitting}
         onClick={() => {
           if (reservationType === 'block') handleSubmit();
           else goNext(reservationType === 'group' ? 'guest' : 'guest');
@@ -1092,20 +1101,20 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
             <>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  className="pl-10 h-11 rounded-xl" 
-                  placeholder="Search lead guest..." 
-                  value={guestQuery} 
-                  onChange={e => handleGuestSearch(e.target.value)} 
+                <Input
+                  className="pl-10 h-11 rounded-xl"
+                  placeholder="Search lead guest..."
+                  value={guestQuery}
+                  onChange={e => handleGuestSearch(e.target.value)}
                 />
                 {isSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
               </div>
               {guestResults.length > 0 && (
                 <div className="border rounded-xl divide-y overflow-hidden bg-white shadow-sm">
                   {guestResults.map(g => (
-                    <button 
-                      key={g._id} 
-                      className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between" 
+                    <button
+                      key={g._id}
+                      className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between"
                       onClick={() => setSelectedGuest(g)}
                     >
                       <div>
@@ -1136,9 +1145,9 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                   <div className="flex items-center justify-between">
                     <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Additional Guests ({additionalGuests.length}/{numRooms - 1})</Label>
                     {additionalGuests.length < numRooms - 1 && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         className="h-6 px-2 text-[9px] font-black uppercase tracking-widest text-primary"
                         onClick={() => setAdditionalGuests([...additionalGuests, { name: '', phone: '' }])}
                       >
@@ -1149,19 +1158,19 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                   <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                     {additionalGuests.map((ag, idx) => (
                       <div key={idx} className="flex gap-2">
-                        <Input 
-                          placeholder={`Guest ${idx + 2} Name`} 
-                          className="h-9 text-xs rounded-lg" 
-                          value={ag.name} 
+                        <Input
+                          placeholder={`Guest ${idx + 2} Name`}
+                          className="h-9 text-xs rounded-lg"
+                          value={ag.name}
                           onChange={e => {
                             const newGuests = [...additionalGuests];
                             newGuests[idx].name = e.target.value;
                             setAdditionalGuests(newGuests);
-                          }} 
+                          }}
                         />
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-9 w-9 text-slate-400 hover:text-red-500"
                           onClick={() => setAdditionalGuests(additionalGuests.filter((_, i) => i !== idx))}
                         >
@@ -1176,8 +1185,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                 </div>
               )}
 
-              <Button 
-                className="w-full h-11 rounded-xl font-black" 
+              <Button
+                className="w-full h-11 rounded-xl font-black"
                 onClick={() => {
                   if (reservationType === 'enquiry') handleSubmit();
                   else goNext(reservationType === 'group' ? 'roomAssignment' : 'payment');
@@ -1193,15 +1202,15 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label className="text-xs font-black uppercase tracking-widest opacity-60">Full Name</Label>
-              <Input className="h-11 rounded-xl" placeholder="Guest Name" value={newGuest.name} onChange={e => setNewGuest({...newGuest, name: e.target.value})} />
+              <Input className="h-11 rounded-xl" placeholder="Guest Name" value={newGuest.name} onChange={e => setNewGuest({ ...newGuest, name: e.target.value })} />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-black uppercase tracking-widest opacity-60">Phone Number</Label>
-              <Input className="h-11 rounded-xl" placeholder="+91 XXXXX XXXXX" value={newGuest.phone} onChange={e => setNewGuest({...newGuest, phone: e.target.value})} />
+              <Input className="h-11 rounded-xl" placeholder="+91 XXXXX XXXXX" value={newGuest.phone} onChange={e => setNewGuest({ ...newGuest, phone: e.target.value })} />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-black uppercase tracking-widest opacity-60">Email (Optional)</Label>
-              <Input className="h-11 rounded-xl" placeholder="guest@example.com" value={newGuest.email} onChange={e => setNewGuest({...newGuest, email: e.target.value})} />
+              <Input className="h-11 rounded-xl" placeholder="guest@example.com" value={newGuest.email} onChange={e => setNewGuest({ ...newGuest, email: e.target.value })} />
             </div>
           </div>
           <div className="flex gap-2">
@@ -1235,7 +1244,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                 {selectedRooms.map(rid => {
                   const r = rooms.find(rmLocal => rmLocal._id === rid);
                   const a = roomAssignments[rid] || { guestName: allGroupGuestNames[0] || 'TBA', plan: planType, price: r?.price || 0, adults: adults, children: children };
-                  
+
                   // Calculate room-specific breakdown
                   const stats = calculateBookingPrice({
                     roomPrice: a.price,
@@ -1253,72 +1262,72 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                   return (
                     <tr key={rid} className="hover:bg-slate-50 transition-colors group">
                       <td className="p-3 font-black whitespace-nowrap align-top">
-                         <div className="flex flex-col">
-                           <span className="text-slate-900 text-xs tracking-tight">#{r?.roomNumber}</span>
-                           <span className="text-[7px] text-primary/60 font-black uppercase tracking-widest">{r?.roomType}</span>
-                         </div>
+                        <div className="flex flex-col">
+                          <span className="text-slate-900 text-xs tracking-tight">#{r?.roomNumber}</span>
+                          <span className="text-[7px] text-primary/60 font-black uppercase tracking-widest">{r?.roomType}</span>
+                        </div>
                       </td>
                       <td className="p-3 align-top min-w-[120px]">
-                         <Select value={a.guestName} onValueChange={v => setRoomAssignments({...roomAssignments, [rid]: {...a, guestName: v}})}>
+                        <Select value={a.guestName} onValueChange={v => setRoomAssignments({ ...roomAssignments, [rid]: { ...a, guestName: v } })}>
                           <SelectTrigger className="h-7 text-[10px] w-full rounded-md border-slate-100 bg-white"><SelectValue /></SelectTrigger>
                           <SelectContent className="rounded-xl border-none shadow-2xl">
                             {allGroupGuestNames.map(n => <SelectItem key={n} value={n} className="text-xs font-bold">{n}</SelectItem>)}
                           </SelectContent>
-                         </Select>
+                        </Select>
                       </td>
                       <td className="p-3 align-top">
                         <div className="flex items-center gap-1.5">
-                           <Select value={a.plan} onValueChange={v => setRoomAssignments({...roomAssignments, [rid]: {...a, plan: v}})}>
+                          <Select value={a.plan} onValueChange={v => setRoomAssignments({ ...roomAssignments, [rid]: { ...a, plan: v } })}>
                             <SelectTrigger className="h-7 text-[10px] w-full min-w-[65px] rounded-md border-slate-100 bg-white"><SelectValue /></SelectTrigger>
                             <SelectContent className="rounded-xl border-none shadow-2xl">
-                              {(hotel?.settings?.stayPlans || [{key: 'EP', label: 'EP'}]).map((p: any) => (
+                              {(hotel?.settings?.stayPlans || [{ key: 'EP', label: 'EP' }]).map((p: any) => (
                                 <SelectItem key={p.key} value={p.key}>
                                   <span className="font-black text-[10px] uppercase tracking-tighter">{p.key}</span>
                                 </SelectItem>
                               ))}
                             </SelectContent>
-                           </Select>
+                          </Select>
 
-                           <Popover>
-                             <PopoverTrigger asChild>
-                               <button className="h-7 px-2 flex items-center justify-center gap-1.5 bg-primary/5 hover:bg-primary/10 text-primary border border-primary/20 text-[10px] font-black rounded-md transition-all">
-                                 <Users className="h-3 w-3" />
-                                 <span className="tabular-nums">{a.adults}A/{a.children || 0}C</span>
-                               </button>
-                             </PopoverTrigger>
-                             <PopoverContent className="w-40 p-3 rounded-2xl shadow-2xl border-none" align="end">
-                               <div className="space-y-3">
-                                 <div className="flex items-center justify-between">
-                                   <span className="text-[9px] font-black uppercase opacity-60">Adults</span>
-                                   <div className="flex items-center gap-2">
-                                     <button className="h-5 w-5 rounded bg-slate-100 flex items-center justify-center text-[10px] font-bold" onClick={() => setRoomAssignments({...roomAssignments, [rid]: {...a, adults: Math.max(1, a.adults - 1)}})}>−</button>
-                                     <span className="text-xs font-black w-3 text-center">{a.adults}</span>
-                                     <button className="h-5 w-5 rounded bg-slate-100 flex items-center justify-center text-[10px] font-bold" onClick={() => setRoomAssignments({...roomAssignments, [rid]: {...a, adults: a.adults + 1}})}>+</button>
-                                   </div>
-                                 </div>
-                                 <div className="flex items-center justify-between">
-                                   <span className="text-[9px] font-black uppercase opacity-60">Children</span>
-                                   <div className="flex items-center gap-2">
-                                     <button className="h-5 w-5 rounded bg-slate-100 flex items-center justify-center text-[10px] font-bold" onClick={() => setRoomAssignments({...roomAssignments, [rid]: {...a, children: Math.max(0, (a.children || 0) - 1)}})}>−</button>
-                                     <span className="text-xs font-black w-3 text-center">{a.children || 0}</span>
-                                     <button className="h-5 w-5 rounded bg-slate-100 flex items-center justify-center text-[10px] font-bold" onClick={() => setRoomAssignments({...roomAssignments, [rid]: {...a, children: (a.children || 0) + 1}})}>+</button>
-                                   </div>
-                                 </div>
-                               </div>
-                             </PopoverContent>
-                           </Popover>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button className="h-7 px-2 flex items-center justify-center gap-1.5 bg-primary/5 hover:bg-primary/10 text-primary border border-primary/20 text-[10px] font-black rounded-md transition-all">
+                                <Users className="h-3 w-3" />
+                                <span className="tabular-nums">{a.adults}A/{a.children || 0}C</span>
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-40 p-3 rounded-2xl shadow-2xl border-none" align="end">
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[9px] font-black uppercase opacity-60">Adults</span>
+                                  <div className="flex items-center gap-2">
+                                    <button className="h-5 w-5 rounded bg-slate-100 flex items-center justify-center text-[10px] font-bold" onClick={() => setRoomAssignments({ ...roomAssignments, [rid]: { ...a, adults: Math.max(1, a.adults - 1) } })}>−</button>
+                                    <span className="text-xs font-black w-3 text-center">{a.adults}</span>
+                                    <button disabled={a.adults >= (r?.maxOccupancy || 6)} className="h-5 w-5 rounded bg-slate-100 flex items-center justify-center text-[10px] font-bold disabled:opacity-50" onClick={() => setRoomAssignments({ ...roomAssignments, [rid]: { ...a, adults: Math.min(r?.maxOccupancy || 6, a.adults + 1) } })}>+</button>
+                                  </div>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[9px] font-black uppercase opacity-60">Children</span>
+                                  <div className="flex items-center gap-2">
+                                    <button className="h-5 w-5 rounded bg-slate-100 flex items-center justify-center text-[10px] font-bold" onClick={() => setRoomAssignments({ ...roomAssignments, [rid]: { ...a, children: Math.max(0, (a.children || 0) - 1) } })}>−</button>
+                                    <span className="text-xs font-black w-3 text-center">{a.children || 0}</span>
+                                    <button disabled={(a.children || 0) >= 6} className="h-5 w-5 rounded bg-slate-100 flex items-center justify-center text-[10px] font-bold disabled:opacity-50" onClick={() => setRoomAssignments({ ...roomAssignments, [rid]: { ...a, children: Math.min(6, (a.children || 0) + 1) } })}>+</button>
+                                  </div>
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
                         </div>
                       </td>
                       <td className="p-3 text-right font-bold align-top">
-                         <div className="flex flex-col text-[10px] tracking-tight text-right items-end">
-                           <span className="text-primary font-black text-[11px] tabular-nums underline decoration-primary/20 underline-offset-2">₹{stats.grandTotal.toLocaleString('en-IN')}</span>
-                           <div className="flex flex-col text-[7px] font-bold uppercase tracking-tighter mt-0.5 w-max">
-                             <span className="text-slate-400 opacity-80 tabular-nums">Room: ₹{stats.baseSubtotal.toLocaleString('en-IN')}</span>
-                             {stats.extraCharge > 0 && <span className="text-blue-500 tabular-nums">+ ₹{stats.extraCharge.toLocaleString('en-IN')} (Adults)</span>}
-                             {stats.mealCharge > 0 && <span className="text-amber-500 tabular-nums">+ ₹{stats.mealCharge.toLocaleString('en-IN')} (Plan)</span>}
-                             <span className="text-slate-400 opacity-80 tabular-nums">+ ₹{stats.taxAmount.toLocaleString('en-IN')} (GST)</span>
-                           </div>
-                         </div>
+                        <div className="flex flex-col text-[10px] tracking-tight text-right items-end">
+                          <span className="text-primary font-black text-[11px] tabular-nums underline decoration-primary/20 underline-offset-2">₹{stats.grandTotal.toLocaleString('en-IN')}</span>
+                          <div className="flex flex-col text-[7px] font-bold uppercase tracking-tighter mt-0.5 w-max">
+                            <span className="text-slate-400 opacity-80 tabular-nums">Room: ₹{stats.baseSubtotal.toLocaleString('en-IN')}</span>
+                            {stats.extraCharge > 0 && <span className="text-blue-500 tabular-nums">+ ₹{stats.extraCharge.toLocaleString('en-IN')} (Adults)</span>}
+                            {stats.mealCharge > 0 && <span className="text-amber-500 tabular-nums">+ ₹{stats.mealCharge.toLocaleString('en-IN')} (Plan)</span>}
+                            <span className="text-slate-400 opacity-80 tabular-nums">+ ₹{stats.taxAmount.toLocaleString('en-IN')} (GST)</span>
+                          </div>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1347,7 +1356,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
       selectedRooms.forEach(rid => {
         const r = rooms.find(rm => rm._id === rid);
         const a = roomAssignments[rid] || { price: r?.price || 0, plan: planType, adults: adults, children: children };
-        
+
         const stats = calculateBookingPrice({
           roomPrice: a.price,
           checkin: checkinDate,
@@ -1383,22 +1392,22 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
     const isDayUse = checkinDate === checkoutDate;
     const computedNights = isDayUse ? 1 : Math.max(1, differenceInDays(startOfDay(parseISO(checkoutDate)), startOfDay(parseISO(checkinDate))));
-    
+
     // Formatting metadata labels for the summary
     const displayRoomCountStr = isGroup ? `${selectedRooms.length} Rooms` : '1 Room';
     const displayNightStr = isDayUse ? 'Day Use' : `${computedNights} Night${computedNights !== 1 ? 's' : ''}`;
-    
+
     const singleRoom = rooms.find(r => r._id === selectedRoom);
     const singleExtraPax = Math.max(0, adults - (singleRoom?.baseOccupancy || 2));
     const singleMealPax = displayMeals > 0 ? adults : 0;
-    
-    const displayExtraCountStr = isGroup 
-       ? `${groupExtraPaxCount} Extra Guest${groupExtraPaxCount !== 1 ? 's' : ''}` 
-       : `${singleExtraPax} Extra Guest${singleExtraPax !== 1 ? 's' : ''}`;
-       
+
+    const displayExtraCountStr = isGroup
+      ? `${groupExtraPaxCount} Extra Guest${groupExtraPaxCount !== 1 ? 's' : ''}`
+      : `${singleExtraPax} Extra Guest${singleExtraPax !== 1 ? 's' : ''}`;
+
     const displayMealCountStr = isGroup
-       ? `${groupMealPaxCount} Guest${groupMealPaxCount !== 1 ? 's' : ''}`
-       : `${singleMealPax} Guest${singleMealPax !== 1 ? 's' : ''}`;
+      ? `${groupMealPaxCount} Guest${groupMealPaxCount !== 1 ? 's' : ''}`
+      : `${singleMealPax} Guest${singleMealPax !== 1 ? 's' : ''}`;
 
     return (
       <div className="space-y-4">
@@ -1427,7 +1436,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               </div>
             )}
           </div>
-          
+
           <div className="flex justify-between font-black text-sm"><span>Grand Total</span><span className="text-primary font-black">₹{finalTotal.toLocaleString('en-IN')}</span></div>
           <div className="flex justify-between text-xs text-slate-500 font-bold"><span>Advance Paid</span><span>₹{advancePayment.toLocaleString('en-IN')}</span></div>
           <Separator />
@@ -1468,30 +1477,30 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         <div className="space-y-8 divide-y divide-slate-100">
           <div className="group-step-section pt-0 space-y-4">
             <h4 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-               <span className="h-5 w-5 rounded-md bg-slate-100 flex items-center justify-center text-slate-600">1</span>
-               Dates & Guest
+              <span className="h-5 w-5 rounded-md bg-slate-100 flex items-center justify-center text-slate-600">1</span>
+              Dates & Guest
             </h4>
             {renderDatesStep()}
             {renderGuestStep()}
           </div>
           <div className="group-step-section pt-8 space-y-4">
             <h4 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-               <span className="h-5 w-5 rounded-md bg-slate-100 flex items-center justify-center text-slate-600">2</span>
-               Group Configuration
+              <span className="h-5 w-5 rounded-md bg-slate-100 flex items-center justify-center text-slate-600">2</span>
+              Group Configuration
             </h4>
             {renderGroupConfigStep()}
           </div>
           <div className="group-step-section pt-8 space-y-4">
             <h4 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-               <span className="h-5 w-5 rounded-md bg-slate-100 flex items-center justify-center text-slate-600">3</span>
-               Room Assignments
+              <span className="h-5 w-5 rounded-md bg-slate-100 flex items-center justify-center text-slate-600">3</span>
+              Room Assignments
             </h4>
             {renderRoomAssignmentStep()}
           </div>
           <div className="pt-8 space-y-4">
             <h4 className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-               <span className="h-5 w-5 rounded-md bg-slate-100 flex items-center justify-center text-slate-600">4</span>
-               Summary & Confirmation
+              <span className="h-5 w-5 rounded-md bg-slate-100 flex items-center justify-center text-slate-600">4</span>
+              Summary & Confirmation
             </h4>
             {renderPaymentStep()}
           </div>
@@ -1510,7 +1519,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
     // Only flag conflict if the room genuinely conflicts AND it's not the booking's original room.
     // (Note: isRoomAvailable now returns true for the original room, so selectedRoom !== originalRoomId is extra safety)
     const isRoomConflicted = !!selectedRoom && !isRoomAvailable(selectedRoom) && selectedRoom !== originalRoomId;
-    
+
     return (
       <div className="space-y-5">
         {/* Dates Row */}
@@ -1525,7 +1534,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               <Select value={checkinTime} onValueChange={setCheckinTime}>
                 <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(hotel?.settings?.checkinTimes?.length ? hotel.settings.checkinTimes : ['09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00']).map(t => <SelectItem key={t} value={t}>{format(parseISO(`2000-01-01T${t}:00`), 'h:mm a')}</SelectItem>)}
+                  {(hotel?.settings?.checkinTimes?.length ? hotel.settings.checkinTimes : ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00']).map(t => <SelectItem key={t} value={t}>{format(parseISO(`2000-01-01T${t}:00`), 'h:mm a')}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -1534,7 +1543,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               <Select value={checkoutTime} onValueChange={setCheckoutTime}>
                 <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(hotel?.settings?.checkoutTimes?.length ? hotel.settings.checkoutTimes : ['08:00','09:00','10:00','11:00','12:00','13:00','14:00']).map(t => <SelectItem key={t} value={t}>{format(parseISO(`2000-01-01T${t}:00`), 'h:mm a')}</SelectItem>)}
+                  {(hotel?.settings?.checkoutTimes?.length ? hotel.settings.checkoutTimes : ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00']).map(t => <SelectItem key={t} value={t}>{format(parseISO(`2000-01-01T${t}:00`), 'h:mm a')}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -1579,16 +1588,16 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                     const avail = isRoomAvailable(room._id);
                     const isCurrent = room._id === (typeof initialBooking?.roomId === 'object' ? (initialBooking.roomId as any)._id : initialBooking?.roomId);
                     const isSelectable = avail || isCurrent;
-                    
+
                     const clash = !avail ? bookings.find(b => {
-                        if (b.status === 'cancelled' || b.status === 'checked-out' || b.status === 'expired') return false;
-                        const bRoomId = typeof b.roomId === 'object' ? (b.roomId as any)._id : b.roomId;
-                        if (bRoomId !== room._id) return false;
-                        const checkinDateStr = typeof b.checkin === 'string' ? b.checkin.slice(0, 10) : format(new Date(b.checkin), 'yyyy-MM-dd');
-                        const checkoutDateStr = typeof b.checkout === 'string' ? b.checkout.slice(0, 10) : format(new Date(b.checkout), 'yyyy-MM-dd');
-                        const bCI = toISO(checkinDateStr, b.checkinTime  || '14:00');
-                        const bCO = toISO(checkoutDateStr, b.checkoutTime || '11:00');
-                        return overlaps(checkinISO, checkoutISO, bCI, bCO);
+                      if (b.status === 'cancelled' || b.status === 'checked-out' || b.status === 'expired') return false;
+                      const bRoomId = typeof b.roomId === 'object' ? (b.roomId as any)._id : b.roomId;
+                      if (bRoomId !== room._id) return false;
+                      const checkinDateStr = typeof b.checkin === 'string' ? b.checkin.slice(0, 10) : format(new Date(b.checkin), 'yyyy-MM-dd');
+                      const checkoutDateStr = typeof b.checkout === 'string' ? b.checkout.slice(0, 10) : format(new Date(b.checkout), 'yyyy-MM-dd');
+                      const bCI = toISO(checkinDateStr, b.checkinTime || '14:00');
+                      const bCO = toISO(checkoutDateStr, b.checkoutTime || '11:00');
+                      return overlaps(checkinISO, checkoutISO, bCI, bCO);
                     }) : null;
 
                     const clashStatus = clash?.status;
@@ -1596,37 +1605,37 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                     const isReserved = !avail && (clashStatus === 'reserved' || clash?.bookingType === 'enquiry' || clash?.reservationType === 'enquiry');
 
                     return (
-                      <SelectItem 
-                        key={room._id} 
-                        value={room._id} 
+                      <SelectItem
+                        key={room._id}
+                        value={room._id}
                         disabled={!isSelectable}
                         className={cn("font-bold text-sm h-11", !isSelectable && "opacity-40")}
                       >
                         <div className="flex items-center justify-between w-full min-w-[240px] pr-1">
-                           <div className="flex items-center gap-2">
-                              <span className={cn(
-                                 "w-2 h-2 rounded-full shrink-0",
-                                  isOccupied ? 'bg-red-500' : 
-                                  isReserved ? 'bg-indigo-500' :
-                                  (room.status === 'maintenance' || room.status === 'under-maintenance') ? 'bg-slate-400' : 
-                                  room.status === 'dirty' ? 'bg-amber-400' : 'bg-emerald-500'
-                              )} />
-                              <span className="whitespace-nowrap tabular-nums">Room #{room.roomNumber}</span>
-                           </div>
-                           <span className={cn(
-                              'text-[10px] font-black uppercase px-2.5 py-1 rounded-full ml-4 tracking-widest leading-none shrink-0 border', 
-                              isCurrent ? 'bg-slate-100 text-slate-600 border border-slate-200' : 
+                          <div className="flex items-center gap-2">
+                            <span className={cn(
+                              "w-2 h-2 rounded-full shrink-0",
+                              isOccupied ? 'bg-red-500' :
+                                isReserved ? 'bg-indigo-500' :
+                                  (room.status === 'maintenance' || room.status === 'under-maintenance') ? 'bg-slate-400' :
+                                    room.status === 'dirty' ? 'bg-amber-400' : 'bg-emerald-500'
+                            )} />
+                            <span className="whitespace-nowrap tabular-nums">Room #{room.roomNumber}</span>
+                          </div>
+                          <span className={cn(
+                            'text-[10px] font-black uppercase px-2.5 py-1 rounded-full ml-4 tracking-widest leading-none shrink-0 border',
+                            isCurrent ? 'bg-slate-100 text-slate-600 border border-slate-200' :
                               isOccupied ? 'bg-red-50 text-red-600 border-red-100' :
-                              isReserved ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
-                              (room.status === 'maintenance' || room.status === 'under-maintenance') ? 'bg-slate-50 text-slate-500 border-slate-200' :
-                              (room.status === 'dirty' ? 'bg-amber-100 text-amber-700 border-amber-200/50' : 'bg-emerald-100 text-emerald-700 border-emerald-200/50')
-                           )}>
-                              {isCurrent ? 'Current' : 
-                               isOccupied ? 'Occupied' : 
-                               isReserved ? 'Reserved' : 
-                               (room.status === 'maintenance' || room.status === 'under-maintenance') ? 'Service' :
-                               (room.status === 'dirty' ? 'Dirty' : 'Clean')}
-                           </span>
+                                isReserved ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
+                                  (room.status === 'maintenance' || room.status === 'under-maintenance') ? 'bg-slate-50 text-slate-500 border-slate-200' :
+                                    (room.status === 'dirty' ? 'bg-amber-100 text-amber-700 border-amber-200/50' : 'bg-emerald-100 text-emerald-700 border-emerald-200/50')
+                          )}>
+                            {isCurrent ? 'Current' :
+                              isOccupied ? 'Occupied' :
+                                isReserved ? 'Reserved' :
+                                  (room.status === 'maintenance' || room.status === 'under-maintenance') ? 'Service' :
+                                    (room.status === 'dirty' ? 'Dirty' : 'Clean')}
+                          </span>
                         </div>
                       </SelectItem>
                     );
@@ -1661,7 +1670,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               <Select value={adults.toString()} onValueChange={v => setAdults(Number(v))}>
                 <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {[1,2,3,4,5,6,7,8].filter(n => n <= (rooms.find(r => r._id === selectedRoom)?.maxOccupancy || 6)).map(n => (
+                  {[1, 2, 3, 4, 5, 6, 7, 8].filter(n => n <= (rooms.find(r => r._id === selectedRoom)?.maxOccupancy || 6)).map(n => (
                     <SelectItem key={n} value={n.toString()}>{n}</SelectItem>
                   ))}
                 </SelectContent>
@@ -1672,7 +1681,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               <Select value={children.toString()} onValueChange={v => setChildren(Number(v))}>
                 <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {[0,1,2,3,4,5,6].map(n => (
+                  {[0, 1, 2, 3, 4, 5, 6].map(n => (
                     <SelectItem key={n} value={n.toString()}>{n}</SelectItem>
                   ))}
                 </SelectContent>
@@ -1683,17 +1692,17 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               <Select value={planType} onValueChange={setPlanType}>
                 <SelectTrigger className="h-11 rounded-xl font-bold"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {(hotel?.settings?.stayPlans || [{key: 'EP', label: 'EP'}]).map((p: any) => {
+                  {(hotel?.settings?.stayPlans || [{ key: 'EP', label: 'EP' }]).map((p: any) => {
                     const key = typeof p === 'string' ? p : p.key;
                     const label = typeof p === 'string' ? p : p.label;
                     const desc = typeof p === 'string' ? '' : p.desc;
                     return (
                       <SelectItem key={key} value={key} className="py-2.5">
                         <div className="flex flex-col">
-                           <div className="flex items-center justify-between gap-12">
-                             <span className="font-black text-xs uppercase tracking-tight">{label}</span>
-                             {mealRates[key] > 0 && <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md">₹{mealRates[key]}</span>}
-                           </div>
+                          <div className="flex items-center justify-between gap-12">
+                            <span className="font-black text-xs uppercase tracking-tight">{label}</span>
+                            {mealRates[key] > 0 && <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md">₹{mealRates[key]}</span>}
+                          </div>
                         </div>
                       </SelectItem>
                     );
@@ -1716,68 +1725,68 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         {/* Lead Guest */}
         {reservationType !== 'block' && (
           <div className="space-y-3">
-             <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-1 block">Lead Guest</Label>
-             {!selectedGuest ? (
-                <div className="space-y-3">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
-                    <Input 
-                      className="pl-10 h-11 rounded-xl font-bold" 
-                      placeholder="Search for guest..." 
-                      value={guestQuery} 
-                      onChange={e => handleGuestSearch(e.target.value)} 
-                    />
-                    {isSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
+            <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-1 block">Lead Guest</Label>
+            {!selectedGuest ? (
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground opacity-50" />
+                  <Input
+                    className="pl-10 h-11 rounded-xl font-bold"
+                    placeholder="Search for guest..."
+                    value={guestQuery}
+                    onChange={e => handleGuestSearch(e.target.value)}
+                  />
+                  {isSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />}
+                </div>
+                {guestResults.length > 0 && (
+                  <div className="border rounded-xl divide-y overflow-hidden bg-white shadow-md animate-in fade-in slide-in-from-top-2">
+                    {guestResults.map(g => (
+                      <button key={g._id} className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between" onClick={() => setSelectedGuest(g)}>
+                        <div>
+                          <div className="font-bold text-sm">{g.name}</div>
+                          <div className="text-[10px] text-slate-500">{g.phone}</div>
+                        </div>
+                        <Badge variant="outline" className="text-[9px] font-black uppercase">Select</Badge>
+                      </button>
+                    ))}
                   </div>
-                  {guestResults.length > 0 && (
-                    <div className="border rounded-xl divide-y overflow-hidden bg-white shadow-md animate-in fade-in slide-in-from-top-2">
-                      {guestResults.map(g => (
-                        <button key={g._id} className="w-full text-left px-4 py-3 hover:bg-slate-50 flex items-center justify-between" onClick={() => setSelectedGuest(g)}>
-                          <div>
-                            <div className="font-bold text-sm">{g.name}</div>
-                            <div className="text-[10px] text-slate-500">{g.phone}</div>
-                          </div>
-                          <Badge variant="outline" className="text-[9px] font-black uppercase">Select</Badge>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <Button variant="outline" className="w-full h-11 rounded-xl border-2 font-black border-dashed opacity-60 hover:opacity-100" onClick={() => setShowNewGuest(true)}>
-                    <UserPlus className="h-4 w-4 mr-2" /> Register New Guest
-                  </Button>
+                )}
+                <Button variant="outline" className="w-full h-11 rounded-xl border-2 font-black border-dashed opacity-60 hover:opacity-100" onClick={() => setShowNewGuest(true)}>
+                  <UserPlus className="h-4 w-4 mr-2" /> Register New Guest
+                </Button>
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between group">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-black text-xs shadow-sm">
+                    {selectedGuest.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="font-black text-sm text-slate-900">{selectedGuest.name}</div>
+                    <div className="text-[10px] font-bold text-slate-500">{selectedGuest.phone}</div>
+                  </div>
                 </div>
-             ) : (
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between group">
-                   <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-black text-xs shadow-sm">
-                        {selectedGuest.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="font-black text-sm text-slate-900">{selectedGuest.name}</div>
-                        <div className="text-[10px] font-bold text-slate-500">{selectedGuest.phone}</div>
-                      </div>
-                   </div>
-                   <Button variant="ghost" size="sm" className="h-8 text-[10px] font-black opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setSelectedGuest(null)}>Change</Button>
-                </div>
-             )}
+                <Button variant="ghost" size="sm" className="h-8 text-[10px] font-black opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setSelectedGuest(null)}>Change</Button>
+              </div>
+            )}
           </div>
         )}
 
         {/* Guest Registration Popover (for single-page flow) */}
         {showNewGuest && (
-           <div className="p-4 rounded-2xl border border-indigo-100 bg-indigo-50/50 space-y-4 animate-in zoom-in-95 fade-in">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600">New Guest Registration</span>
-                <button onClick={() => setShowNewGuest(false)} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Input placeholder="Full Name" className="h-11 rounded-xl font-bold" value={newGuest.name} onChange={e => setNewGuest({...newGuest, name: e.target.value})} />
-                <Input placeholder="Phone" className="h-11 rounded-xl font-bold" value={newGuest.phone} onChange={e => setNewGuest({...newGuest, phone: e.target.value})} />
-              </div>
-              <Button className="w-full h-11 rounded-xl font-black bg-indigo-600 hover:bg-indigo-700" onClick={handleCreateGuest} disabled={isSubmitting}>
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create & Select'}
-              </Button>
-           </div>
+          <div className="p-4 rounded-2xl border border-indigo-100 bg-indigo-50/50 space-y-4 animate-in zoom-in-95 fade-in">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600">New Guest Registration</span>
+              <button onClick={() => setShowNewGuest(false)} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Input placeholder="Full Name" className="h-11 rounded-xl font-bold" value={newGuest.name} onChange={e => setNewGuest({ ...newGuest, name: e.target.value })} />
+              <Input placeholder="Phone" className="h-11 rounded-xl font-bold" value={newGuest.phone} onChange={e => setNewGuest({ ...newGuest, phone: e.target.value })} />
+            </div>
+            <Button className="w-full h-11 rounded-xl font-black bg-indigo-600 hover:bg-indigo-700" onClick={handleCreateGuest} disabled={isSubmitting}>
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create & Select'}
+            </Button>
+          </div>
         )}
 
         <Separator />
@@ -1800,11 +1809,11 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               <Label className="text-[10px] font-black uppercase tracking-widest opacity-50">Advance Payment</Label>
               <div className="relative">
                 <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                <Input 
-                  type="number" 
-                  className="pl-9 h-11 rounded-xl font-bold" 
-                  value={advancePayment} 
-                  onChange={e => setAdvancePayment(Number(e.target.value))} 
+                <Input
+                  type="number"
+                  className="pl-9 h-11 rounded-xl font-bold"
+                  value={advancePayment}
+                  onChange={e => setAdvancePayment(Number(e.target.value))}
                 />
               </div>
             </div>
@@ -1813,20 +1822,20 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
 
         {advancePayment > 0 && (
           <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1">
-             <Label className="text-[10px] font-black uppercase tracking-widest opacity-50">Payment Method</Label>
-             <div className="grid grid-cols-4 gap-2">
-                {['UPI', 'Cash', 'Card', 'Bank'].map(m => (
-                  <Button 
-                    key={m} 
-                    type="button"
-                    variant={paymentMethod === m ? 'default' : 'outline'} 
-                    className={cn("h-9 rounded-lg text-[10px] font-black uppercase tracking-widest", paymentMethod === m ? 'bg-primary border-primary' : 'border-slate-200 text-slate-500')}
-                    onClick={() => setPaymentMethod(m)}
-                  >
-                    {m}
-                  </Button>
-                ))}
-             </div>
+            <Label className="text-[10px] font-black uppercase tracking-widest opacity-50">Payment Method</Label>
+            <div className="grid grid-cols-4 gap-2">
+              {['UPI', 'Cash', 'Card', 'Bank'].map(m => (
+                <Button
+                  key={m}
+                  type="button"
+                  variant={paymentMethod === m ? 'default' : 'outline'}
+                  className={cn("h-9 rounded-lg text-[10px] font-black uppercase tracking-widest", paymentMethod === m ? 'bg-primary border-primary' : 'border-slate-200 text-slate-500')}
+                  onClick={() => setPaymentMethod(m)}
+                >
+                  {m}
+                </Button>
+              ))}
+            </div>
           </div>
         )}
         {planType && planType !== 'EP' && (
@@ -1849,7 +1858,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                 <p className="text-xs font-black text-slate-700">{adults}A, {children}C</p>
               </div>
             </div>
-            
+
             <div className="space-y-2 pt-3 border-t border-slate-200/60">
               <div className="flex justify-between text-[11px] font-bold text-slate-500">
                 <span>Room charges ({nights}N)</span>
@@ -1864,7 +1873,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               {mealCharge > 0 && (
                 <div className="flex justify-between text-[11px] font-bold text-slate-500">
                   <span>
-                    {planType === 'custom' 
+                    {planType === 'custom'
                       ? (planCustomText || 'Custom Plan')
                       : (PLAN_LABELS[planType as keyof typeof PLAN_LABELS] || planType + ' Plan')}
                   </span>
@@ -1873,7 +1882,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               )}
               {taxAmount > 0 && (
                 <div className="flex justify-between text-[11px] font-bold text-slate-500">
-                  <span>GST ({ (taxConfig?.cgst||0)+(taxConfig?.sgst||0) }%)</span>
+                  <span>GST ({(taxConfig?.cgst || 0) + (taxConfig?.sgst || 0)}%)</span>
                   <span className="text-slate-900">₹{taxAmount.toLocaleString('en-IN')}</span>
                 </div>
               )}
@@ -1886,7 +1895,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           <div className="space-y-4">
             <div>
               <Label className="text-[10px] font-black uppercase tracking-widest opacity-50 mb-1.5 block">Special Requests</Label>
-                <textarea
+              <textarea
                 className="w-full h-16 rounded-xl border border-input bg-transparent px-3 py-2 text-sm font-medium resize-none focus:outline-none focus:ring-1 focus:ring-ring"
                 placeholder="e.g. High floor, extra pillow…"
                 value={specialRequests}
@@ -1936,23 +1945,23 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
               </Button>
             )}
             <div className="flex-1 min-w-0">
-                <TitleWrapper className="text-lg sm:text-xl font-black tracking-tighter truncate">
-                  {isEditingGroup ? 'Edit Group Booking' : (initialBooking ? 'Edit Booking' : (reservationType === 'group' ? 'Add Group Booking' : `New ${reservationType === 'block' ? 'Room Block' : reservationType === 'enquiry' ? 'Enquiry Hold' : 'Room Booking'}`))}
-                </TitleWrapper>
-               {!initialBooking && (
-                 <p className="text-[10px] font-black tracking-widest text-primary/60 uppercase">
-                   Step {currentStepNum} of {totalSteps} &bull; {stepLabel[step]}
-                 </p>
-               )}
-               {initialBooking && !isEditingGroup && (
-                 <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
-                    {typeof initialBooking.roomId === 'object' 
-                       ? `Room ${(initialBooking.roomId as any).roomNumber}` 
-                       : rooms.find(r => r._id === initialBooking.roomId)?.roomNumber 
-                         ? `Room ${rooms.find(r => r._id === initialBooking.roomId)!.roomNumber}` 
-                         : ''}
-                 </p>
-               )}
+              <TitleWrapper className="text-lg sm:text-xl font-black tracking-tighter truncate">
+                {isEditingGroup ? 'Edit Group Booking' : (initialBooking ? 'Edit Booking' : (reservationType === 'group' ? 'Add Group Booking' : `New ${reservationType === 'block' ? 'Room Block' : reservationType === 'enquiry' ? 'Enquiry Hold' : 'Room Booking'}`))}
+              </TitleWrapper>
+              {!initialBooking && (
+                <p className="text-[10px] font-black tracking-widest text-primary/60 uppercase">
+                  Step {currentStepNum} of {totalSteps} &bull; {stepLabel[step]}
+                </p>
+              )}
+              {initialBooking && !isEditingGroup && (
+                <p className="text-[10px] font-black tracking-widest text-slate-400 uppercase">
+                  {typeof initialBooking.roomId === 'object'
+                    ? `Room ${(initialBooking.roomId as any).roomNumber}`
+                    : rooms.find(r => r._id === initialBooking.roomId)?.roomNumber
+                      ? `Room ${rooms.find(r => r._id === initialBooking.roomId)!.roomNumber}`
+                      : ''}
+                </p>
+              )}
             </div>
             <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10 sm:h-8 sm:w-8 rounded-full bg-white shadow-sm border border-slate-200 shrink-0 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all">
               <X className="h-5 w-5 sm:h-4 sm:w-4" />
@@ -1961,14 +1970,14 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
             <p id="dialog-description" className="sr-only">Modal for creating a new booking, editing an existing one, or managing group bookings.</p>
           </div>
         </div>
-        
+
         <div className="p-4 sm:p-6 flex-1 overflow-y-auto bg-white/50 pb-6 sm:pb-6"
-             onKeyDown={(e) => {
-               if (e.key === 'Escape') {
-                 e.stopPropagation();
-                 onClose();
-               }
-             }}>
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation();
+              onClose();
+            }
+          }}>
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center gap-2">
               <Info className="h-4 w-4 shrink-0" />
@@ -1978,16 +1987,16 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           )}
 
           {initialBooking ? (
-             isEditingGroup ? renderGroupEditForm() : renderEditForm()
+            isEditingGroup ? renderGroupEditForm() : renderEditForm()
           ) : (
             <AnimatePresence mode="wait">
-              <motion.div 
-                 key={step} 
-                 initial={{ opacity: 0, x: 20 }} 
-                 animate={{ opacity: 1, x: 0 }} 
-                 exit={{ opacity: 0, x: -20 }} 
-                 transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                 className="h-full"
+              <motion.div
+                key={step}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                className="h-full"
               >
                 {stepContent[step]()}
               </motion.div>
