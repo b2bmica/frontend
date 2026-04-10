@@ -12,7 +12,7 @@ import { calculateBookingPrice } from '../lib/pricing';
 import { differenceInDays, format, addDays, parseISO, startOfDay, addHours } from 'date-fns';
 import {
   Loader2, Search, UserPlus, IndianRupee, Info,
-  CalendarCheck, Clock, Lock, Users, ArrowLeft, ChevronRight,
+  CalendarCheck, Clock, Lock, Users, ArrowLeft, ChevronRight, ChevronUp, ChevronDown,
   Utensils, Coffee, Sun, Star, Bed, X
 } from 'lucide-react';
 import { Badge } from './ui/badge';
@@ -139,11 +139,27 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   const [numRooms, setNumRooms] = useState(2);
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
   const [groupRoomPrefs, setGroupRoomPrefs] = useState<Record<string, number>>({});
-  const [additionalGuests, setAdditionalGuests] = useState<Array<{ name: string; phone: string }>>([]);
+  const [additionalGuests, setAdditionalGuests] = useState<Array<{ name: string; phone: string; email?: string }>>([]);
   const [roomAssignments, setRoomAssignments] = useState<Record<string, { guestName: string; plan: string; price: number; adults: number; children: number }>>({});
   const [isSingleFolio, setIsSingleFolio] = useState(true);
   const [planMixed, setPlanMixed] = useState(false);
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('');
+  const [showReviewRooms, setShowReviewRooms] = useState(false);
+
+  const availablePlans = useMemo(() => {
+    // If the hotel has explicitly defined stay plans in their settings, use those
+    if (hotel?.settings?.stayPlans && hotel.settings.stayPlans.length > 0) {
+      return hotel.settings.stayPlans;
+    }
+
+    const mealRates = hotel?.settings?.mealRates || {};
+    // Default behavior: Always show EP and Custom.
+    // Show others (CP, MAP, AP) ONLY if they have a set rate > 0
+    return PLAN_TYPES.filter(p => {
+      if (p.key === 'EP' || p.key === 'custom') return true;
+      return (mealRates[p.key] || 0) > 0;
+    });
+  }, [hotel?.settings]);
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -295,7 +311,26 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
         return overlaps(checkinISO, checkoutISO, bCI, bCO);
       });
     });
-  }, [rooms, bookings, checkinISO, checkoutISO, initialBooking]);
+  }, [rooms, bookings, checkinISO, checkoutISO, initialBooking, isEditingGroup]);
+
+  // Auto-sync rooms based on distribution preferences
+  useEffect(() => {
+    if (reservationType !== 'group' || !isOpen) return;
+
+    // Calculate how many rooms are needed per category
+    const newSelection: string[] = [];
+    Object.entries(groupRoomPrefs).forEach(([type, count]) => {
+      if (count <= 0) return;
+      const candidates = availableRooms.filter(r => r.roomType === type).map(r => r._id);
+      newSelection.push(...candidates.slice(0, count));
+    });
+
+    // Simple comparison to prevent infinite loop
+    if (JSON.stringify(newSelection) !== JSON.stringify(selectedRooms)) {
+      // Only auto-update if we are in the config phase or just starting
+      setSelectedRooms(newSelection);
+    }
+  }, [groupRoomPrefs, reservationType, availableRooms, isOpen]);
 
   const isRoomAvailable = (roomId: string) => {
     // If we're editing an existing booking, the original room is always available for this booking
@@ -483,27 +518,61 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
           }
         }
 
+        // Create actual guest records for additional names so they appear directly on the calendar mappings
+        const guestNameMap: Record<string, string> = {};
+        if (selectedGuest?._id) guestNameMap[selectedGuest.name] = selectedGuest._id;
+
+        for (const ag of additionalGuests) {
+          if (ag.name.trim() && !guestNameMap[ag.name]) {
+            try {
+              const g = await createGuest({
+                name: ag.name,
+                phone: ag.phone || selectedGuest?.phone || '+910000000000',
+                email: ag.email || '',
+                nationality: selectedGuest?.nationality || 'Indian',
+                idProof: { idType: 'aadhaar', number: 'Group Member' }
+              });
+              guestNameMap[ag.name] = g._id;
+            } catch (e) {
+              console.warn('Silent fail to register sub-guest:', e);
+            }
+          }
+        }
+
+        const allGroupGuestNames = [selectedGuest?.name || 'Lead', ...additionalGuests.map(ag => ag.name).filter(Boolean)];
+
         const roomOps = selectedRooms.map(async (rid) => {
-          const assignment = roomAssignments[rid];
+          const ridIndex = selectedRooms.indexOf(rid);
           const rmLocal = rooms.find(r => r._id === rid);
-          if (!selectedGuest?._id) return;
+          if (!selectedGuest?._id || !rmLocal) return;
+
+          const defaultGuestName = allGroupGuestNames[ridIndex] || allGroupGuestNames[0];
+          const assignment = roomAssignments[rid] || {
+            guestName: defaultGuestName,
+            price: rmLocal?.price || 0,
+            plan: planType,
+            adults: adults,
+            children: children
+          };
+
+          const actualGuestId = guestNameMap[assignment.guestName] || selectedGuest._id;
 
           const partialPayload = {
             checkin: checkinDate,
             checkout: checkoutDate,
             checkinTime,
             checkoutTime,
-            roomPrice: assignment?.price || rmLocal?.price || 0,
+            roomPrice: assignment.price,
             specialRequests: specialRequests,
-            planType: (assignment?.plan || planType) as 'EP' | 'CP' | 'MAP' | 'AP' | 'custom',
-            mealRate: mealRates[assignment?.plan as string || planType] || 0,
-            mealChargeTotal: (mealRates[assignment?.plan as string || planType] || 0) * (assignment?.adults || adults) * Math.max(nights, isDayUse ? 1 : 0),
+            planType: (assignment.plan) as 'EP' | 'CP' | 'MAP' | 'AP' | 'custom',
+            mealRate: mealRates[assignment.plan] || 0,
+            mealChargeTotal: (mealRates[assignment.plan] || 0) * (assignment.adults) * Math.max(nights, isDayUse ? 1 : 0),
             groupName,
-            guestId: selectedGuest._id,
-            adults: assignment?.adults || adults,
-            children: assignment?.children || children,
-            baseOccupancy: rmLocal?.baseOccupancy || 2,
-            extraPersonPrice: rmLocal?.extraPersonPrice || 0,
+            guestId: actualGuestId,
+            adults: assignment.adults,
+            children: assignment.children,
+            baseOccupancy: rmLocal.baseOccupancy,
+            extraPersonPrice: rmLocal.extraPersonPrice,
             isGroup: true,
             groupId: groupId!,
             reservationType: 'group' as const,
@@ -576,7 +645,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   // ─── Render Step: Type ────────────────────────────────────────────────────
   const renderTypeStep = () => {
     const types = [
-      { key: 'booking', label: 'Booking', desc: 'Confirmed reservation', icon: CalendarCheck, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
+      { key: 'booking', label: 'Single', desc: 'Confirmed reservation', icon: CalendarCheck, color: 'text-emerald-600 bg-emerald-50 border-emerald-200' },
       { key: 'enquiry', label: 'Enquiry', desc: 'Tentative hold, auto-releases', icon: Clock, color: 'text-amber-600 bg-amber-50 border-amber-200' },
       { key: 'block', label: 'Room Block', desc: 'Maintenance / owner use', icon: Lock, color: 'text-slate-600 bg-slate-50 border-slate-200' },
       { key: 'group', label: 'Group', desc: 'Multiple rooms at once', icon: Users, color: 'text-blue-600 bg-blue-50 border-blue-200' },
@@ -625,169 +694,123 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
   // ─── Render Step: Group Config ────────────────────────────────────────────
   const renderGroupConfigStep = () => {
     const roomTypesInHotel = Array.from(new Set(rooms.map(r => r.roomType)));
+
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         <div className="space-y-1.5">
           <Label className="text-xs font-black uppercase tracking-widest opacity-60">Group Name *</Label>
-          <Input className="h-11 rounded-xl" placeholder="e.g. Singh Wedding Party" value={groupName} onChange={e => setGroupName(e.target.value)} />
+          <Input className="h-11 rounded-xl shadow-sm border-slate-100" placeholder="e.g. Singh Wedding Party" value={groupName} onChange={e => setGroupName(e.target.value)} />
         </div>
-        {/* Removed Adults/Children / Room selection from here as per user request */}
-        <div className="flex items-center justify-between bg-slate-50 p-3 rounded-xl">
-          <Label className="text-xs font-black uppercase tracking-widest opacity-60">Number of Rooms</Label>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg"
-              onClick={() => {
-                const newNum = Math.max(1, numRooms - 1);
-                setNumRooms(newNum);
-                if (selectedRooms.length > newNum) {
-                  setSelectedRooms(selectedRooms.slice(0, newNum));
-                }
-              }}>–</Button>
-            <span className="font-black text-lg">{numRooms}</span>
-            <Button variant="outline" size="icon" className="h-8 w-8 rounded-lg" disabled={numRooms >= availableRooms.length || numRooms >= 50} onClick={() => setNumRooms(Math.min(availableRooms.length, Math.min(50, numRooms + 1)))}>+</Button>
-          </div>
-        </div>
-        <div className="space-y-3 bg-slate-50/50 p-3 rounded-2xl border border-dashed border-slate-200">
+
+        <div className="space-y-4 bg-slate-50/50 p-4 rounded-3xl border border-slate-100">
           <div className="flex items-center justify-between">
-            <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Distribution Preferences</Label>
-            <span className="text-[9px] font-medium text-slate-400">Total: {Object.values(groupRoomPrefs).reduce((a, b) => a + b, 0)}</span>
+            <Label className="text-[10px] font-black uppercase tracking-widest opacity-60">Distribution (Rooms per Category)</Label>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black text-primary bg-primary/10 px-3 py-1 rounded-full shadow-sm">
+                {selectedRooms.length} Rooms Selected
+              </span>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+
+          <div className="grid grid-cols-1 gap-2.5">
             {roomTypesInHotel.map(type => {
               const typeAvailable = availableRooms.filter(r => r.roomType === type).length;
               const currentCount = groupRoomPrefs[type] || 0;
-              const totalPrefs = Object.values(groupRoomPrefs).reduce((a, b) => a + b, 0);
-              const canAdd = currentCount < typeAvailable && totalPrefs < numRooms;
 
               return (
-                <div key={type} className="flex items-center justify-between px-2.5 py-1.5 rounded-xl border bg-white shadow-sm">
-                  <span className="text-[10px] font-bold text-slate-600 truncate mr-2">
-                    {type} <span className="opacity-50 font-medium">({typeAvailable} avail)</span>
-                  </span>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button className="h-5 w-5 rounded-md hover:bg-slate-100 flex items-center justify-center transition-colors" onClick={() => setGroupRoomPrefs({ ...groupRoomPrefs, [type]: Math.max(0, currentCount - 1) })}>–</button>
-                    <span className="text-[10px] font-black w-3 text-center">{currentCount}</span>
-                    <button disabled={!canAdd} className="h-5 w-5 rounded-md hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors font-bold" onClick={() => setGroupRoomPrefs({ ...groupRoomPrefs, [type]: currentCount + 1 })}>+</button>
+                <div key={type} className="group/cat flex items-center justify-between px-4 py-3.5 rounded-2xl border bg-white shadow-sm transition-all hover:border-primary/20 hover:shadow-md">
+                  <div>
+                    <p className="text-xs font-black text-slate-900 uppercase tracking-tight">{type}</p>
+                    <p className="text-[10px] font-bold text-slate-400 capitalize">{typeAvailable} units available</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 rounded-xl bg-slate-100/50 hover:bg-slate-100 text-slate-600"
+                      onClick={() => setGroupRoomPrefs(prev => ({ ...prev, [type]: Math.max(0, (prev[type] || 0) - 1) }))}
+                    >
+                      –
+                    </Button>
+                    <span className="text-sm font-black w-4 text-center tabular-nums">{currentCount}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 rounded-xl bg-slate-100/50 hover:bg-slate-100 text-slate-900"
+                      disabled={currentCount >= typeAvailable}
+                      onClick={() => setGroupRoomPrefs(prev => ({ ...prev, [type]: (prev[type] || 0) + 1 }))}
+                    >
+                      +
+                    </Button>
                   </div>
                 </div>
               );
             })}
           </div>
-          <Button variant="outline" size="sm" className="w-full h-8 text-[9px] font-black uppercase tracking-widest mt-1 border-slate-200 bg-white hover:bg-primary hover:text-white hover:border-primary transition-all"
-            onClick={() => {
-              const newSelection: string[] = [];
-              let remainingToSelect = numRooms;
 
-              // 1. First follow distribution preferences
-              Object.entries(groupRoomPrefs).forEach(([type, count]) => {
-                if (count <= 0) return;
-                const candidates = availableRooms.filter(r => r.roomType === type).map(r => r._id);
-                const toTake = Math.min(count, candidates.length, remainingToSelect);
-                newSelection.push(...candidates.slice(0, toTake));
-                remainingToSelect -= toTake;
-              });
-
-              // 2. If still need rooms, fill from available pool
-              if (remainingToSelect > 0) {
-                const availablePool = availableRooms
-                  .filter(r => !newSelection.includes(r._id))
-                  .map(r => r._id);
-                newSelection.push(...availablePool.slice(0, remainingToSelect));
-              }
-
-              setSelectedRooms(newSelection);
-            }}>
-            Auto-fill from Distribution
-          </Button>
-        </div>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between px-1">
-            <Label className="text-xs font-black uppercase tracking-widest opacity-60">
-              {isEditingGroup ? 'Manage Group Rooms' : 'Select Rooms'} ({selectedRooms.length}/{numRooms})
-            </Label>
-            {selectedRooms.length > 0 && (
-              <Button variant="ghost" size="sm" className="h-6 text-[9px] font-black uppercase text-red-500" onClick={() => setSelectedRooms([])}>Clear All</Button>
-            )}
-          </div>
-
-          {/* Category Tabs / Filters */}
-          <div className="flex flex-wrap gap-1.5 px-0.5 sm:px-1">
-            {roomTypesInHotel.map(type => {
-              const count = selectedRooms.filter(rid => rooms.find(r => r._id === rid)?.roomType === type).length;
-              const isActive = activeCategoryFilter === type || (!activeCategoryFilter && type === roomTypesInHotel[0]);
-
-              return (
-                <button
-                  key={type}
-                  onClick={() => setActiveCategoryFilter(type)}
-                  className={cn(
-                    "px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border-2",
-                    isActive
-                      ? "bg-primary text-white border-primary shadow-sm"
-                      : "bg-white text-slate-400 border-slate-100 hover:border-primary/20"
-                  )}
-                >
-                  {type} {count > 0 && <span className="ml-0.5 opacity-60">({count})</span>}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="max-h-60 overflow-y-auto pr-1">
-            {roomTypesInHotel.map(type => {
-              const isFiltered = activeCategoryFilter ? activeCategoryFilter === type : type === roomTypesInHotel[0];
-              if (!isFiltered) return null;
-
-              const roomsInType = rooms.filter(r => r.roomType === type);
-              return (
-                <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-3">
-                  {roomsInType.map(room => {
-                    const avail = isRoomAvailable(room._id);
-                    const idx = selectedRooms.indexOf(room._id);
-                    const sel = idx !== -1;
-                    return (
-                      <button
-                        key={room._id}
-                        disabled={!avail}
-                        onClick={() => sel ? setSelectedRooms(selectedRooms.filter(id => id !== room._id)) : (selectedRooms.length < numRooms && setSelectedRooms([...selectedRooms, room._id]))}
-                        className={cn(
-                          'group/room h-14 rounded-2xl border-2 flex flex-col items-center justify-center relative transition-all duration-200',
-                          sel
-                            ? 'border-primary bg-primary text-white font-black shadow-lg shadow-primary/20 z-10'
-                            : avail
-                              ? 'border-slate-100 bg-white hover:border-primary/30 hover:bg-slate-50'
-                              : 'opacity-25 cursor-not-allowed bg-slate-100 border-transparent'
-                        )}
-                      >
-                        <span className={cn("text-xs tabular-nums font-black transition-transform", sel && "scale-110")}>{room.roomNumber}</span>
-                        {sel && (
-                          <div className="absolute -top-2 -right-2 w-5 h-5 bg-white text-primary text-[9px] rounded-full border-2 border-primary flex items-center justify-center font-black shadow-md">
-                            {idx + 1}
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
+          {selectedRooms.length > 0 && (
+            <div className="pt-2">
+              <button
+                onClick={() => setShowReviewRooms(!showReviewRooms)}
+                className={cn(
+                  "w-full flex items-center justify-between p-4 rounded-2xl border transition-all duration-300",
+                  showReviewRooms ? "bg-slate-900 border-slate-900 text-white shadow-xl translate-y-[-2px]" : "bg-white border-slate-100 text-slate-500 hover:text-slate-900 hover:border-slate-200"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <Bed className={cn("h-4 w-4", showReviewRooms ? "text-primary" : "text-slate-400")} />
+                  <span className="text-[10px] font-black uppercase tracking-widest">Review Selected Room Numbers</span>
                 </div>
-              );
-            })}
-          </div>
+                {showReviewRooms ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+
+              {showReviewRooms && (
+                <div className="mt-3 p-4 bg-white rounded-2xl border border-slate-100 shadow-inner space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="flex flex-wrap gap-2">
+                    {selectedRooms.map((rid, idx) => {
+                      const rm = rooms.find(r => r._id === rid);
+                      return (
+                        <div key={rid} className="px-3 py-2 rounded-xl bg-indigo-50/50 border border-indigo-100/50 text-[10px] font-black text-indigo-700 flex items-center gap-3 group/rm transition-all hover:bg-indigo-100 hover:border-indigo-200">
+                          <span className="opacity-30 tabular-nums">{idx + 1}</span>
+                          <span className="tracking-tight">#{rm?.roomNumber}</span>
+                          <button
+                            onClick={() => setSelectedRooms(selectedRooms.filter(id => id !== rid))}
+                            className="opacity-0 group-hover/rm:opacity-100 hover:text-red-500 transition-all"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="bg-amber-50 rounded-xl p-3 flex items-start gap-3 border border-amber-100">
+                    <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                    <p className="text-[9px] font-bold text-amber-800 leading-normal">Rooms are auto-filled from the top of available pool. You can manually exclude specific rooms by clicking the 'x' if desired.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-        <div className="space-y-3 pt-2">
-          <Label className="text-xs font-black uppercase tracking-widest opacity-60">Group Plan</Label>
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => setPlanMixed(false)} className={cn('p-3 rounded-xl border-2 text-xs font-black transition-all', !planMixed ? 'border-primary bg-primary/5' : 'border-slate-200')}>Single Plan</button>
-            <button onClick={() => setPlanMixed(true)} className={cn('p-3 rounded-xl border-2 text-xs font-black transition-all', planMixed ? 'border-primary bg-primary/5' : 'border-slate-200')}>Mixed Plans</button>
+
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-black uppercase tracking-widest opacity-60">Meal Plan Configuration</Label>
+            <div className="flex bg-slate-100 p-1 rounded-lg">
+              <button onClick={() => setPlanMixed(false)} className={cn('px-3 py-1.5 rounded-md text-[9px] font-black transition-all', !planMixed ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600')}>SINGLE</button>
+              <button onClick={() => setPlanMixed(true)} className={cn('px-3 py-1.5 rounded-md text-[9px] font-black transition-all', planMixed ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600')}>MIXED</button>
+            </div>
           </div>
+
           {!planMixed && (
-            <Select value={planType} onValueChange={(v: 'EP' | 'CP' | 'MAP' | 'AP' | 'custom') => setPlanType(v)}>
-              <SelectTrigger className="h-11 rounded-xl font-bold bg-white"><SelectValue /></SelectTrigger>
+            <Select value={planType} onValueChange={(v: any) => setPlanType(v)}>
+              <SelectTrigger className="h-11 rounded-xl font-bold bg-white border-slate-100 shadow-sm"><SelectValue /></SelectTrigger>
               <SelectContent className="rounded-2xl border-none shadow-2xl">
-                {(hotel?.settings?.stayPlans || PLAN_TYPES).map((p: any) => (
+                {availablePlans.map((p: any) => (
                   <SelectItem key={p.key} value={p.key}>
-                    <div className="flex flex-col py-1">
-                      <span className="font-black text-xs uppercase tracking-tight">{p.label}</span>
-                      <span className="text-[9px] opacity-50 font-medium leading-none">{p.desc}</span>
+                    <div className="flex flex-col py-0.5">
+                      <span className="font-black text-[10px] uppercase tracking-tight">{p.label}</span>
+                      <span className="text-[9px] opacity-50 font-medium leading-none truncate">{(p as any).desc || ''}</span>
                     </div>
                   </SelectItem>
                 ))}
@@ -795,7 +818,10 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
             </Select>
           )}
         </div>
-        <Button className="w-full h-11 rounded-xl font-black" disabled={!groupName || selectedRooms.length < 1} onClick={() => goNext('guest')}>Continue <ChevronRight className="ml-1 h-4 w-4" /></Button>
+
+        <Button className="w-full h-12 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-lg shadow-primary/20" disabled={!groupName || selectedRooms.length < 1} onClick={() => goNext('guest')}>
+          Continue to Lead Guest <ChevronRight className="ml-2 h-4 w-4" />
+        </Button>
       </div>
     );
   };
@@ -1004,8 +1030,8 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                 <SelectValue placeholder="Select a plan" />
               </SelectTrigger>
               <SelectContent>
-                {(hotel?.settings?.stayPlans || PLAN_TYPES).map((p: any) => {
-                  const rate = mealRates[p.key] || 0;
+                {availablePlans.map((p: any) => {
+                  const rate = (hotel?.settings?.mealRates as any)?.[p.key] || 0;
                   return (
                     <SelectItem key={p.key} value={p.key}>
                       <div className="flex items-center justify-between min-w-[200px] w-full py-0.5">
@@ -1149,7 +1175,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                         variant="ghost"
                         size="sm"
                         className="h-6 px-2 text-[9px] font-black uppercase tracking-widest text-primary"
-                        onClick={() => setAdditionalGuests([...additionalGuests, { name: '', phone: '' }])}
+                        onClick={() => setAdditionalGuests([...additionalGuests, { name: '', phone: '', email: '' }])}
                       >
                         + Add Name
                       </Button>
@@ -1160,7 +1186,7 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                       <div key={idx} className="flex gap-2">
                         <Input
                           placeholder={`Guest ${idx + 2} Name`}
-                          className="h-9 text-xs rounded-lg"
+                          className="h-9 text-xs rounded-lg flex-1"
                           value={ag.name}
                           onChange={e => {
                             const newGuests = [...additionalGuests];
@@ -1168,10 +1194,21 @@ export function BookingModal({ isOpen, onClose, selectedRoomId, selectedDate, in
                             setAdditionalGuests(newGuests);
                           }}
                         />
+                        <Input
+                          placeholder="Email (Optional)"
+                          className="h-9 text-xs rounded-lg flex-1"
+                          type="email"
+                          value={ag.email || ''}
+                          onChange={e => {
+                            const newGuests = [...additionalGuests];
+                            newGuests[idx].email = e.target.value;
+                            setAdditionalGuests(newGuests);
+                          }}
+                        />
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-9 w-9 text-slate-400 hover:text-red-500"
+                          className="h-9 w-9 text-slate-400 hover:text-red-500 shrink-0"
                           onClick={() => setAdditionalGuests(additionalGuests.filter((_, i) => i !== idx))}
                         >
                           <X className="h-3.5 w-3.5" />

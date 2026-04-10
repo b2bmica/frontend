@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format } from 'date-fns';
+import { format, startOfDay } from 'date-fns';
 import { useBookings, type Booking } from '../context/booking-context';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -27,7 +27,7 @@ export function BookingTable() {
   const [dateSelectionType, setDateSelectionType] = useState<'single' | 'range'>('single');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
@@ -39,17 +39,18 @@ export function BookingTable() {
       const guestName = typeof b.guestId === 'object' ? b.guestId?.name || '' : '';
       const roomNumber = typeof b.roomId === 'object' ? b.roomId?.roomNumber || '' : '';
       const bookingId = b._id || '';
-      const matchSearch = !search || 
+      const matchSearch = !search ||
         guestName.toLowerCase().includes(search.toLowerCase()) ||
         roomNumber.toLowerCase().includes(search.toLowerCase()) ||
         bookingId.toLowerCase().includes(search.toLowerCase());
       const type = b.reservationType || b.bookingType || 'booking';
-      const matchStatus = statusFilter === 'all' || 
-                         (statusFilter === 'enquiry' && type === 'enquiry') ||
-                         (statusFilter === 'block' && type === 'block') ||
-                         (statusFilter === 'booking' && type === 'booking' && b.status === 'reserved') ||
-                         (b.status === statusFilter && type === 'booking');
-      
+      const matchStatus = statusFilter === 'all' ||
+        (statusFilter === 'enquiry' && type === 'enquiry' && (!b.enquiryExpiresAt || new Date(b.enquiryExpiresAt) >= new Date())) ||
+        (statusFilter === 'expired' && type === 'enquiry' && b.enquiryExpiresAt && new Date(b.enquiryExpiresAt) < new Date()) ||
+        (statusFilter === 'block' && type === 'block') ||
+        (statusFilter === 'booking' && type === 'booking' && b.status === 'reserved') ||
+        (b.status === statusFilter && type === 'booking');
+
       let matchDate = true;
       if (dateFrom || dateTo) {
         const dStr = dateFilterMode === 'checkin' ? b.checkin : b.createdAt;
@@ -58,10 +59,10 @@ export function BookingTable() {
         } else {
           const d = dStr.split('T')[0]; // Extract YYYY-MM-DD
           if (dateSelectionType === 'single') {
-             matchDate = d === dateFrom;
+            matchDate = d === dateFrom;
           } else {
-             if (dateFrom && d < dateFrom) matchDate = false;
-             if (dateTo && d > dateTo) matchDate = false;
+            if (dateFrom && d < dateFrom) matchDate = false;
+            if (dateTo && d > dateTo) matchDate = false;
           }
         }
       }
@@ -89,13 +90,13 @@ export function BookingTable() {
     const type = booking.reservationType || booking.bookingType || 'booking';
     const isEnquiryExpired = type === 'enquiry' && booking.enquiryExpiresAt && new Date(booking.enquiryExpiresAt) < new Date();
     if (isEnquiryExpired) {
-       return <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20">Expired Hold</Badge>;
+      return <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20">Expired Hold</Badge>;
     }
     if (type === 'enquiry') {
-       return <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20">Enquiry</Badge>;
+      return <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/20">Enquiry</Badge>;
     }
     if (type === 'block') {
-       return <Badge variant="outline" className="bg-slate-500/10 text-slate-500 border-slate-500/20">Room Block</Badge>;
+      return <Badge variant="outline" className="bg-slate-500/10 text-slate-500 border-slate-500/20">Room Block</Badge>;
     }
     const config: Record<string, { label: string; className: string }> = {
       'reserved': { label: 'Reserved', className: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' },
@@ -131,14 +132,14 @@ export function BookingTable() {
       <div className="flex flex-col sm:flex-row items-center gap-3 w-full bg-white p-2 sm:p-3 rounded-2xl border border-slate-100 shadow-sm">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
-          <Input 
-            className="pl-9 h-10 text-sm border-none bg-slate-50 focus:bg-white transition-all shadow-none rounded-xl" 
-            placeholder="Search guests or rooms..." 
-            value={search} 
-            onChange={e => { setSearch(e.target.value); setCurrentPage(1); }} 
+          <Input
+            className="pl-9 h-10 text-sm border-none bg-slate-50 focus:bg-white transition-all shadow-none rounded-xl"
+            placeholder="Search guests or rooms..."
+            value={search}
+            onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
           />
         </div>
-        
+
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}>
             <SelectTrigger className="w-full sm:w-[130px] h-10 text-xs rounded-xl border-none bg-slate-50 shadow-none">
@@ -152,7 +153,8 @@ export function BookingTable() {
               <SelectItem value="reserved">Reserved</SelectItem>
               <SelectItem value="checked-in">Checked In</SelectItem>
               <SelectItem value="checked-out">Checked Out</SelectItem>
-              <SelectItem value="enquiry">Enquiry</SelectItem>
+              <SelectItem value="enquiry">Active Enquiry</SelectItem>
+              <SelectItem value="expired">Expired Hold</SelectItem>
               <SelectItem value="block">Blocked</SelectItem>
               <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
@@ -175,134 +177,134 @@ export function BookingTable() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <div className="relative h-10 w-[42px] sm:w-[50px] flex-shrink-0 cursor-pointer">
-                 <div className={cn(
-                   "h-full w-full rounded-xl bg-slate-50 flex items-center justify-center transition-colors hover:bg-slate-100",
-                   (dateFrom || dateTo) ? "bg-primary/10 text-primary border border-primary/20" : "text-slate-400"
-                 )}>
-                    <Calendar className="h-4 w-4" />
-                 </div>
-                 {(dateFrom || dateTo) && (
-                   <button 
-                     onClick={(e) => { 
-                       e.stopPropagation(); 
-                       setDateFrom(''); 
-                       setDateTo(''); 
-                       setSortOrder('desc'); // Using setSortOrder here to avoid unused warning
-                     }}
-                     className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:scale-110 active:scale-90 transition-all z-20"
-                   >
-                     <XCircle className="h-2.5 w-2.5 fill-current" />
-                   </button>
-                 )}
+                <div className={cn(
+                  "h-full w-full rounded-xl bg-slate-50 flex items-center justify-center transition-colors hover:bg-slate-100",
+                  (dateFrom || dateTo) ? "bg-primary/10 text-primary border border-primary/20" : "text-slate-400"
+                )}>
+                  <Calendar className="h-4 w-4" />
+                </div>
+                {(dateFrom || dateTo) && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDateFrom('');
+                      setDateTo('');
+                      setSortOrder('desc'); // Using setSortOrder here to avoid unused warning
+                    }}
+                    className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:scale-110 active:scale-90 transition-all z-20"
+                  >
+                    <XCircle className="h-2.5 w-2.5 fill-current" />
+                  </button>
+                )}
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="p-5 w-80 rounded-[32px] shadow-2xl border-none ring-1 ring-slate-200/50">
-               <div className="flex flex-col gap-5">
-                  <header className="flex items-center justify-between border-b border-slate-50 pb-3">
-                     <span className="text-xs font-black uppercase tracking-widest text-slate-800">Advanced Filter</span>
-                     <Badge variant="secondary" className="text-[9px] font-black tracking-widest uppercase bg-slate-100/50">
-                        {dateFilterMode === 'checkin' ? 'Check-in' : 'Registration'}
-                     </Badge>
-                  </header>
+              <div className="flex flex-col gap-5">
+                <header className="flex items-center justify-between border-b border-slate-50 pb-3">
+                  <span className="text-xs font-black uppercase tracking-widest text-slate-800">Advanced Filter</span>
+                  <Badge variant="secondary" className="text-[9px] font-black tracking-widest uppercase bg-slate-100/50">
+                    {dateFilterMode === 'checkin' ? 'Check-in' : 'Registration'}
+                  </Badge>
+                </header>
 
-                  <div className="space-y-4">
-                     {/* Toggle 1: What to filter */}
-                     <div className="flex flex-col gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Filter Base</label>
-                        <div className="grid grid-cols-2 gap-1 bg-slate-50/80 p-1.5 rounded-2xl border border-slate-100/50">
-                           <button 
-                              onClick={() => setDateFilterMode('checkin')}
-                              className={cn(
-                                 "flex items-center justify-center gap-2 py-2 text-[10px] font-black rounded-xl transition-all duration-300",
-                                 dateFilterMode === 'checkin' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100/50"
-                              )}
-                           >
-                              <Calendar className="h-3 w-3" />
-                              Check-in
-                           </button>
-                           <button 
-                              onClick={() => setDateFilterMode('createdAt')}
-                              className={cn(
-                                 "flex items-center justify-center gap-2 py-2 text-[10px] font-black rounded-xl transition-all duration-300",
-                                 dateFilterMode === 'createdAt' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100/50"
-                              )}
-                           >
-                              <Plus className="h-3 w-3" />
-                              Created
-                           </button>
-                        </div>
-                     </div>
-
-                     {/* Toggle 2: Range vs Single */}
-                     <div className="flex flex-col gap-2">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Selection Mode</label>
-                        <div className="grid grid-cols-2 gap-1 bg-slate-50/80 p-1.5 rounded-2xl border border-slate-100/50">
-                           <button 
-                              onClick={() => setDateSelectionType('single')}
-                              className={cn(
-                                 "flex items-center justify-center gap-2 py-2 text-[10px] font-black rounded-xl transition-all duration-300",
-                                 dateSelectionType === 'single' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100/50"
-                              )}
-                           >
-                              Single Date
-                           </button>
-                           <button 
-                              onClick={() => setDateSelectionType('range')}
-                              className={cn(
-                                 "flex items-center justify-center gap-2 py-2 text-[10px] font-black rounded-xl transition-all duration-300",
-                                 dateSelectionType === 'range' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100/50"
-                              )}
-                           >
-                              Date Range
-                           </button>
-                        </div>
-                     </div>
-                     
-                     <div className="animate-in fade-in slide-in-from-top-1 duration-300">
-                        {dateSelectionType === 'single' ? (
-                           <div className="flex flex-col gap-2">
-                              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Pick Date</label>
-                              <Input 
-                                 type="date" 
-                                 className="h-11 text-xs rounded-2xl border-slate-100 bg-slate-50/50 focus:bg-white focus:ring-primary shadow-none transition-all"
-                                 value={dateFrom}
-                                 onChange={e => { setDateFrom(e.target.value); setCurrentPage(1); }}
-                              />
-                           </div>
-                        ) : (
-                           <div className="flex flex-col gap-2">
-                              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Range Duration</label>
-                              <div className="grid grid-cols-[1fr,auto,1fr] items-center gap-2">
-                                 <Input 
-                                   type="date" 
-                                   className="h-11 text-xs rounded-2xl border-slate-100 bg-slate-50/50 focus:bg-white transition-all shadow-none"
-                                   value={dateFrom}
-                                   onChange={e => { setDateFrom(e.target.value); setCurrentPage(1); }}
-                                 />
-                                 <ArrowRight className="h-3 w-3 text-slate-200" />
-                                 <Input 
-                                   type="date" 
-                                   className="h-11 text-xs rounded-2xl border-slate-100 bg-slate-50/50 focus:bg-white transition-all shadow-none"
-                                   value={dateTo}
-                                   onChange={e => { setDateTo(e.target.value); setCurrentPage(1); }}
-                                 />
-                              </div>
-                           </div>
+                <div className="space-y-4">
+                  {/* Toggle 1: What to filter */}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Filter Base</label>
+                    <div className="grid grid-cols-2 gap-1 bg-slate-50/80 p-1.5 rounded-2xl border border-slate-100/50">
+                      <button
+                        onClick={() => setDateFilterMode('checkin')}
+                        className={cn(
+                          "flex items-center justify-center gap-2 py-2 text-[10px] font-black rounded-xl transition-all duration-300",
+                          dateFilterMode === 'checkin' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100/50"
                         )}
-                     </div>
+                      >
+                        <Calendar className="h-3 w-3" />
+                        Check-in
+                      </button>
+                      <button
+                        onClick={() => setDateFilterMode('createdAt')}
+                        className={cn(
+                          "flex items-center justify-center gap-2 py-2 text-[10px] font-black rounded-xl transition-all duration-300",
+                          dateFilterMode === 'createdAt' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100/50"
+                        )}
+                      >
+                        <Plus className="h-3 w-3" />
+                        Created
+                      </button>
+                    </div>
                   </div>
 
-                  {(dateFrom || dateTo) && (
-                     <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={() => { setDateFrom(''); setDateTo(''); }}
-                        className="h-10 text-[10px] font-black uppercase tracking-widest text-destructive hover:bg-destructive/5 hover:text-destructive rounded-2xl"
-                     >
-                        Reset All Filters
-                     </Button>
-                  )}
-               </div>
+                  {/* Toggle 2: Range vs Single */}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Selection Mode</label>
+                    <div className="grid grid-cols-2 gap-1 bg-slate-50/80 p-1.5 rounded-2xl border border-slate-100/50">
+                      <button
+                        onClick={() => setDateSelectionType('single')}
+                        className={cn(
+                          "flex items-center justify-center gap-2 py-2 text-[10px] font-black rounded-xl transition-all duration-300",
+                          dateSelectionType === 'single' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100/50"
+                        )}
+                      >
+                        Single Date
+                      </button>
+                      <button
+                        onClick={() => setDateSelectionType('range')}
+                        className={cn(
+                          "flex items-center justify-center gap-2 py-2 text-[10px] font-black rounded-xl transition-all duration-300",
+                          dateSelectionType === 'range' ? "bg-white text-primary shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-100/50"
+                        )}
+                      >
+                        Date Range
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="animate-in fade-in slide-in-from-top-1 duration-300">
+                    {dateSelectionType === 'single' ? (
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Pick Date</label>
+                        <Input
+                          type="date"
+                          className="h-11 text-xs rounded-2xl border-slate-100 bg-slate-50/50 focus:bg-white focus:ring-primary shadow-none transition-all"
+                          value={dateFrom}
+                          onChange={e => { setDateFrom(e.target.value); setCurrentPage(1); }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Range Duration</label>
+                        <div className="grid grid-cols-[1fr,auto,1fr] items-center gap-2">
+                          <Input
+                            type="date"
+                            className="h-11 text-xs rounded-2xl border-slate-100 bg-slate-50/50 focus:bg-white transition-all shadow-none"
+                            value={dateFrom}
+                            onChange={e => { setDateFrom(e.target.value); setCurrentPage(1); }}
+                          />
+                          <ArrowRight className="h-3 w-3 text-slate-200" />
+                          <Input
+                            type="date"
+                            className="h-11 text-xs rounded-2xl border-slate-100 bg-slate-50/50 focus:bg-white transition-all shadow-none"
+                            value={dateTo}
+                            onChange={e => { setDateTo(e.target.value); setCurrentPage(1); }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {(dateFrom || dateTo) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setDateFrom(''); setDateTo(''); }}
+                    className="h-10 text-[10px] font-black uppercase tracking-widest text-destructive hover:bg-destructive/5 hover:text-destructive rounded-2xl"
+                  >
+                    Reset All Filters
+                  </Button>
+                )}
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -349,7 +351,7 @@ export function BookingTable() {
                           </div>
                         ) : (
                           <>
-                            <button 
+                            <button
                               className="font-black hover:text-primary hover:underline underline-offset-4 transition-all text-left"
                               onClick={() => guest?._id && setSelectedGuestId(guest._id)}
                             >
@@ -395,8 +397,12 @@ export function BookingTable() {
                               )}
                               <DropdownMenuSeparator />
                               {booking.status === 'reserved' && (
-                                <DropdownMenuItem onClick={() => handleAction(booking._id, checkIn)}>
-                                  <LogIn className="h-4 w-4 mr-2" /> Check In
+                                <DropdownMenuItem
+                                  onClick={() => handleAction(booking._id, checkIn)}
+                                  disabled={startOfDay(new Date(booking.checkin)) > startOfDay(new Date())}
+                                >
+                                  <LogIn className={cn("h-4 w-4 mr-2", startOfDay(new Date(booking.checkin)) > startOfDay(new Date()) && "opacity-20")} />
+                                  <span>{startOfDay(new Date(booking.checkin)) > startOfDay(new Date()) ? `Check-in Only on ${format(new Date(booking.checkin), 'dd MMM')}` : 'Check In'}</span>
                                 </DropdownMenuItem>
                               )}
                               {booking.status === 'checked-in' && (
@@ -429,9 +435,9 @@ export function BookingTable() {
             <span className="text-slate-900 font-black">{(currentPage - 1) * pageSize + 1}—{Math.min(currentPage * pageSize, filtered.length)}</span> of {filtered.length} Records
           </div>
           <div className="flex items-center gap-1.5 order-1 sm:order-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
               className="h-8 rounded-lg border-slate-200 text-[10px] font-black uppercase tracking-widest px-3 shadow-none disabled:opacity-30"
@@ -462,9 +468,9 @@ export function BookingTable() {
                 return null;
               })}
             </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
               className="h-8 rounded-lg border-slate-200 text-[10px] font-black uppercase tracking-widest px-3 shadow-none disabled:opacity-30"
@@ -486,50 +492,50 @@ export function BookingTable() {
           const status = booking.status;
 
           return (
-            <div 
-              key={booking._id} 
-              className="bg-white rounded-[24px] border border-slate-100 p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-200 group flex flex-col gap-4 relative overflow-hidden cursor-pointer" 
+            <div
+              key={booking._id}
+              className="bg-white rounded-[24px] border border-slate-100 p-5 shadow-sm transition-all hover:shadow-md hover:border-slate-200 group flex flex-col gap-4 relative overflow-hidden cursor-pointer"
               onClick={() => setSelectedBooking(booking)}
             >
               {/* Vertical accent bar based on status */}
               <div className={cn(
                 "absolute left-0 top-0 bottom-0 w-1.5",
                 status === 'reserved' ? 'bg-emerald-500' :
-                status === 'checked-in' ? 'bg-blue-500' :
-                status === 'checked-out' ? 'bg-orange-500' :
-                'bg-red-500'
+                  status === 'checked-in' ? 'bg-blue-500' :
+                    status === 'checked-out' ? 'bg-orange-500' :
+                      'bg-red-500'
               )} />
 
               <div className="flex items-start justify-between">
                 <div className="space-y-1 overflow-hidden pr-2">
                   <div className="flex items-center gap-1.5">
-                     <button 
-                        className="text-sm font-black text-slate-900 tracking-tight hover:text-primary hover:underline underline-offset-4 transition-all truncate text-left"
-                        onClick={(e) => {
-                           e.stopPropagation();
-                           if (guest?._id) setSelectedGuestId(guest._id);
-                        }}
-                     >
-                        {guest?.name || 'Unknown Guest'}
-                     </button>
-                     <button 
-                        className="h-7 w-7 rounded-full hover:bg-slate-100 flex items-center justify-center transition-colors flex-shrink-0"
-                        onClick={(e) => {
-                           e.stopPropagation();
-                           if (guest?._id) setSelectedGuestId(guest._id);
-                        }}
-                        title="View Guest Profile"
-                     >
-                        <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary transition-colors" />
-                     </button>
+                    <button
+                      className="text-sm font-black text-slate-900 tracking-tight hover:text-primary hover:underline underline-offset-4 transition-all truncate text-left"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (guest?._id) setSelectedGuestId(guest._id);
+                      }}
+                    >
+                      {guest?.name || 'Unknown Guest'}
+                    </button>
+                    <button
+                      className="h-7 w-7 rounded-full hover:bg-slate-100 flex items-center justify-center transition-colors flex-shrink-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (guest?._id) setSelectedGuestId(guest._id);
+                      }}
+                      title="View Guest Profile"
+                    >
+                      <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-primary transition-colors" />
+                    </button>
                     <Badge variant="outline" className={cn(
                       "text-[8px] font-black uppercase tracking-widest border-none h-5 px-2 rounded-md",
                       (booking.reservationType === 'enquiry' || booking.bookingType === 'enquiry') ? 'bg-amber-50 text-amber-600' :
-                      (booking.reservationType === 'block' || booking.bookingType === 'block') ? 'bg-slate-50 text-slate-600' :
-                      status === 'reserved' ? 'bg-emerald-50 text-emerald-600' :
-                      status === 'checked-in' ? 'bg-blue-50 text-blue-600' :
-                      status === 'checked-out' ? 'bg-orange-50 text-orange-600' :
-                      'bg-red-50 text-red-600'
+                        (booking.reservationType === 'block' || booking.bookingType === 'block') ? 'bg-slate-50 text-slate-600' :
+                          status === 'reserved' ? 'bg-emerald-50 text-emerald-600' :
+                            status === 'checked-in' ? 'bg-blue-50 text-blue-600' :
+                              status === 'checked-out' ? 'bg-orange-50 text-orange-600' :
+                                'bg-red-50 text-red-600'
                     )}>
                       {(booking.reservationType === 'booking' || (!booking.reservationType && (booking.bookingType === 'booking' || !booking.bookingType))) ? status.replace('-', ' ') : (booking.reservationType || booking.bookingType)}
                     </Badge>
@@ -541,29 +547,29 @@ export function BookingTable() {
                     <span className="ml-1 opacity-40 px-1 py-0.5 bg-slate-50 rounded italic whitespace-nowrap">{nights}N</span>
                   </div>
                   {sortField === 'createdAt' && booking.createdAt && (
-                     <div className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">
-                        Created: {format(new Date(booking.createdAt), 'dd MMM, hh:mm a')}
-                     </div>
+                    <div className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">
+                      Created: {format(new Date(booking.createdAt), 'dd MMM, hh:mm a')}
+                    </div>
                   )}
                 </div>
                 <div className="text-right">
-                   <div className="text-xs font-black text-slate-800">RM {room?.roomNumber || '??'}</div>
-                   <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{room?.roomType?.split(' ')[0] || 'Asset'}</div>
+                  <div className="text-xs font-black text-slate-800">RM {room?.roomNumber || '??'}</div>
+                  <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{room?.roomType?.split(' ')[0] || 'Asset'}</div>
                 </div>
               </div>
-              
+
               <div className="flex items-center justify-between pt-4 border-t border-slate-50">
                 <div className="flex flex-col gap-0.5">
-                   <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                     {booking.bookingSource === 'ota' ? <Globe className="h-2.5 w-2.5" /> : <UserPlus className="h-2.5 w-2.5" />} 
-                     {booking.bookingSource || 'direct'}
-                   </div>
+                  <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                    {booking.bookingSource === 'ota' ? <Globe className="h-2.5 w-2.5" /> : <UserPlus className="h-2.5 w-2.5" />}
+                    {booking.bookingSource || 'direct'}
+                  </div>
                 </div>
                 <div className="flex flex-col items-end">
-                   <span className="text-[9px] font-bold text-slate-300 uppercase leading-none mb-0.5">Total Revenue</span>
-                   <span className="text-base font-black text-slate-900 tracking-tighter">
-                      {(booking.reservationType === 'block' || booking.bookingType === 'block') ? '—' : `₹${amount.toLocaleString('en-IN')}`}
-                   </span>
+                  <span className="text-[9px] font-bold text-slate-300 uppercase leading-none mb-0.5">Total Revenue</span>
+                  <span className="text-base font-black text-slate-900 tracking-tighter">
+                    {(booking.reservationType === 'block' || booking.bookingType === 'block') ? '—' : `₹${amount.toLocaleString('en-IN')}`}
+                  </span>
                 </div>
               </div>
             </div>
@@ -571,28 +577,28 @@ export function BookingTable() {
         })}
         {filtered.length === 0 && (
           <div className="py-20 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200/60">
-             <div className="h-12 w-12 rounded-2xl bg-white flex items-center justify-center mx-auto mb-4 shadow-sm">
-                <Search className="h-5 w-5 text-slate-200" />
-             </div>
-             <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">No Records Matching Search</p>
+            <div className="h-12 w-12 rounded-2xl bg-white flex items-center justify-center mx-auto mb-4 shadow-sm">
+              <Search className="h-5 w-5 text-slate-200" />
+            </div>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">No Records Matching Search</p>
           </div>
         )}
       </div>
 
       <BookingDetailSheet booking={selectedBooking} onClose={() => setSelectedBooking(null)} onOpenGuest={(id) => setSelectedGuestId(id)} />
-      <BookingModal 
-        isOpen={!!editingBooking} 
-        onClose={() => setEditingBooking(null)} 
-        initialBooking={editingBooking || undefined} 
+      <BookingModal
+        isOpen={!!editingBooking}
+        onClose={() => setEditingBooking(null)}
+        initialBooking={editingBooking || undefined}
         isEditingGroup={!!editingBooking?.groupId}
       />
-      <GuestProfileSheet 
-        guestId={selectedGuestId} 
-        onClose={() => setSelectedGuestId(null)} 
+      <GuestProfileSheet
+        guestId={selectedGuestId}
+        onClose={() => setSelectedGuestId(null)}
         onBookingClick={(b) => {
           setSelectedBooking(b);
           setSelectedGuestId(null);
-        }} 
+        }}
       />
     </div>
   );
